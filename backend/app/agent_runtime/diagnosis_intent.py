@@ -88,6 +88,33 @@ def _parse_confidence(value: str | None) -> Decimal | None:
     return parsed
 
 
+def _normalize_evidence_reference(
+    value: str | None,
+    selections: tuple[RuntimeEvidenceSelection, ...],
+) -> str | None:
+    """Normalize an unambiguous Observation-ID alias to its deterministic Evidence ID.
+
+    Some compatible providers copy the selected ``observation_id`` into an
+    Evidence-reference field instead of repeating the mechanical
+    ``evidence:{observation_id}:{role}`` encoding.  Accept only the exact ID of
+    one selected Observation/role pair; unknown or ambiguous references remain
+    unchanged and are rejected by the downstream Evidence resolver.
+    """
+    if value is None:
+        return None
+    derived = {
+        f"evidence:{item.observation_id}:{item.role.value}": item
+        for item in selections
+    }
+    if value in derived:
+        return value
+    matches = [item for item in selections if item.observation_id == value]
+    if len(matches) == 1:
+        item = matches[0]
+        return f"evidence:{item.observation_id}:{item.role.value}"
+    return value
+
+
 def runtime_intent_to_drafts(
     intent: RuntimeDiagnosisIntent,
 ) -> tuple[EvidenceSelectionDraft, DiagnosisDraft]:
@@ -115,13 +142,20 @@ def runtime_intent_to_drafts(
     except EvidenceValidationError as exc:
         raise DiagnosisValidationError("Invalid runtime Evidence selections.") from exc
 
+    selections = tuple(intent.evidence_selections)
     diagnosis_draft = DiagnosisDraft(
         status=intent.status,
         target_metric=intent.target_metric,
-        target_evidence_id=intent.target_evidence_id,
+        target_evidence_id=_normalize_evidence_reference(
+            intent.target_evidence_id,
+            selections,
+        ),
         primary_driver=intent.primary_driver,
         affected_scope=scope,
-        evidence_ids=intent.evidence_ids,
+        evidence_ids=tuple(
+            _normalize_evidence_reference(item, selections)
+            for item in intent.evidence_ids
+        ),
         confidence=_parse_confidence(intent.confidence),
         limitations=intent.limitations,
     )

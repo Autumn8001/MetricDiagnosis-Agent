@@ -410,9 +410,9 @@ def create_query_metric_tool(
 
         Args:
             metric: Metric identifier declared in the semantic registry.
-            start_date: Current-period start date in YYYY-MM-DD format.
-            end_date: Current-period end date in YYYY-MM-DD format.
-            compare_to: Baseline strategy; currently previous_7_days.
+            start_date: Single-day current-period date in YYYY-MM-DD format. Must equal end_date.
+            end_date: Single-day current-period date in YYYY-MM-DD format. Must equal start_date.
+            compare_to: Baseline strategy; use previous_7_days instead of widening the current date range.
             filters: Optional semantic dimension/value filter items.
             group_by: Optional semantic dimensions used to segment the result.
         """
@@ -480,9 +480,9 @@ def create_query_related_metrics_tool(
 
         Args:
             metric: Source metric identifier declared in the semantic registry.
-            start_date: Current-period start date in YYYY-MM-DD format.
-            end_date: Current-period end date in YYYY-MM-DD format.
-            compare_to: Baseline strategy; currently previous_7_days.
+            start_date: Single-day current-period date in YYYY-MM-DD format. Must equal end_date.
+            end_date: Single-day current-period date in YYYY-MM-DD format. Must equal start_date.
+            compare_to: Baseline strategy; use previous_7_days instead of widening the current date range.
             filters: Optional semantic dimension/value filter items.
             group_by: Optional semantic dimensions used to segment the result.
         """

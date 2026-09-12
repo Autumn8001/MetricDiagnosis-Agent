@@ -4,7 +4,7 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
 
 ## 当前状态
 
-* **当前阶段**：Stage 1 Portfolio MVP 已完成实现，处于 Stabilization / Acceptance 收尾。FastAPI 与 React Diagnosis Workspace 已落地；Hermetic 测试和构建已通过，但真实 Provider + PostgreSQL 的三场景 Live Agent 验收尚未形成可复核证据，因此不能宣称 Agent 自主调查已经最终验收。
+* **当前阶段**：Stage 1 Portfolio MVP 已完成实现，处于 Stabilization / Acceptance 收尾。FastAPI 与 React Diagnosis Workspace 已落地；Hermetic 测试和构建已通过。真实 Provider + PostgreSQL 验收已实际启动，但 Canonical 场景因模型引用了本次 Tool Output 中不存在的 `observation_id` 而 Fail-Closed，三场景尚未通过，因此不能宣称 Agent 自主调查已经最终验收。
 * **当前范围**：
   - 基础 Python 3.12+ 脚手架与元数据（当前验证解释器：Python 3.13.5）；
   - Phase 0 人工调查契约规格（[docs/phase-0-manual-investigation.md](docs/phase-0-manual-investigation.md)）；
@@ -26,9 +26,9 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
   - Phase 10 React Diagnosis Workspace 前端工程（`frontend/`：React + TS + Vite + 原生 Vanilla CSS，包含拓扑图、调查轨迹流、证据链看板、结构化诊断与追问交互）；
   - 项目学习与开发日志（[docs/project-learning-log.md](docs/project-learning-log.md)）；
   - Agent 运行状态与接管指南（[docs/agent-state.md](docs/agent-state.md), [AGENTS.md](AGENTS.md)）。
-* **当前权威验证（2026-09-12）**：后端 435 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
+* **当前权威验证（2026-09-12）**：后端 436 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
 * **演示口径**：Fixture Preview 是确定性离线预览，用于展示 UI 与数据契约，不得称为真实 Agent Run；Live 模式才用于真实 Provider 调查。
-* **未完成验收**：真实 Provider + PostgreSQL 的 Canonical / Traffic / No-anomaly 三场景，以及 10 Case Live Evaluation。API 服务层已经直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`；当前配置为第三方兼容 Provider，发送 Synthetic Benchmark 数据前仍需显式授权。
+* **未完成验收**：真实 Provider + PostgreSQL 的 Canonical / Traffic / No-anomaly 三场景，以及 10 Case Live Evaluation。三场景运行已获授权并实际调用兼容 Provider；最新一次在 Canonical 场景因无效 Observation 引用被证据解析边界拒绝，数据库已恢复且没有生成 PASS artifact。API 服务层已直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
 * **明确延后**：复杂多租户/用户系统、Go Gateway、大规模云端多 Agent 编排。
 * **开发约束与文档**：
   - 后续所有开发工作必须严格遵守 [任务书.md](任务书.md)；
@@ -430,6 +430,8 @@ python backend/scripts/verify_phase6_live_investigation.py
 5. **严格预算与轮次**：各场景均在 8 次工具调用与 10 轮模型交互内顺利终止；
 6. **证据溯源**：所有引用的 Evidence 100% 对应本场 Run 产生的真实数据库 Observation；
 7. **环境恢复**：执行完毕后自动恢复数据库至 `canonical` 演示场景。
+
+截至 2026-09-12，使用 CLI / 环境变量显式指定的兼容 Provider 模型完成了真实调用与多次 Analytics Tool 调用，但尚未通过三场景验收。最新 Canonical Run 的 Diagnosis Draft 引用了本次 Tool Output 中不存在的 `observation_id`，系统按设计 Fail-Closed；数据库已恢复到 canonical，失败运行未生成 PASS artifact。这里记录的是 Provider 输出契约不合格，不是脚本未执行，也不是验收通过。
 
 ### 13. Phase 7 Structured Diagnosis Domain Contract
 

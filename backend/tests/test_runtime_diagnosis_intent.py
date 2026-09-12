@@ -57,6 +57,23 @@ class TestRuntimeDiagnosisIntent(unittest.TestCase):
         self.assertEqual(dict(diagnosis.affected_scope), {"marketplace": "US", "traffic_source": "Ads"})
         self.assertEqual(diagnosis.confidence, Decimal("0.90"))
 
+    def test_unambiguous_observation_id_evidence_aliases_are_normalized(self) -> None:
+        payload = diagnosed_payload()
+        payload["target_evidence_id"] = "obs-target"
+        payload["evidence_ids"] = ["obs-target", "obs-driver", "obs-control"]
+
+        _, diagnosis = runtime_intent_to_drafts(self.parse(payload))
+
+        self.assertEqual(diagnosis.target_evidence_id, "evidence:obs-target:supporting")
+        self.assertEqual(
+            diagnosis.evidence_ids,
+            (
+                "evidence:obs-target:supporting",
+                "evidence:obs-driver:supporting",
+                "evidence:obs-control:negative_control",
+            ),
+        )
+
     def test_no_anomaly_and_empty_budget_intents_convert(self) -> None:
         normal = diagnosed_payload()
         normal.update({

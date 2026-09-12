@@ -6,10 +6,10 @@
 - **Snapshot Date**: 2026-09-12
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
 - **Current Task**: Final factual reconciliation and live acceptance gate
-- **Current Task Status**: Hermetic implementation verified; Live Agent acceptance not executed with reproducible evidence
-- **Last Verified Batch**: 2026-09-11 MVP hardening batch
-- **Current Blocker**: explicit authorization to send Synthetic Benchmark metric data to the configured third-party compatible Provider
-- **Current Phase Status**: Portfolio MVP implementation complete; final Live acceptance pending
+- **Current Task Status**: Real Provider run executed; Live Agent acceptance failed closed on an invalid Observation reference
+- **Last Verified Batch**: 2026-09-12 final hardening and reconciliation
+- **Current Blocker**: configured compatible model did not conform to the evidence-reference contract during the Canonical Run
+- **Current Phase Status**: Portfolio MVP implementation complete; final Live acceptance not passed
 - **Later Work**: only after the Live gate; no new feature task is active
 
 ---
@@ -43,12 +43,12 @@
 | `MS-P4-002` | Phase 4 | PostgreSQL Readonly Role 与权限验证 | Accepted |
 | `MS-P4-003` | Phase 4 | ToolResult → Observation 可追溯转换基础 | Accepted |
 | `MS-P4-004` | Phase 4 | Observation → Evidence 显式提升契约 | Accepted |
-| `MS-P5-001` | Phase 5 | OpenAI Agents SDK Runtime Capability Spike | Blocked — Live Spike 未执行 |
+| `MS-P5-001` | Phase 5 | OpenAI Agents SDK Runtime Capability Spike | Live capability observed during MS-P6-004 attempt |
 | `MS-P5-001-R1` | Phase 5 | Runtime budget/trace fail-closed hardening | Accepted |
 | `MS-P6-001` | Phase 6 | Runtime Analytics Tool Bridge | Accepted |
 | `MS-P6-002` | Phase 6 | Investigation Run Contract 与多调用 Trace 验证 | Accepted |
 | `MS-P6-003` | Phase 6 | Development Scenario Investigation Harness | Accepted |
-| `MS-P6-004` | Phase 6 | Live Development Set Agent Evaluation | Ready but not executed with reproducible real-run evidence |
+| `MS-P6-004` | Phase 6 | Live Development Set Agent Evaluation | Executed — FAIL (unknown Observation reference) |
 | `MS-P7-001` | Phase 7 | Structured Diagnosis Domain Contract | Accepted |
 | `MS-P7-002` | Phase 7 | Diagnosis Draft Resolution 与 Evidence Citation Verification | Accepted |
 | `MS-P7-003` | Phase 7 | Evidence Selection Draft 与 Observation Citation Resolution | Accepted |
@@ -290,10 +290,12 @@
 | `CONFIG-SEC-001` | Verified | 示例配置仅保留占位凭据与官方 Provider 默认地址；仓库扫描未发现已知明文测试凭据 |
 | `TRACE-API-001` | Verified | API Live Trace 唯一来源改为 SDK `InvestigationRunSummary.tool_trace`，组合工具内部调用不再冒充模型动作 |
 | `LIVE-ARTIFACT-001` | Verified hermetically | 三场景验收增加原子脱敏 artifact、Traffic 完整 scope 与可信动态分支断言 |
+| `LIVE-CONTRACT-001` | Verified hermetically | Runtime Prompt 与 Tool 文档明确单日 Current Period；Baseline 只由 `previous_7_days` 计算 |
+| `LIVE-REF-001` | Verified hermetically | 仅对可唯一映射的 Observation-ID-as-Evidence-ID 表达差异做确定性归一化；未知或歧义引用继续 Fail-Closed |
 
 ### 3.3 明确未实现或未验收能力
 - 云端多租户与生产级用户账号系统（属于 Stage 2 规划）
-- 真实模型在开发集上的自主调查与 Diagnosis 验收（MS-P6-004：实现已就绪，但缺少可复核三场景真实运行证据）
+- 真实模型在开发集上的自主调查与 Diagnosis 验收（MS-P6-004 已执行，但 Canonical 场景未通过 Evidence/Observation 引用完整性校验）
 - 大规模 Holdout 盲测数据集与在线全量 Agent 评测运行
 - Go Gateway（Stage 1 保持轻量单体，严格避免过度工程）
 - 有状态的连续追问 Session；当前追问是新的独立调查请求
@@ -302,13 +304,13 @@
 
 ## 4. 当前验证状态
 
-- **Last Verification Date**: 2026-09-11
-- **Backend Unit Tests**: 435/435 PASS
+- **Last Verification Date**: 2026-09-12
+- **Backend Unit Tests**: 436/436 PASS
 - **Frontend Lint**: PASS
 - **Frontend Production Build**: PASS
 - **10 Case Hermetic Evaluation**: PASS (`--hermetic --runs-per-case 1`)，仅证明评测管道与受控离线输入，不证明真实模型能力
 - **Credential Scan**: PASS（显式排除本地 `.env`、`.git`、`node_modules` 与构建产物）
-- **Real Provider + PostgreSQL Three-case Run**: NOT ACCEPTED / no reproducible artifact
+- **Real Provider + PostgreSQL Three-case Run**: EXECUTED / FAIL-CLOSED during Canonical / no PASS artifact
 - **Real Provider 10 Case Evaluation**: NOT EXECUTED
 - **Historical Browser Verification**: 文档保留历史报告，但本轮未重新执行，不作为当前新增验收证据
 
@@ -317,16 +319,16 @@
 ## 5. 当前阻塞与下一步
 
 - **实现状态**：Stage 1 Portfolio MVP 的 Core、Evaluation、API 与 UI 已形成可运行实现；API 已直接使用可信 SDK Tool Trace，三场景脚本可原子输出脱敏验收 artifact。
-- **验证状态**：435 项后端测试通过；API 与 Live Validator 专项各 23 项通过。失败的真实运行没有生成 PASS artifact。
-- **验收阻塞**：本地 PostgreSQL 与隔离 Python 环境已就绪；当前 Provider 是第三方兼容端点。在用户明确授权把 Synthetic Benchmark 指标数据发送至该端点前，不执行真实三场景调用。
+- **验证状态**：436 项后端测试通过；API 与 Live Validator 专项各 23 项通过。真实 Provider 已被调用，失败运行没有生成 PASS artifact。
+- **验收阻塞**：用户已授权发送 Synthetic Benchmark 数据；本地 PostgreSQL 与隔离 Python 环境可用。真实运行先后暴露并修正了单日查询参数表达和可唯一解析的 Evidence ID 表达差异；最新 Canonical Run 仍引用了本次 Tool Output 中不存在的 `observation_id`，被严格解析器拒绝。
 - **安全边界**：真实 `.env` 保持本地且不得提交；artifact 不记录 API Key、数据库连接串或完整 Provider URL。
-- **恢复开发时的唯一优先级**：获得数据发送授权后执行三场景 Live 验收；通过前不启动新 Phase。
+- **恢复开发时的唯一优先级**：在不削弱 Evidence 完整性校验的前提下，提高模型对 Observation/Evidence 引用契约的遵循度，然后重新执行三场景 Live 验收；通过前不启动新 Phase。
 
 ---
 
 ## 6. 工作区状态说明
 
-- 当前仓库尚无干净的新项目 Git 提交基线，开发遵循 Minimal Diff 原则。
+- 当前仓库已建立并推送 Stage 1 MVP Git 基线，后续继续遵循 Minimal Diff 原则。
 - 旧占位文件 `1` 的删除已由用户确认，无需恢复。
 - 新 Agent 必须首先运行 `git status --short --untracked-files=all` 查看工作区。
 - 必须对比任务开始与结束时的实际文件状态，严禁修改或覆盖未授权文件。
