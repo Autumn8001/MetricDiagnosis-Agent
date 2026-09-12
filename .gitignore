@@ -1,0 +1,25 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# Testing & Linting cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Distribution & Build
+dist/
+build/
+*.egg-info/
+frontend/dist/
+
+# Node
+node_modules/
+frontend/node_modules/

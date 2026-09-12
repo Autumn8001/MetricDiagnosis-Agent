@@ -1,0 +1,109 @@
+version: 1
+
+source:
+  table: warehouse.fact_daily_performance
+  time_dimension: date
+  dimensions:
+    - marketplace
+    - asin
+    - traffic_source
+
+metrics:
+  sales:
+    display_name: Sales
+    description: Total gross sales in USD (refunds are not deducted in Phase 2)
+    metric_type: additive
+    unit: usd
+    formula: SUM(sales)
+    source_fields:
+      - sales
+    dimensions:
+      - marketplace
+      - asin
+      - traffic_source
+    dependencies: []
+    related_metrics:
+      - orders
+      - sessions
+      - conversion_rate
+      - aov
+
+  orders:
+    display_name: Orders
+    description: Total count of completed orders
+    metric_type: additive
+    unit: count
+    formula: SUM(orders)
+    source_fields:
+      - orders
+    dimensions:
+      - marketplace
+      - asin
+      - traffic_source
+    dependencies: []
+    related_metrics:
+      - sales
+      - sessions
+      - conversion_rate
+      - aov
+
+  sessions:
+    display_name: Sessions
+    description: Total count of user traffic sessions
+    metric_type: additive
+    unit: count
+    formula: SUM(sessions)
+    source_fields:
+      - sessions
+    dimensions:
+      - marketplace
+      - asin
+      - traffic_source
+    dependencies: []
+    related_metrics:
+      - sales
+      - orders
+      - conversion_rate
+
+  conversion_rate:
+    display_name: Conversion Rate
+    description: Ratio of orders to sessions (evaluates to unavailable when denominator is zero)
+    metric_type: ratio
+    unit: ratio
+    formula: SUM(orders) / NULLIF(SUM(sessions), 0)
+    source_fields:
+      - orders
+      - sessions
+    dimensions:
+      - marketplace
+      - asin
+      - traffic_source
+    dependencies:
+      - orders
+      - sessions
+    related_metrics:
+      - sales
+      - orders
+      - sessions
+      - aov
+
+  aov:
+    display_name: Average Order Value
+    description: Average sales revenue per order (evaluates to unavailable when denominator is zero)
+    metric_type: ratio
+    unit: usd
+    formula: SUM(sales) / NULLIF(SUM(orders), 0)
+    source_fields:
+      - sales
+      - orders
+    dimensions:
+      - marketplace
+      - asin
+      - traffic_source
+    dependencies:
+      - sales
+      - orders
+    related_metrics:
+      - sales
+      - orders
+      - conversion_rate

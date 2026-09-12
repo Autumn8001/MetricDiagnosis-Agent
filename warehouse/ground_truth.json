@@ -1,0 +1,67 @@
+[
+  {
+    "case_id": "canonical_sales_cr_us_asin_a_ads",
+    "scenario": "canonical",
+    "target_metric": "sales",
+    "status": "diagnosed",
+    "primary_driver": "conversion_rate",
+    "affected_scope": {
+      "marketplace": "US",
+      "asin": "ASIN-A",
+      "traffic_source": "Ads"
+    },
+    "expected_stable_metrics": [
+      "aov",
+      "sessions"
+    ],
+    "negative_controls": {
+      "marketplaces": ["DE", "UK"],
+      "asins": ["ASIN-B", "ASIN-C"],
+      "traffic_sources": ["Organic"]
+    },
+    "causal_boundary": "Locates data-level anomaly contribution to US / ASIN-A / Ads conversion rate; does not prove external business root cause."
+  },
+  {
+    "case_id": "alternate_sales_sessions_us_asin_a_ads",
+    "scenario": "traffic",
+    "target_metric": "sales",
+    "status": "diagnosed",
+    "primary_driver": "sessions",
+    "affected_scope": {
+      "marketplace": "US",
+      "asin": "ASIN-A",
+      "traffic_source": "Ads"
+    },
+    "expected_stable_metrics": [
+      "aov",
+      "conversion_rate"
+    ],
+    "negative_controls": {
+      "marketplaces": ["DE", "UK"],
+      "asins": ["ASIN-B", "ASIN-C"],
+      "traffic_sources": ["Organic"]
+    },
+    "causal_boundary": "Locates data-level anomaly contribution to US / ASIN-A / Ads traffic volume; does not prove external business root cause."
+  },
+  {
+    "case_id": "normal_fluctuation_no_material_anomaly",
+    "scenario": "no_anomaly",
+    "target_metric": "sales",
+    "status": "no_material_anomaly",
+    "primary_driver": null,
+    "affected_scope": {},
+    "expected_stable_metrics": [
+      "sales",
+      "orders",
+      "sessions",
+      "conversion_rate",
+      "aov"
+    ],
+    "negative_controls": {
+      "marketplaces": ["US", "DE", "UK"],
+      "asins": ["ASIN-A", "ASIN-B", "ASIN-C"],
+      "traffic_sources": ["Ads", "Organic"]
+    },
+    "causal_boundary": "All metric changes remain within normal fluctuation threshold (<5%); no material anomaly exists."
+  }
+]

@@ -1,0 +1,17 @@
+[project]
+name = "metricsleuth"
+version = "0.1.0"
+description = "MetricSleuth metric anomaly diagnosis agent"
+requires-python = ">=3.12"
+dependencies = [
+    "openai-agents==0.22.0",
+    "pydantic>=2.12,<3",
+    "psycopg[binary]>=3.2,<4",
+    "PyYAML>=6,<7",
+    "sqlglot>=30.17.0,<30.18",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "httpx>=0.27,<1",
+    "python-dotenv>=1.0,<2",
+    "brotlicffi>=1.2,<2"
+]
