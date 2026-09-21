@@ -24,6 +24,7 @@ def diagnosed_payload() -> dict:
         "status": "diagnosed",
         "target_metric": "sales",
         "target_evidence_id": "evidence:obs-target:supporting",
+        "driver_evidence_id": "evidence:obs-driver:supporting",
         "primary_driver": "conversion_rate",
         "affected_scope": [
             {"dimension": "marketplace", "value": "US"},
@@ -80,6 +81,7 @@ class TestRuntimeDiagnosisIntent(unittest.TestCase):
             "evidence_selections": [{"observation_id": "obs-normal", "role": "supporting"}],
             "status": "no_material_anomaly",
             "target_evidence_id": "evidence:obs-normal:supporting",
+            "driver_evidence_id": None,
             "primary_driver": None,
             "affected_scope": [],
             "evidence_ids": ["evidence:obs-normal:supporting"],
@@ -90,7 +92,7 @@ class TestRuntimeDiagnosisIntent(unittest.TestCase):
         budget = diagnosed_payload()
         budget.update({
             "evidence_selections": [], "status": "budget_exhausted",
-            "target_evidence_id": None, "primary_driver": None,
+            "target_evidence_id": None, "driver_evidence_id": None, "primary_driver": None,
             "affected_scope": [], "evidence_ids": [], "confidence": None,
         })
         evidence, diagnosis = runtime_intent_to_drafts(self.parse(budget))
@@ -174,6 +176,18 @@ class TestRuntimeDiagnosisIntent(unittest.TestCase):
                     assert_closed(value)
 
         assert_closed(json_schema)
+
+    def test_output_schema_describes_verbatim_ids_and_joint_diagnosis_support(self) -> None:
+        schema = AgentOutputSchema(RuntimeDiagnosisIntent).json_schema()
+        serialized = __import__("json").dumps(schema)
+
+        self.assertIn("character-for-character", serialized)
+        self.assertIn("Never invent, derive, shorten, or paraphrase", serialized)
+        self.assertIn("same anomalous supporting", serialized)
+        self.assertIn("Metric identifier only, never a dimension", serialized)
+        self.assertIn("metric == primary_driver", serialized)
+        self.assertIn("filters/dimensions cover all affected_scope", serialized)
+        self.assertIn("do not combine separate", serialized)
 
     def test_non_intent_input_is_rejected(self) -> None:
         with self.assertRaises(DiagnosisValidationError):

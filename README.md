@@ -26,9 +26,9 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
   - Phase 10 React Diagnosis Workspace 前端工程（`frontend/`：React + TS + Vite + 原生 Vanilla CSS，包含拓扑图、调查轨迹流、证据链看板、结构化诊断与追问交互）；
   - 项目学习与开发日志（[docs/project-learning-log.md](docs/project-learning-log.md)）；
   - Agent 运行状态与接管指南（[docs/agent-state.md](docs/agent-state.md), [AGENTS.md](AGENTS.md)）。
-* **当前权威验证（2026-09-12）**：后端 436 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
+* **当前权威验证（2026-09-21）**：后端 438 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
 * **演示口径**：Fixture Preview 是确定性离线预览，用于展示 UI 与数据契约，不得称为真实 Agent Run；Live 模式才用于真实 Provider 调查。
-* **未完成验收**：真实 Provider + PostgreSQL 的 Canonical / Traffic / No-anomaly 三场景，以及 10 Case Live Evaluation。三场景运行已获授权并实际调用兼容 Provider；最新一次在 Canonical 场景因无效 Observation 引用被证据解析边界拒绝，数据库已恢复且没有生成 PASS artifact。API 服务层已直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
+* **未完成验收**：真实 Provider + PostgreSQL 的 Canonical / Traffic / No-anomaly 三场景，以及 10 Case Live Evaluation。已对该 Provider 的全部两个可用模型执行 Canonical；均因未遵守 Metric Driver / Evidence / Scope 合同而被 Fail-Closed（未生成 PASS artifact），数据库均已恢复。API 服务层已直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
 * **明确延后**：复杂多租户/用户系统、Go Gateway、大规模云端多 Agent 编排。
 * **开发约束与文档**：
   - 后续所有开发工作必须严格遵守 [任务书.md](任务书.md)；

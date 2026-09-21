@@ -6,9 +6,9 @@
 - **Snapshot Date**: 2026-09-12
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
 - **Current Task**: Final factual reconciliation and live acceptance gate
-- **Current Task Status**: Real Provider run executed; Live Agent acceptance failed closed on an invalid Observation reference
-- **Last Verified Batch**: 2026-09-12 final hardening and reconciliation
-- **Current Blocker**: configured compatible model did not conform to the evidence-reference contract during the Canonical Run
+- **Current Task Status**: Real Provider runs executed against all available compatible models; Live Agent acceptance remains Fail-Closed
+- **Last Verified Batch**: 2026-09-21 live contract hardening and model comparison
+- **Current Blocker**: neither available compatible model demonstrated the required Metric Driver / Evidence / Scope contract on Canonical
 - **Current Phase Status**: Portfolio MVP implementation complete; final Live acceptance not passed
 - **Later Work**: only after the Live gate; no new feature task is active
 
@@ -48,7 +48,7 @@
 | `MS-P6-001` | Phase 6 | Runtime Analytics Tool Bridge | Accepted |
 | `MS-P6-002` | Phase 6 | Investigation Run Contract 与多调用 Trace 验证 | Accepted |
 | `MS-P6-003` | Phase 6 | Development Scenario Investigation Harness | Accepted |
-| `MS-P6-004` | Phase 6 | Live Development Set Agent Evaluation | Executed — FAIL (unknown Observation reference) |
+| `MS-P6-004` | Phase 6 | Live Development Set Agent Evaluation | Executed — FAIL (provider contract nonconformance) |
 | `MS-P7-001` | Phase 7 | Structured Diagnosis Domain Contract | Accepted |
 | `MS-P7-002` | Phase 7 | Diagnosis Draft Resolution 与 Evidence Citation Verification | Accepted |
 | `MS-P7-003` | Phase 7 | Evidence Selection Draft 与 Observation Citation Resolution | Accepted |
@@ -292,10 +292,11 @@
 | `LIVE-ARTIFACT-001` | Verified hermetically | 三场景验收增加原子脱敏 artifact、Traffic 完整 scope 与可信动态分支断言 |
 | `LIVE-CONTRACT-001` | Verified hermetically | Runtime Prompt 与 Tool 文档明确单日 Current Period；Baseline 只由 `previous_7_days` 计算 |
 | `LIVE-REF-001` | Verified hermetically | 仅对可唯一映射的 Observation-ID-as-Evidence-ID 表达差异做确定性归一化；未知或歧义引用继续 Fail-Closed |
+| `LIVE-DIAG-002` | Verified hermetically | Structured Intent 显式 driver_evidence_id、Tool Output 证据协议与失败审计备注；Driver-at-Scope 不变量未被放宽 |
 
 ### 3.3 明确未实现或未验收能力
 - 云端多租户与生产级用户账号系统（属于 Stage 2 规划）
-- 真实模型在开发集上的自主调查与 Diagnosis 验收（MS-P6-004 已执行，但 Canonical 场景未通过 Evidence/Observation 引用完整性校验）
+- 真实模型在开发集上的自主调查与 Diagnosis 验收（MS-P6-004 已执行；该兼容端点的两个可用模型均未通过 Canonical 的 Driver / Evidence / Scope 校验）
 - 大规模 Holdout 盲测数据集与在线全量 Agent 评测运行
 - Go Gateway（Stage 1 保持轻量单体，严格避免过度工程）
 - 有状态的连续追问 Session；当前追问是新的独立调查请求
@@ -304,13 +305,13 @@
 
 ## 4. 当前验证状态
 
-- **Last Verification Date**: 2026-09-12
-- **Backend Unit Tests**: 436/436 PASS
+- **Last Verification Date**: 2026-09-21
+- **Backend Unit Tests**: 438/438 PASS
 - **Frontend Lint**: PASS
 - **Frontend Production Build**: PASS
 - **10 Case Hermetic Evaluation**: PASS (`--hermetic --runs-per-case 1`)，仅证明评测管道与受控离线输入，不证明真实模型能力
 - **Credential Scan**: PASS（显式排除本地 `.env`、`.git`、`node_modules` 与构建产物）
-- **Real Provider + PostgreSQL Three-case Run**: EXECUTED / FAIL-CLOSED during Canonical / no PASS artifact
+- **Real Provider + PostgreSQL Three-case Run**: EXECUTED / both available compatible models FAIL-CLOSED during Canonical / no PASS artifact
 - **Real Provider 10 Case Evaluation**: NOT EXECUTED
 - **Historical Browser Verification**: 文档保留历史报告，但本轮未重新执行，不作为当前新增验收证据
 
@@ -319,10 +320,10 @@
 ## 5. 当前阻塞与下一步
 
 - **实现状态**：Stage 1 Portfolio MVP 的 Core、Evaluation、API 与 UI 已形成可运行实现；API 已直接使用可信 SDK Tool Trace，三场景脚本可原子输出脱敏验收 artifact。
-- **验证状态**：436 项后端测试通过；API 与 Live Validator 专项各 23 项通过。真实 Provider 已被调用，失败运行没有生成 PASS artifact。
-- **验收阻塞**：用户已授权发送 Synthetic Benchmark 数据；本地 PostgreSQL 与隔离 Python 环境可用。真实运行先后暴露并修正了单日查询参数表达和可唯一解析的 Evidence ID 表达差异；最新 Canonical Run 仍引用了本次 Tool Output 中不存在的 `observation_id`，被严格解析器拒绝。
+- **验证状态**：438 项后端测试通过；API 与 Live Validator 专项各 23 项通过。真实 Provider 已被调用，失败运行没有生成 PASS artifact。
+- **验收阻塞**：用户已授权发送 Synthetic Benchmark 数据；本地 PostgreSQL 可用。当前 Provider 仅提供 grok-4.5 与 grok-4.6：前者能查询 related metrics 但会把 target metric 当 Driver 或在没有 scope 时结束，后者曾把维度当 Driver 或给出空 no-anomaly。两者均被 Evidence 与 Diagnosis 的领域边界拒绝。
 - **安全边界**：真实 `.env` 保持本地且不得提交；artifact 不记录 API Key、数据库连接串或完整 Provider URL。
-- **恢复开发时的唯一优先级**：在不削弱 Evidence 完整性校验的前提下，提高模型对 Observation/Evidence 引用契约的遵循度，然后重新执行三场景 Live 验收；通过前不启动新 Phase。
+- **恢复开发时的唯一优先级**：获得可稳定支持 Tool Calling 与 JSON Schema 的模型/Provider 后重新执行三场景 Live 验收；或单独 ADR 决定是否增加可让 SDK Runtime 依据领域校验错误继续 replan 的最终提交工具。两者完成前不启动新 Phase。
 
 ---
 

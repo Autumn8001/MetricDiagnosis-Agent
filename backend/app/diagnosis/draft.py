@@ -68,6 +68,7 @@ class DiagnosisDraft:
     evidence_ids: tuple[str, ...]
     confidence: Decimal | None
     limitations: tuple[str, ...]
+    driver_evidence_id: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, DiagnosisStatus):
@@ -79,6 +80,12 @@ class DiagnosisDraft:
                 self,
                 "target_evidence_id",
                 _clean_string(self.target_evidence_id, "target_evidence_id"),
+            )
+        if self.driver_evidence_id is not None:
+            object.__setattr__(
+                self,
+                "driver_evidence_id",
+                _clean_string(self.driver_evidence_id, "driver_evidence_id"),
             )
         if self.primary_driver is not None:
             object.__setattr__(
@@ -164,6 +171,13 @@ def resolve_diagnosis_draft(
         raise DiagnosisValidationError(
             "target_evidence_id must be included in draft.evidence_ids."
         )
+    if (
+        draft.driver_evidence_id is not None
+        and draft.driver_evidence_id not in draft.evidence_ids
+    ):
+        raise DiagnosisValidationError(
+            "driver_evidence_id must be included in draft.evidence_ids."
+        )
 
     selected: list[Evidence] = []
     for evidence_id in draft.evidence_ids:
@@ -180,6 +194,7 @@ def resolve_diagnosis_draft(
         target_metric=draft.target_metric,
         evidence=selected,
         target_evidence_id=draft.target_evidence_id,
+        driver_evidence_id=draft.driver_evidence_id,
         primary_driver=draft.primary_driver,
         affected_scope=draft.affected_scope,
         confidence=draft.confidence,

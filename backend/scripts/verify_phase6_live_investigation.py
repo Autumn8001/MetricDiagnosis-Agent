@@ -978,6 +978,8 @@ def main() -> int:
             _write_live_artifact(args.output_json, artifact)
             print(f"Live artifact written atomically: {args.output_json}")
     except Exception as exc:
+        for note in getattr(exc, "__notes__", ()):
+            print(f"[LIVE DIAGNOSTIC] {note}", file=sys.stderr)
         print(f"\n[LIVE INVESTIGATION FAILED] {exc}", file=sys.stderr)
         return 1
 

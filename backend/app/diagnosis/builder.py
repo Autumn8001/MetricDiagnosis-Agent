@@ -61,6 +61,7 @@ def build_diagnosis(
     target_metric: str,
     evidence: Sequence[Evidence],
     target_evidence_id: str | None = None,
+    driver_evidence_id: str | None = None,
     primary_driver: str | None = None,
     affected_scope: Mapping[str, str] | None = None,
     confidence: Decimal | None = None,
@@ -104,6 +105,13 @@ def build_diagnosis(
                 "primary_driver and affected_scope must be jointly supported by one "
                 "anomalous supporting Evidence item."
             )
+        if driver_evidence_id is not None:
+            selected_driver = _find_evidence(items, driver_evidence_id)
+            if selected_driver not in driver_at_scope_support:
+                raise DiagnosisValidationError(
+                    "driver_evidence_id must identify the anomalous supporting Evidence "
+                    "that jointly supports primary_driver and affected_scope."
+                )
         if not any(item.role == EvidenceRole.NEGATIVE_CONTROL for item in items):
             raise DiagnosisValidationError("Diagnosed status requires negative-control Evidence.")
     elif status == DiagnosisStatus.NO_MATERIAL_ANOMALY:

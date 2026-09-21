@@ -82,7 +82,15 @@ def create_evidence_driven_agent(
         output_type=RuntimeDiagnosisIntent,
         instructions=(
             "Investigate the requested business metric using only the available controlled "
-            "analytics tools. When semantic meaning is needed, use get_metric_definition and "
+            "analytics tools. Before returning a diagnosed intent, use get_metric_definition for "
+            "the target metric. When the target definition declares related metrics, investigate "
+            "the relevant related metrics to identify the primary driver before attributing scope. "
+            "A primary_driver is always a metric identifier, never a dimension or dimension value. "
+            "If a related metric is anomalous, do not use the target metric itself as its primary "
+            "driver and do not finish diagnosed yet: investigate that candidate driver across "
+            "relevant allowed dimensions until one driver Observation jointly supports a scope, "
+            "or until the evidence or budget justifies a non-success status. "
+            "When semantic meaning is needed, use get_metric_definition and "
             "do not invent metric formulas, dependencies, relationships, units, or dimensions. "
             "Choose tools, metrics, filters, and grouping dimensions from semantic definitions "
             "and observations returned by the tools; do not follow a fixed drill-down sequence. "
@@ -91,20 +99,28 @@ def create_evidence_driven_agent(
             "baseline with compare_to='previous_7_days'; never encode the baseline by widening "
             "the current-period date range. "
             "Treat tool Output as the sole source of factual Observation IDs. In your final "
-            "structured intent, cite only Observation IDs that appeared in tool Output and use "
+            "structured intent, copy every observation_id character-for-character from the current "
+            "tool Output; never invent, derive, shorten, or paraphrase an Observation ID. Use "
             "the deterministic Evidence ID format evidence:{observation_id}:{role}. "
             "Allowed roles are 'supporting', 'negative_control', or 'limitation'. "
-            "For 'diagnosed' status: set primary_driver to the identified driver metric, provide "
-            "the identified affected_scope items (dimension and value), and cite target_evidence_id "
-            "from the target metric observation. "
+            "For 'diagnosed' status, one and the same selected anomalous supporting Observation "
+            "must have metric equal to primary_driver and filters/dimensions covering every "
+            "affected_scope dimension and value. Do not splice primary_driver from one Evidence "
+            "item with affected_scope from another. Set driver_evidence_id to that exact "
+            "Observation's deterministic Evidence ID and include it in evidence_ids. If no "
+            "single Observation satisfies this joint support requirement, use an appropriate "
+            "non-success status instead. Cite "
+            "target_evidence_id from the target metric Observation. "
             "For 'no_material_anomaly' status: set primary_driver to null and affected_scope to []. "
             "Always include at least one limitation in limitations (e.g. 'Data-level contribution only'). "
             "Set confidence to a decimal string in [0, 1] (e.g. '0.90'). "
             "Do not invent current values, baseline values, relative changes, units, periods, "
-            "dimensions, sample sizes, or error details. Do not provide an external business "
-            "root cause. If the available evidence cannot support a successful diagnosis, use "
-            "an appropriate non-success status and state the limitation; budget or tool failure "
-            "may finish without evidence."
+            "dimensions, sample sizes, or error details. Before finishing, cross-check every "
+            "observation_id and Evidence ID against the current tool outputs and ensure the "
+            "diagnosed joint-support rule is satisfied. Do not provide an external business root "
+            "cause. If the available evidence cannot support a successful diagnosis, use an "
+            "appropriate non-success status and state the limitation; budget or tool failure may "
+            "finish without evidence."
         ),
     )
 
@@ -200,13 +216,37 @@ def run_evidence_driven_diagnosis(
         if created_at is None
         else created_at
     )
-    composition = compose_diagnosis_from_observations(
-        diagnosis_id=diagnosis_id.strip(),
-        evidence_selection_draft=evidence_selection_draft,
-        diagnosis_draft=diagnosis_draft,
-        observation_catalog=observation_catalog,
-        created_at=timestamp,
-    )
+    try:
+        composition = compose_diagnosis_from_observations(
+            diagnosis_id=diagnosis_id.strip(),
+            evidence_selection_draft=evidence_selection_draft,
+            diagnosis_draft=diagnosis_draft,
+            observation_catalog=observation_catalog,
+            created_at=timestamp,
+        )
+    except Exception as exc:
+        # Keep the domain exception type intact.  The compact reference-only note
+        # is for live-evaluation diagnosis; it never includes metric values,
+        # database configuration, or provider credentials.
+        exc.add_note(
+            "Runtime intent references: "
+            + repr(
+                {
+                    "status": final_output.status.value,
+                    "primary_driver": final_output.primary_driver,
+                    "driver_evidence_id": final_output.driver_evidence_id,
+                    "affected_scope": [
+                        {"dimension": item.dimension, "value": item.value}
+                        for item in final_output.affected_scope
+                    ],
+                    "evidence_selections": [
+                        {"observation_id": item.observation_id, "role": item.role.value}
+                        for item in final_output.evidence_selections
+                    ],
+                }
+            )
+        )
+        raise
     return EvidenceDrivenRunSummary(
         investigation=investigation,
         composition=composition,

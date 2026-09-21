@@ -182,6 +182,22 @@ class TestDiagnosis(unittest.TestCase):
                     created_at=NOW,
                 )
 
+    def test_explicit_driver_evidence_id_must_match_joint_support(self) -> None:
+        with self.assertRaisesRegex(DiagnosisValidationError, "driver_evidence_id"):
+            build_diagnosis(
+                diagnosis_id="bad-explicit-driver",
+                status=DiagnosisStatus.DIAGNOSED,
+                target_metric="sales",
+                evidence=[self.target, self.driver, self.control],
+                target_evidence_id=self.target.evidence_id,
+                driver_evidence_id=self.target.evidence_id,
+                primary_driver="conversion_rate",
+                affected_scope={"marketplace": "US"},
+                confidence=Decimal("0.5"),
+                limitations=["boundary"],
+                created_at=NOW,
+            )
+
     def test_no_anomaly_rejects_anomalous_evidence(self) -> None:
         with self.assertRaises(DiagnosisValidationError):
             build_diagnosis(

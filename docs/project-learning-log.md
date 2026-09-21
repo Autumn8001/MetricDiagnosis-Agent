@@ -45,7 +45,7 @@
 | `MS-P6-001` | Phase 6 | Runtime Analytics Tool Bridge | Accepted | `investigation_tools.py`, `test_investigation_tools.py` |
 | `MS-P6-002` | Phase 6 | Investigation Run Contract 与多调用 Trace 验证 | Accepted | `investigation_runtime.py`, `test_investigation_runtime.py` |
 | `MS-P6-003` | Phase 6 | Development Scenario Investigation Harness | Accepted | `verify_phase6_development_scenarios.py`, `test_development_scenarios.py` |
-| `MS-P6-004` | Phase 6 | Live Development Set Agent Evaluation | Executed — FAIL | Canonical Run 因引用本次 Tool Output 中不存在的 Observation 而 Fail-Closed；无 PASS artifact |
+| `MS-P6-004` | Phase 6 | Live Development Set Agent Evaluation | Executed — FAIL | 兼容 Provider 的两个可用模型均未通过 Canonical 的 Driver / Evidence / Scope 合同；无 PASS artifact |
 | `MS-P7-001` | Phase 7 | Structured Diagnosis Domain Contract | Accepted | `backend/app/diagnosis/`, `test_diagnosis.py` |
 | `MS-P7-002` | Phase 7 | Diagnosis Draft Resolution 与 Evidence Citation Verification | Accepted | `diagnosis/draft.py`, `test_diagnosis_draft.py` |
 | `MS-P7-003` | Phase 7 | Evidence Selection Draft 与 Observation Citation Resolution | Accepted | `evidence/selection.py`, `test_evidence_selection.py` |
@@ -75,6 +75,7 @@
 | `LIVE-ARTIFACT-001` | MVP Hardening | Reproducible Live Acceptance Artifact | Verified hermetically | 原子脱敏 artifact、Traffic 完整 scope、可信动态分支断言 |
 | `LIVE-CONTRACT-001` | MVP Hardening | Single-day Query Contract | Verified hermetically | Prompt 与 Tool 文档明确 Current Period 为同一自然日，Baseline 由比较策略生成 |
 | `LIVE-REF-001` | MVP Hardening | Evidence Reference Normalization | Verified hermetically | 仅归一化可唯一映射的 Observation ID；未知或歧义引用继续拒绝 |
+| `LIVE-DIAG-002` | MVP Hardening | Explicit Driver Evidence Contract | Verified hermetically | driver_evidence_id、Tool Output 协议与失败审计；未放宽联合支撑校验 |
 
 ---
 
@@ -801,16 +802,16 @@ configs/metrics.yaml
 
 ### 3.35 2026-09-11 MVP Acceptance Hardening Batch
 
-- **实现完成不等于真实模型验收** `[必须掌握]` `[面试高频]`：436 项 Hermetic 测试、前端 lint/build 和 10 Case 离线评测证明代码契约与评测管道可靠；它们不能替代真实 Provider + PostgreSQL 的三场景运行。当前 `MS-P6-004` 已执行，但因无效 Observation 引用 Fail-Closed，准确状态是 Executed — FAIL。
+- **实现完成不等于真实模型验收** `[必须掌握]` `[面试高频]`：438 项 Hermetic 测试、前端 lint/build 和 10 Case 离线评测证明代码契约与评测管道可靠；它们不能替代真实 Provider + PostgreSQL 的三场景运行。当前 `MS-P6-004` 已执行，但 Provider 模型未满足严格 Driver / Evidence / Scope 合同，准确状态是 Executed — FAIL。
 - **Driver-at-Scope 必须由同一证据支撑** `[必须掌握]`：不能把全局 Driver Evidence 与另一个 Segment Evidence 拼接成“该 Driver 导致该 Scope”的结论。同一条 anomalous supporting Evidence 必须同时匹配 primary driver 并覆盖完整 affected scope。
 - **模型自由度应位于调查动作选择** `[必须掌握]`：Agent 可调用 `get_metric_definition`、`query_metric`、`query_related_metrics`，由 Semantic Layer 提供事实；生产 Prompt 不写死 Canonical 下钻序列。
 - **SDK Trace 与业务侧录不同** `[建议掌握]`：`InvestigationRunSummary.tool_trace` 从 SDK Tool Call 原始参数与时序派生，适合证明模型实际选择了什么。API 已完成接入，不再把 `query_related_metrics` 的内部 `query_metric` 复用记录成模型主动选择。
 - **Fixture Preview 不是 Agent** `[必须掌握]`：Fixture 是 Ground-Truth-backed 的确定性产品预览，只验证 UI 和数据契约；Live 模式才可用于证明 Agent Authenticity。场景列表也不得把 expected driver/scope/status 暴露给前端。
 - **Core 中立不等于现在建设多行业框架** `[项目特有]`：Registry 已去掉固定五指标和单位白名单，但 Stage 1 YAML、Warehouse、Benchmark 仍只支持 Amazon Profile。没有引入 Domain Plugin、Factory 或 SaaS Adapter。
 - **凭据进入聊天或日志即视为泄露** `[必须掌握]`：示例配置只能使用占位符；任何暴露过的 Key 必须撤销并轮换，真实 `.env` 永不提交。
-- **当前权威验证**：后端 436/436 PASS，API 与 Live Validator 专项各 23/23 PASS，前端 lint/build PASS，10 Case Hermetic Evaluation PASS；真实三场景已执行但未通过，Live 10 Case 尚未执行。历史章节中的测试数量仅代表对应任务完成时的快照。
+- **当前权威验证**：后端 438/438 PASS，API 与 Live Validator 专项各 23/23 PASS，前端 lint/build PASS，10 Case Hermetic Evaluation PASS；真实三场景尚未通过，Live 10 Case 尚未执行。历史章节中的测试数量仅代表对应任务完成时的快照。
 
-**面试自测题**：为什么 436 项测试全部通过仍不能证明 Agent 会自主调查？为什么 API Tool Trace 应优先来自 SDK Runner，而不是业务工具 wrapper？
+**面试自测题**：为什么 438 项测试全部通过仍不能证明 Agent 会自主调查？为什么 API Tool Trace 应优先来自 SDK Runner，而不是业务工具 wrapper？
 
 ### 3.36 2026-09-12 Live Provider Reality Check
 
@@ -819,6 +820,14 @@ configs/metrics.yaml
 - **表示归一化不能变成容错造证据** `[必须掌握]`：模型把已选择 Observation ID 填入 Evidence ID 字段时，系统只在它能唯一对应一条 Selection 时做确定性转换；未知或歧义引用仍由 Resolver 拒绝。这里修复的是等价表示，不是猜测模型意图。
 - **最终失败证明 Fail-Closed 边界有效** `[面试高频]`：最新 Canonical Run 引用了本次 Tool Output 中不存在的 Observation ID。系统没有补造 Observation、没有降低校验、没有输出 Diagnosis PASS artifact，而是终止验收并恢复 canonical 数据库状态。
 - **结论**：MVP 实现与测试基线成立，但选定模型尚未证明能稳定遵循 Evidence/Observation 引用契约。恢复时应优先改善结构化引用遵循度或评估更合适的模型，不应削弱 Evidence Integrity。
+
+### 3.37 2026-09-21 Driver-at-Scope Live Hardening
+
+- **当前事实** `[必须掌握]`：兼容 Provider 仅返回 grok-4.5 与 grok-4.6。两者都实际运行过 Canonical，数据库每次均恢复，且失败不会产生 PASS artifact。
+- **模型输出不等于领域结论** `[面试高频]`：grok-4.6 曾把 marketplace 这样的维度写入 primary_driver；grok-4.5 能查到 Related Metrics，但会把 target metric 视为 Driver 或在没有 Scope 的情况下结束。JSON 形状有效不表示业务引用关系有效。
+- **新增的可追溯性合同** `[必须掌握]`：Runtime Intent 增加 driver_evidence_id，使模型显式指出哪条 Evidence 同时支撑 Driver 与完整 Scope；查询 Tool Output 同时携带通用证据协议。未知引用、跨 Evidence 拼接、空 no-anomaly 仍由领域层 Fail-Closed。
+- **未被采纳的错误修复**：没有把最近的 Observation 自动当 Driver Evidence，没有把多条 Evidence 合成为虚拟证据，也没有为通过 Demo 放宽 builder.py 的联合支撑规则。
+- **结论**：下一步不是继续堆 Prompt，而是获取能稳定支持 Tool Calling 与 JSON Schema 的 Provider，或通过独立 ADR 决定把领域校验错误作为受控 final-submit Tool 的反馈，让 SDK Runtime 自己 replan。
 
 ---
 

@@ -323,6 +323,7 @@ class TestDiagnosisDraft(unittest.TestCase):
                 "status",
                 "target_metric",
                 "target_evidence_id",
+                "driver_evidence_id",
                 "primary_driver",
                 "affected_scope",
                 "evidence_ids",
@@ -344,6 +345,7 @@ class TestDiagnosisDraft(unittest.TestCase):
         common = dict(
             target_metric="sales",
             target_evidence_id=None,
+            driver_evidence_id=None,
             primary_driver=None,
             affected_scope={},
             evidence_ids=(),

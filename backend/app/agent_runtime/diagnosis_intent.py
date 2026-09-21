@@ -8,6 +8,7 @@ from typing import Annotated, Any
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     StringConstraints,
     field_validator,
 )
@@ -32,8 +33,18 @@ class RuntimeEvidenceSelection(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    observation_id: StrictNonEmptyString
-    role: EvidenceRole
+    observation_id: StrictNonEmptyString = Field(
+        description=(
+            "Copy the observation_id character-for-character from the current tool output. "
+            "Never invent, derive, shorten, or paraphrase an Observation ID."
+        )
+    )
+    role: EvidenceRole = Field(
+        description=(
+            "Evidence role for this exact tool Observation: supporting, negative_control, "
+            "or limitation."
+        )
+    )
 
 
 class RuntimeScopeItem(BaseModel):
@@ -41,8 +52,12 @@ class RuntimeScopeItem(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    dimension: StrictNonEmptyString
-    value: StrictNonEmptyString
+    dimension: StrictNonEmptyString = Field(
+        description="Affected-scope dimension copied from the selected tool Observation."
+    )
+    value: StrictNonEmptyString = Field(
+        description="Affected-scope value copied from the selected tool Observation."
+    )
 
 
 class RuntimeDiagnosisIntent(BaseModel):
@@ -50,15 +65,63 @@ class RuntimeDiagnosisIntent(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    evidence_selections: tuple[RuntimeEvidenceSelection, ...]
-    status: DiagnosisStatus
-    target_metric: StrictNonEmptyString
-    target_evidence_id: StrictNonEmptyString | None
-    primary_driver: StrictNonEmptyString | None
-    affected_scope: tuple[RuntimeScopeItem, ...]
-    evidence_ids: tuple[StrictNonEmptyString, ...]
-    confidence: StrictNonEmptyString | None
-    limitations: tuple[StrictNonEmptyString, ...]
+    evidence_selections: tuple[RuntimeEvidenceSelection, ...] = Field(
+        description=(
+            "Select only Observations returned by the current tool run. For diagnosed status, "
+            "at least one anomalous supporting selection must be the single Observation that "
+            "has metric == primary_driver and whose filters/dimensions cover all affected_scope "
+            "items; do not combine separate Evidence items to manufacture that support."
+        )
+    )
+    status: DiagnosisStatus = Field(
+        description="Use diagnosed only when all required Evidence constraints are jointly satisfied."
+    )
+    target_metric: StrictNonEmptyString = Field(
+        description="Metric identifier from the semantic definition and current tool output."
+    )
+    target_evidence_id: StrictNonEmptyString | None = Field(
+        description=(
+            "Deterministic Evidence ID for the target Observation: "
+            "evidence:{observation_id}:{role}. The observation_id portion must be copied "
+            "character-for-character from tool output."
+        )
+    )
+    driver_evidence_id: StrictNonEmptyString | None = Field(
+        description=(
+            "For diagnosed status, the deterministic Evidence ID of the one selected "
+            "anomalous supporting Observation that jointly supports primary_driver and "
+            "every affected_scope item. It must be included in evidence_ids; never use "
+            "a different Evidence for driver versus scope."
+        )
+    )
+    primary_driver: StrictNonEmptyString | None = Field(
+        description=(
+            "Metric identifier only, never a dimension or dimension value. For diagnosed status, "
+            "one anomalous supporting Observation must satisfy metric == primary_driver and have "
+            "filters/dimensions covering all affected_scope items. Do not combine different "
+            "Evidence items."
+        )
+    )
+    affected_scope: tuple[RuntimeScopeItem, ...] = Field(
+        description=(
+            "For diagnosed status, every item must be covered by the same anomalous supporting "
+            "Observation whose metric == primary_driver and whose filters/dimensions cover all "
+            "affected_scope items; do not splice scope from another Evidence item. Use an "
+            "appropriate non-success status if no such Observation exists."
+        )
+    )
+    evidence_ids: tuple[StrictNonEmptyString, ...] = Field(
+        description=(
+            "Deterministic Evidence IDs only, each derived from an exact selected Observation ID "
+            "and role; unknown or invented references are invalid."
+        )
+    )
+    confidence: StrictNonEmptyString | None = Field(
+        description="Decimal confidence string in [0, 1], or null for non-success statuses."
+    )
+    limitations: tuple[StrictNonEmptyString, ...] = Field(
+        description="Explicit limitations of the data-level diagnosis."
+    )
 
     @field_validator(
         "evidence_selections",
@@ -148,6 +211,10 @@ def runtime_intent_to_drafts(
         target_metric=intent.target_metric,
         target_evidence_id=_normalize_evidence_reference(
             intent.target_evidence_id,
+            selections,
+        ),
+        driver_evidence_id=_normalize_evidence_reference(
+            intent.driver_evidence_id,
             selections,
         ),
         primary_driver=intent.primary_driver,

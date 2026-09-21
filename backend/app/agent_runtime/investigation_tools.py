@@ -67,6 +67,17 @@ _METRIC_DEFINITION_JSON_KEYS = frozenset(
         "related_metrics",
     }
 )
+_DIAGNOSIS_PROTOCOL = (
+    "A primary_driver must be a metric identifier, never a dimension or dimension "
+    "value. If a related metric is anomalous, investigate it across relevant allowed "
+    "dimensions before diagnosed. For a diagnosed result, select one anomalous supporting Observation whose "
+    "metric equals primary_driver and whose filters plus dimensions cover every "
+    "affected_scope item. Do not combine a driver from one Observation with scope "
+    "from another. Copy IDs character-for-character; use that Observation's "
+    "evidence:{observation_id}:supporting value as driver_evidence_id. If no one "
+    "Observation jointly supports the claim, continue investigating or use a "
+    "non-success status."
+)
 
 
 class DimensionFilter(BaseModel):
@@ -326,6 +337,7 @@ def _query_observations_adapter(
         "tool_call_id": tool_call_id,
         "metric": metric,
         "observations": [observation_to_json(item) for item in observations],
+        "diagnosis_protocol": _DIAGNOSIS_PROTOCOL,
     }
     return payload
 

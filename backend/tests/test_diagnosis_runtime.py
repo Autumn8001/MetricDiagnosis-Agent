@@ -66,6 +66,7 @@ def diagnosed_intent_payload() -> dict:
         "status": "diagnosed",
         "target_metric": "sales",
         "target_evidence_id": "evidence:target_call_sales_0:supporting",
+        "driver_evidence_id": "evidence:driver_call_conversion_rate_0:supporting",
         "primary_driver": "conversion_rate",
         "affected_scope": [{"dimension": "marketplace", "value": "US"}],
         "evidence_ids": [
@@ -87,6 +88,7 @@ def no_anomaly_intent_payload() -> dict:
         "status": "no_material_anomaly",
         "target_metric": "orders",
         "target_evidence_id": "evidence:related_call_rel0_orders_0:supporting",
+        "driver_evidence_id": None,
         "primary_driver": None,
         "affected_scope": [],
         "evidence_ids": [
@@ -257,6 +259,7 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
             ]
             payload["target_metric"] = "sales"
             payload["target_evidence_id"] = f"evidence:{call_id}_sales_0:supporting"
+            payload["driver_evidence_id"] = None
             payload["evidence_ids"] = [f"evidence:{call_id}_sales_0:supporting"]
             return ScriptedModel(
                 [
@@ -349,6 +352,14 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
         self.assertIn("When semantic meaning is needed", agent.instructions)
         self.assertIn("do not invent metric formulas", agent.instructions)
         self.assertIn("Observation IDs", agent.instructions)
+        self.assertIn("copy every observation_id character-for-character", agent.instructions)
+        self.assertIn("same selected anomalous supporting Observation", agent.instructions)
+        self.assertIn("primary_driver is always a metric identifier", agent.instructions)
+        self.assertIn("related metrics to identify the primary driver", agent.instructions)
+        self.assertIn("do not use the target metric itself", agent.instructions)
+        self.assertIn("metric equal to primary_driver", agent.instructions)
+        self.assertIn("Do not splice primary_driver", agent.instructions)
+        self.assertIn("cross-check every observation_id and Evidence ID", agent.instructions)
         self.assertIn("evidence:{observation_id}:{role}", agent.instructions)
         self.assertIn("fixed drill-down sequence", agent.instructions)
         self.assertNotIn("root_cause", RuntimeDiagnosisIntent.model_fields)
