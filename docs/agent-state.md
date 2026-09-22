@@ -14,6 +14,53 @@
 
 ---
 
+## 0.1 十分钟项目速读（给当前学习者）
+
+> **一句话**：MetricSleuth 不是“给数据库问一句话就生成答案”的 Text2SQL 工具；它让 Agent 在系统控制的指标语义和查询边界内，基于每轮真实 Observation 选择下一步调查，并把结论限定为可追溯的 Evidence-backed 数据异常定位。
+
+### 先记住这条链
+
+```text
+Metric semantic layer → Agent Runtime → Analytics Tool → Observation
+→ Evidence → Structured Diagnosis → Human / upper operations Agent
+```
+
+Amazon 的 Sales、ASIN、Marketplace、Traffic Source 是 **Stage 1 的验证词汇**，不是永久产品定义；本阶段只做 Amazon Profile，也没有提前做多行业插件框架。
+
+### 现在已经能做什么（Current，已由代码/验证支持）
+
+| 你能看到的能力 | 它解决的问题 | 主要实现位置 |
+|---|---|---|
+| 声明式指标语义 | 不让模型临时编造“指标怎么算、能按什么维度查” | `configs/metrics.yaml`、`backend/app/metrics/` |
+| 受控 Analytics Tools | Agent 可以选择调查动作，但不能执行任意数据库操作 | `backend/app/analytics/`、`backend/app/sql_safety/` |
+| Observation 与 Evidence | 让 Diagnosis 中的重要结论可回溯到本次 Tool 输出 | `backend/app/observations/`、`backend/app/evidence/`、`backend/app/diagnosis/` |
+| 动态 Agent 调查 | Agent Runtime 负责 Reason → Tool Call → Observe → Replan，不是写死的 Sales 下钻脚本 | `backend/app/agent_runtime/` |
+| 受控 Benchmark 与真实运行评测 | 同时验证驱动、范围、Evidence 引用和无异常停止 | `warehouse/benchmark_cases.json`、`backend/scripts/run_benchmark_evaluation.py`、`docs/evaluation-artifacts/` |
+| API 与工作台 | 可选择 Fixture Preview 或 Live Agent，查看 Trace / Evidence / Diagnosis | `backend/app/api/`、`frontend/` |
+| Manual Daily Scan | 先筛“什么值得调查”，但不替 Agent 决定 driver、scope 或下一步 | `backend/app/monitoring/manual_scan.py`、`POST /api/scans/daily` |
+
+### 已验证到什么程度（Current）
+
+- 后端单元测试：**455/455 PASS**；前端 lint 与 production build 均通过。
+- Gemini `gemini-3.8-flash-high` 已在真实 PostgreSQL 上完成 Canonical / Traffic / No-anomaly 三场景 Live 验收；10 Case 单次评测为 100%，30 次稳定性样本为 28/30 完成（93.33%）。详细 artifact 在 `docs/evaluation-artifacts/`。
+- 真实 Olist 公开数据已完成**隔离 schema 的映射与工具兼容性验证**；它没有进入产品 Runtime、Amazon Benchmark 或 Ground Truth。
+- 最新的 Daily Scan API 已在本地 Warehouse smoke 运行：候选为 `sales`、`orders`、`conversion_rate`，响应不含 `diagnosis`、`primary_driver`、`affected_scope`。
+
+### 你现在最值得看懂的 5 件事
+
+1. `configs/metrics.yaml`：系统怎样定义指标，而不是让 LLM 定义指标。
+2. `backend/app/analytics/tools.py`：为什么 Tool 是领域级查询，不是 `execute_any_sql()`。
+3. `backend/app/agent_runtime/diagnosis_runtime.py`：Runtime 的职责边界，以及为什么不自建通用 Agent Loop。
+4. `backend/app/evidence/` 与 `backend/app/diagnosis/`：为什么“模型说有问题”不够，必须引用 Evidence。
+5. `backend/scripts/run_benchmark_evaluation.py`：为什么受控异常注入 + Ground Truth 才能评估 Agent 是否真的找对了位置。
+
+### 当前限制与下一件事
+
+- **Current limitation**：30-run 稳定性样本中有 2 次 `DiagnosisValidationError`；目前没有确定性复现，因此没有证据授权加入自动重试或固定补救 Workflow。
+- **Proposed next action**：不新增功能，做一次浏览器里的真实全栈 Demo 验收：`Manual Daily Scan → 选择候选 → Live Agent → Trace / Evidence / Diagnosis`。它要验证 UI 没有混淆“候选扫描”和“Agent 诊断”，并生成可展示的端到端证据。
+
+---
+
 ## 1. 状态文档权威边界
 
 - **`docs/agent-state.md`**：当前执行状态、任务进展、验证结果与阻塞项的**唯一动态权威来源**。
