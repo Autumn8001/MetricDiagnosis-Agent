@@ -32,6 +32,7 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
 * **明确延后**：复杂多租户/用户系统、Go Gateway、大规模云端多 Agent 编排。
 * **开发约束与文档**：
   - 后续所有开发工作必须严格遵守 [任务书.md](任务书.md)；
+  - 面向展示的当前能力与边界参见 [docs/mvp-demo-brief.md](docs/mvp-demo-brief.md)，真实模型评测的脱敏验收摘要参见 [docs/evaluation-artifacts/live-evaluation-2026-09-22.md](docs/evaluation-artifacts/live-evaluation-2026-09-22.md)；
   - `warehouse/ground_truth.json` 仅供评测评估（Evaluation Runner）使用，**严禁**暴露给未来的 Agent Runtime 或查询工具；
   - 详细的设计决策、历史踩坑复盘与知识总结参见 [docs/project-learning-log.md](docs/project-learning-log.md)。
 
