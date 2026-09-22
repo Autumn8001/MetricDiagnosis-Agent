@@ -129,9 +129,21 @@ def load_validation_schema(input_dir: Path, database_url: str, replace: bool) ->
                         "olist_validation already contains data; rerun with --replace to truncate only validation tables."
                     )
                 if existing:
-                    cursor.execute("TRUNCATE olist_validation.olist_order_items, olist_validation.olist_orders")
+                    cursor.execute(
+                        "TRUNCATE olist_validation.fact_daily_order_value, "
+                        "olist_validation.olist_order_items, olist_validation.olist_orders"
+                    )
                 _copy_rows(cursor, "COPY olist_validation.olist_orders (order_id, customer_id, purchase_date, order_status, customer_state) FROM STDIN", orders)
                 _copy_rows(cursor, "COPY olist_validation.olist_order_items (order_id, order_item_id, product_id, seller_id, product_category_name, seller_state, price, freight_value) FROM STDIN", items)
+                cursor.execute(
+                    "INSERT INTO olist_validation.fact_daily_order_value "
+                    "(date, order_id, customer_state, merchandise_gmv, orders) "
+                    "SELECT o.purchase_date, o.order_id, o.customer_state, SUM(i.price), 1 "
+                    "FROM olist_validation.olist_orders o "
+                    "JOIN olist_validation.olist_order_items i USING (order_id) "
+                    "WHERE o.order_status = 'delivered' "
+                    "GROUP BY o.purchase_date, o.order_id, o.customer_state"
+                )
     return len(orders), len(items)
 
 

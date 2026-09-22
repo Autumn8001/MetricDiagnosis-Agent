@@ -87,11 +87,41 @@ class TestMetricRegistry(unittest.TestCase):
 
         self.assertEqual(registry.table, "warehouse.fact_daily_performance")
         self.assertEqual(registry.time_dimension, "date")
+        self.assertEqual(registry.sample_size_field, "sessions")
         self.assertEqual(registry.dimensions, ("marketplace", "asin", "traffic_source"))
 
         metrics = registry.list_metrics()
         metric_ids = [m.metric_id for m in metrics]
         self.assertEqual(metric_ids, ["sales", "orders", "sessions", "conversion_rate", "aov"])
+
+    def test_optional_sample_size_field_is_loaded_and_validated(self):
+        raw = {
+            "version": 1,
+            "source": {
+                "table": "validation.daily_orders",
+                "time_dimension": "date",
+                "sample_size_field": "orders",
+                "dimensions": ["state"],
+            },
+            "metrics": {
+                "orders": {
+                    "display_name": "Orders",
+                    "description": "Orders",
+                    "metric_type": "additive",
+                    "unit": "count",
+                    "formula": "SUM(orders)",
+                    "source_fields": ["orders"],
+                    "dimensions": ["state"],
+                    "dependencies": [],
+                    "driver_metrics": [],
+                    "related_metrics": [],
+                }
+            },
+        }
+        self.assertEqual(MetricRegistry._validate_and_build(raw).sample_size_field, "orders")
+        raw["source"]["sample_size_field"] = " "
+        with self.assertRaises(MetricConfigError):
+            MetricRegistry._validate_and_build(raw)
 
     def test_sales_definition(self):
         """Verify Sales metric definition, gross sales semantics, unit and dimensions."""

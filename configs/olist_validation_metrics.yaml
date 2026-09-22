@@ -1,0 +1,44 @@
+# Phase 9 temporary validation registry. Not loaded by the product API/Runtime.
+version: 1
+
+source:
+  table: olist_validation.fact_daily_order_value
+  time_dimension: date
+  sample_size_field: orders
+  dimensions:
+    - customer_state
+
+metrics:
+  merchandise_gmv:
+    display_name: Olist Merchandise GMV
+    description: Sum of delivered Olist order-item price, excluding freight.
+    metric_type: additive
+    unit: brl
+    formula: SUM(merchandise_gmv)
+    source_fields: [merchandise_gmv]
+    dimensions: [customer_state]
+    dependencies: []
+    driver_metrics: [orders, olist_aov]
+    related_metrics: [orders, olist_aov]
+  orders:
+    display_name: Delivered Orders
+    description: Count of delivered Olist orders with one row per order.
+    metric_type: additive
+    unit: count
+    formula: SUM(orders)
+    source_fields: [orders]
+    dimensions: [customer_state]
+    dependencies: []
+    driver_metrics: []
+    related_metrics: [merchandise_gmv, olist_aov]
+  olist_aov:
+    display_name: Olist Average Order Value
+    description: Delivered merchandise GMV divided by delivered orders.
+    metric_type: ratio
+    unit: brl
+    formula: SUM(merchandise_gmv) / NULLIF(SUM(orders), 0)
+    source_fields: [merchandise_gmv, orders]
+    dimensions: [customer_state]
+    dependencies: [merchandise_gmv, orders]
+    driver_metrics: []
+    related_metrics: [merchandise_gmv, orders]

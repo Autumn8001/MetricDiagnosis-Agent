@@ -6,8 +6,8 @@
 - **Snapshot Date**: 2026-09-22
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
 - **Current Task**: Phase 9 Olist source Profiling and real-world mapping decision
-- **Current Task Status**: Olist raw source has passed profiling and isolated staging dry-run; `olist_validation` loader/verifier are ready but database materialization is BLOCKED until an explicit `DATABASE_URL` is supplied. Existing Semantic Layer, Benchmark, Runtime, and API behavior remain unchanged.
-- **Last Verified Batch**: 2026-09-22 Olist profile and staging dry-run on local raw source; API scenario catalog / Fixture Preview Ground Truth boundary regression, 451 backend tests total, frontend lint/build.
+- **Current Task Status**: Olist raw source has passed profiling, isolated database materialization, mapping verification, and existing AnalyticsTools compatibility verification. The temporary registry remains isolated; existing Amazon Semantic Layer, Benchmark, Runtime, and API behavior remain unchanged.
+- **Last Verified Batch**: 2026-09-22 Olist profile / staging load / mapping and tool-compatibility artifacts; API scenario catalog / Fixture Preview Ground Truth boundary regression, 452 backend tests total.
 - **Current Blocker**: No core blocker. The 30-run sample contains two low-frequency `DiagnosisValidationError` outcomes; safe intent-reference capture is now in place, but no deterministic root cause has been reproduced.
 - **Current Phase Status**: Portfolio MVP implementation complete and technically demo-ready; acceptance documentation and optional real-world validation remain.
 - **Later Work**: Real-world schema mapping validation, deployment decisions, or any feedback/retry design require a separate evidence-backed task.
@@ -328,7 +328,7 @@
 ## 4. 当前验证状态
 
 - **Last Verification Date**: 2026-09-22
-- **Backend Unit Tests**: 448/448 PASS
+- **Backend Unit Tests**: 452/452 PASS
 - **Frontend Lint**: PASS
 - **Frontend Production Build**: PASS
 - **10 Case Hermetic Evaluation**: PASS (`--hermetic --runs-per-case 1`)，仅证明评测管道与受控离线输入，不证明真实模型能力
@@ -343,7 +343,7 @@
 ## 5. 当前阻塞与下一步
 
 - **实现状态**：Stage 1 Portfolio MVP 的 Core、Evaluation、API 与 UI 已形成可运行实现；API 已直接使用可信 SDK Tool Trace，三场景脚本可原子输出脱敏验收 artifact。
-- **验证状态**：448 项后端测试通过；前端 lint/build 已通过；真实 Provider 三场景、10 Case 单次与 30-run 样本的详细事实见第 4 节及 `docs/evaluation-artifacts/`。
+- **验证状态**：452 项后端测试通过；前端 lint/build 已通过；真实 Provider 三场景、10 Case 单次与 30-run 样本的详细事实见第 4 节及 `docs/evaluation-artifacts/`。
 - **验收状态**：Gemini Provider、真实数据库、三场景动态调查链和校准后的 10 Case 单次 Live Evaluation 均已通过。30-run 稳定性评测现有完整 artifact，但 2 次有效领域拒绝显示替代场景的结论生成仍非完全稳定；这不否定 MVP 核心链，却是下一项可靠性改进依据。
 - **安全边界**：真实 `.env` 保持本地且不得提交；artifact 不记录 API Key、数据库连接串或完整 Provider URL。
 - **恢复开发时的唯一优先级**：维持当前真实评估监控；若新的 `DiagnosisValidationError` artifact 出现，基于其 reference-only intent 摘要定位具体缺口后再决定是否需要受控反馈。不在没有可复现问题时提前引入自动重试、固定 Workflow 或 Prompt 特例。

@@ -891,7 +891,14 @@ configs/metrics.yaml
 
 - **最小实现**：`olist_validation` schema 保存原始订单和订单明细的可追溯映射；loader 仅从本地 CSV 构建 join，默认拒绝覆盖已有 validation 数据，只有显式 `--replace` 才能截断这两张隔离表。
 - **为什么不是直接改 `warehouse`** `[必须掌握]`：Synthetic Warehouse 是可控 Benchmark 的事实来源。把真实 Olist 行混入它会同时破坏 Benchmark 可复现性、Amazon 字段语义与 Ground Truth 评分。真实数据必须先在独立 schema 中被验证。
-- **验证边界**：实际 CSV dry-run 已通过（99,441 orders / 112,650 items），Loader 的源映射单测与全量 451 项后端测试通过。当前执行环境没有 `DATABASE_URL`，所以 materialized staging verification 正确报告 BLOCKED；未将“脚本已实现”写成“数据库已验收”。
+- **验证边界**：实际 CSV dry-run 已通过（99,441 orders / 112,650 items），随后在明确本地 PostgreSQL 配置下完成隔离 schema materialization 与 mapping verification；Loader 的源映射单测与当时全量 451 项后端测试通过。该事实仅证明 Olist staging，不影响 Synthetic Warehouse 或 Benchmark 验收。
+
+### 3.47 2026-09-22 真实 Olist 数据与既有 AnalyticsTools 兼容性
+
+- **发现的真实 Core 假设**：AnalyticsTools 曾在 SQL 中固定写 `SUM(sessions)` 来计算 baseline sample size。这使 Amazon Profile 可以运行，却让没有 sessions 的合法订单数据无法复用受控查询工具。
+- **最小修正** `[必须掌握]`：在 `source` 语义元数据中加入可选 `sample_size_field`，默认仍是 `sessions`，完全保持既有 Amazon YAML 与工具行为；Olist 临时 Registry 显式声明 `orders`。这不是 Profile Factory 或通用 DSL，只是让已经存在的样本量语义不再泄漏为不可替换的物理字段。
+- **真实验收**：Olist 在隔离 `olist_validation` schema 中已实际加载 99,441 Orders / 112,650 Items。现有 AnalyticsTools 对 2017-03-20 实际返回 GMV=16,861.09（baseline=13,355.61）、AOV=149.21（baseline=158.19）、24 个 Customer State 行，并按声明顺序返回 Related Metrics `[orders, olist_aov]`。这不是异常 Ground Truth 评测，也不代表真实业务根因。
+- **仍然不可用**：Seller State/Product Category 在源数据中存在，但一笔订单可关联多个 seller/category；若直接作为订单数分组会产生重复计数。因此当前临时工具只公开 order-safe `customer_state`，而不是为了多维展示牺牲指标正确性。Sessions、Conversion、Marketplace、Traffic Source、ASIN 继续明确 unavailable。
 
 ## 4. 面试高频问题与项目化回答
 

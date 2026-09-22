@@ -1,0 +1,42 @@
+{
+  "customer_state_row_count": 24,
+  "overall": {
+    "merchandise_gmv": {
+      "baseline_value": 13355.61,
+      "current_value": 16861.09,
+      "dimensions": {},
+      "relative_change": 0.26247247411387425,
+      "sample_size": 84.42857142857143,
+      "status": "ok"
+    },
+    "olist_aov": {
+      "baseline_value": 158.18827411167513,
+      "current_value": 149.21318584070795,
+      "dimensions": {},
+      "relative_change": -0.05673674816523429,
+      "sample_size": 84.42857142857143,
+      "status": "ok"
+    }
+  },
+  "registry": {
+    "dimensions": [
+      "customer_state"
+    ],
+    "sample_size_field": "orders",
+    "table": "olist_validation.fact_daily_order_value",
+    "time_dimension": "date"
+  },
+  "related_metric_order": [
+    "orders",
+    "olist_aov"
+  ],
+  "schema": "metricsleuth.phase9_olist_tool_compatibility.v1",
+  "target_date": "2017-03-20",
+  "unavailable_by_contract": [
+    "sessions",
+    "conversion_rate",
+    "marketplace",
+    "traffic_source",
+    "asin"
+  ]
+}

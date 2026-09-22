@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 try:
     import psycopg
@@ -77,12 +78,18 @@ def verify(database_url: str) -> dict[str, object]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify the isolated Olist real-world mapping.")
     parser.add_argument("--database-url", default=os.environ.get("DATABASE_URL"))
+    parser.add_argument("--output-json", type=Path, help="Optional path for the aggregate verification artifact.")
     args = parser.parse_args(argv)
     if not args.database_url or not args.database_url.strip():
         print("Olist mapping verification BLOCKED: DATABASE_URL is required.", file=sys.stderr)
         return 2
     try:
-        print(json.dumps(verify(args.database_url), ensure_ascii=False, indent=2, sort_keys=True))
+        result = verify(args.database_url)
+        payload = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True)
+        if args.output_json is not None:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(payload + "\n", encoding="utf-8")
+        print(payload)
         return 0
     except OlistValidationError as exc:
         print(f"Olist mapping verification failed: {exc}", file=sys.stderr)

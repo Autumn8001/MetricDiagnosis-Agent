@@ -1,0 +1,20 @@
+{
+  "delivered_aov": 137.0415857501192,
+  "delivered_merchandise_gmv": 13221498.11,
+  "delivered_orders": 96478,
+  "dimensions": {
+    "customer_state_count": 27,
+    "product_category_count": 73,
+    "seller_state_count": 23
+  },
+  "order_items": 112650,
+  "orders": 99441,
+  "schema": "metricsleuth.phase9_olist_mapping_verification.v1",
+  "unsupported_fields_verified_absent": [
+    "asin",
+    "conversion_rate",
+    "marketplace",
+    "sessions",
+    "traffic_source"
+  ]
+}

@@ -50,7 +50,12 @@ python backend/scripts/load_olist_validation.py --input-dir data/raw/olist --dry
 
 # Requires DATABASE_URL. First load creates only olist_validation.* tables.
 python backend/scripts/load_olist_validation.py --input-dir data/raw/olist
-python backend/scripts/verify_olist_validation.py
+python backend/scripts/verify_olist_validation.py `
+  --output-json docs/evaluation-artifacts/olist-mapping-verification.json
+
+# Reuse the existing controlled AnalyticsTools with the temporary Olist registry.
+python backend/scripts/verify_olist_tool_compatibility.py `
+  --output-json docs/evaluation-artifacts/olist-tool-compatibility.json
 ```
 
 Re-loading an already populated validation schema is fail-closed. `--replace`
@@ -59,8 +64,14 @@ and `olist_validation.olist_order_items`.
 
 ## Phase 9 exit criterion
 
-The isolated staging adapter now validates the raw joins and can materialize
-the source in `olist_validation.*`. The final Phase 9 decision is whether a
-separate, temporary validation Metric Registry should query these three
-supported metrics. It must not modify the existing Amazon Stage 1 Semantic
-Layer or claim support for unavailable funnel metrics.
+The isolated staging adapter now validates the raw joins, materializes the
+source in `olist_validation.*`, and has been queried through the existing
+`AnalyticsTools` using `configs/olist_validation_metrics.yaml`. The temporary
+registry exposes only `merchandise_gmv`, `orders`, `olist_aov` and the
+order-safe `customer_state` dimension. Its `sample_size_field: orders` is an
+explicit real-data semantic choice; the Amazon registry continues to default
+to `sessions`.
+
+No Agent Runtime, product API, Benchmark case, or Amazon Stage 1 metric config
+loads this temporary registry. Phase 9 therefore demonstrates controlled tool
+compatibility, not a production multi-domain implementation.

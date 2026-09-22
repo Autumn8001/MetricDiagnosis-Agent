@@ -179,6 +179,7 @@ class AnalyticsTools:
         table_parts = self._registry.table.split(".")
         table_ident = sql.SQL(".").join(sql.Identifier(p) for p in table_parts)
         time_col_ident = sql.Identifier(self._registry.time_dimension)
+        sample_size_ident = sql.Identifier(self._registry.sample_size_field)
 
         if metric_def.metric_type == "additive":
             field_ident = sql.Identifier(metric_def.source_fields[0])
@@ -246,7 +247,7 @@ class AnalyticsTools:
                         {group_sql},
                         {base_select_num} AS base_num,
                         {base_select_den} AS base_den,
-                        (SUM(sessions)::numeric / 7.0) AS base_sessions_avg,
+                        (SUM({sample_size_ident})::numeric / 7.0) AS base_sessions_avg,
                         COUNT(DISTINCT {time_col_ident}) AS base_days_count
                     FROM {table_ident}
                     WHERE {base_where_sql}
@@ -278,6 +279,7 @@ class AnalyticsTools:
                 base_select_num=base_select_num,
                 base_select_den=base_select_den,
                 time_col_ident=time_col_ident,
+                sample_size_ident=sample_size_ident,
                 table_ident=table_ident,
                 base_where_sql=base_where_sql,
                 curr_select_num=curr_select_num,
@@ -294,7 +296,7 @@ class AnalyticsTools:
                     SELECT
                         {base_select_num} AS base_num,
                         {base_select_den} AS base_den,
-                        (SUM(sessions)::numeric / 7.0) AS base_sessions_avg,
+                        (SUM({sample_size_ident})::numeric / 7.0) AS base_sessions_avg,
                         COUNT(DISTINCT {time_col_ident}) AS base_days_count
                     FROM {table_ident}
                     WHERE {base_where_sql}
@@ -320,6 +322,7 @@ class AnalyticsTools:
                 base_select_num=base_select_num,
                 base_select_den=base_select_den,
                 time_col_ident=time_col_ident,
+                sample_size_ident=sample_size_ident,
                 table_ident=table_ident,
                 base_where_sql=base_where_sql,
                 curr_select_num=curr_select_num,

@@ -81,11 +81,13 @@ class MetricRegistry:
         self,
         table: str,
         time_dimension: str,
+        sample_size_field: str,
         dimensions: tuple[str, ...],
         metrics: Mapping[str, MetricDefinition],
     ) -> None:
         self._table = table
         self._time_dimension = time_dimension
+        self._sample_size_field = sample_size_field
         self._dimensions = tuple(dimensions)
         self._metrics = dict(metrics)
 
@@ -96,6 +98,11 @@ class MetricRegistry:
     @property
     def time_dimension(self) -> str:
         return self._time_dimension
+
+    @property
+    def sample_size_field(self) -> str:
+        """Field used solely to report baseline sample size for controlled queries."""
+        return self._sample_size_field
 
     @property
     def dimensions(self) -> tuple[str, ...]:
@@ -164,6 +171,10 @@ class MetricRegistry:
         time_dimension = source.get("time_dimension")
         if not isinstance(time_dimension, str) or not time_dimension.strip():
             raise MetricConfigError("'source.time_dimension' must be a non-empty string")
+
+        sample_size_field = source.get("sample_size_field", "sessions")
+        if not isinstance(sample_size_field, str) or not sample_size_field.strip():
+            raise MetricConfigError("'source.sample_size_field' must be a non-empty string when provided")
 
         allowed_dimensions_raw = source.get("dimensions")
         if not isinstance(allowed_dimensions_raw, list) or not allowed_dimensions_raw:
@@ -288,6 +299,7 @@ class MetricRegistry:
         return cls(
             table=table.strip(),
             time_dimension=time_dimension.strip(),
+            sample_size_field=sample_size_field.strip(),
             dimensions=tuple(allowed_dimensions),
             metrics=definitions,
         )
