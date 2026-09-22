@@ -900,6 +900,13 @@ configs/metrics.yaml
 - **真实验收**：Olist 在隔离 `olist_validation` schema 中已实际加载 99,441 Orders / 112,650 Items。现有 AnalyticsTools 对 2017-03-20 实际返回 GMV=16,861.09（baseline=13,355.61）、AOV=149.21（baseline=158.19）、24 个 Customer State 行，并按声明顺序返回 Related Metrics `[orders, olist_aov]`。这不是异常 Ground Truth 评测，也不代表真实业务根因。
 - **仍然不可用**：Seller State/Product Category 在源数据中存在，但一笔订单可关联多个 seller/category；若直接作为订单数分组会产生重复计数。因此当前临时工具只公开 order-safe `customer_state`，而不是为了多维展示牺牲指标正确性。Sessions、Conversion、Marketplace、Traffic Source、ASIN 继续明确 unavailable。
 
+### 3.48 2026-09-22 Manual Daily Scan：Trigger 与 Investigation 分离
+
+- **目标**：提供最小的系统触发入口，而不把 Trigger 识别误做成固定 Agent Workflow。
+- **实现**：`run_daily_scan.py` 对当前 Semantic Layer 中每个指标进行一次全局 `query_metric`，再复用既有 Observation Mapper 的材料性下降规则。输出只包含每个 Observation 和 `anomaly_candidate_metrics`，不包含 `primary_driver`、`affected_scope` 或下一步 Tool Call。
+- **真实结果**：在 canonical Synthetic Warehouse 的 2026-01-31 扫描中，Sales / Orders / Conversion Rate 被标记为候选，Sessions / AOV 正常。随后应由 Human 或已有 Agent Runtime 选择是否调查某一个 Trigger；扫描本身不宣称因果或诊断。
+- **边界** `[必须掌握]`：不添加 Cron、Scheduler、队列、自动重试、Session 存储或 Agent Loop。自动发现“值得查什么”和自主调查“下一步查什么”是不同责任。
+
 ## 4. 面试高频问题与项目化回答
 
 ### Q1: 什么是 Metric Semantic Layer（指标语义层）？它在 MetricSleuth 中起什么作用？ `[面试高频]`

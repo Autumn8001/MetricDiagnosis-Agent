@@ -1,0 +1,64 @@
+{
+  "anomaly_candidate_metrics": [
+    "sales",
+    "orders",
+    "conversion_rate"
+  ],
+  "comparison": "previous_7_days",
+  "mode": "manual_trigger_discovery",
+  "next_step": "Human or caller may start the existing Agent investigation for a selected candidate; this scan does not select a driver, scope, or next query.",
+  "observations": [
+    {
+      "baseline_value": 52034.28571428572,
+      "current_value": 45760.0,
+      "metric": "sales",
+      "observation_id": "daily_scan_2026-01-31_sales_sales_0",
+      "relative_change": -0.12057983746980014,
+      "sample_size": 8125.285714285715,
+      "status": "anomalous",
+      "unit": "usd"
+    },
+    {
+      "baseline_value": 650.4285714285714,
+      "current_value": 572.0,
+      "metric": "orders",
+      "observation_id": "daily_scan_2026-01-31_orders_orders_0",
+      "relative_change": -0.12057983746980014,
+      "sample_size": 8125.285714285715,
+      "status": "anomalous",
+      "unit": "count"
+    },
+    {
+      "baseline_value": 8125.285714285715,
+      "current_value": 8124.0,
+      "metric": "sessions",
+      "observation_id": "daily_scan_2026-01-31_sessions_sessions_0",
+      "relative_change": -0.0001582361938920829,
+      "sample_size": 8125.285714285715,
+      "status": "normal",
+      "unit": "count"
+    },
+    {
+      "baseline_value": 0.08004993231007261,
+      "current_value": 0.07040866568193008,
+      "metric": "conversion_rate",
+      "observation_id": "daily_scan_2026-01-31_conversion_rate_conversion_rate_0",
+      "relative_change": -0.12044065934743305,
+      "sample_size": 8125.285714285715,
+      "status": "anomalous",
+      "unit": "ratio"
+    },
+    {
+      "baseline_value": 80.0,
+      "current_value": 80.0,
+      "metric": "aov",
+      "observation_id": "daily_scan_2026-01-31_aov_aov_0",
+      "relative_change": 0.0,
+      "sample_size": 8125.285714285715,
+      "status": "normal",
+      "unit": "usd"
+    }
+  ],
+  "schema": "metricsleuth.manual_daily_scan.v1",
+  "target_date": "2026-01-31"
+}
