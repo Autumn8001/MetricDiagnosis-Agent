@@ -5,12 +5,12 @@
 - **Document Role**: Dynamic operational state
 - **Snapshot Date**: 2026-09-22
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
-- **Current Task**: Final factual reconciliation and live acceptance gate
-- **Current Task Status**: Gemini Chat Completions Provider connected and Canonical executed; Live Agent acceptance remains Fail-Closed
-- **Last Verified Batch**: 2026-09-22 Gemini Provider compatibility hardening and Canonical run
-- **Current Blocker**: Gemini completed a real Tool/Observation/Evidence/Diagnosis run but did not demonstrate the required Metric Driver / Evidence / Scope contract on Canonical
-- **Current Phase Status**: Portfolio MVP implementation complete; final Live acceptance not passed
-- **Later Work**: only after the Live gate; no new feature task is active
+- **Current Task**: Stage 1 acceptance evidence consolidation and presentation readiness
+- **Current Task Status**: Core chain, three-case Live gate, one 10-Case Live run and a 30-run stability sample have completed; current work must not add new core capabilities without a demonstrated gap.
+- **Last Verified Batch**: 2026-09-22 full backend regression (449 tests), frontend lint/build, FastAPI health, explicit Gemini targeted 6-run reproduction.
+- **Current Blocker**: No core blocker. The 30-run sample contains two low-frequency `DiagnosisValidationError` outcomes; safe intent-reference capture is now in place, but no deterministic root cause has been reproduced.
+- **Current Phase Status**: Portfolio MVP implementation complete and technically demo-ready; acceptance documentation and optional real-world validation remain.
+- **Later Work**: Real-world schema mapping validation, deployment decisions, or any feedback/retry design require a separate evidence-backed task.
 
 ---
 
