@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import inspect
 from pathlib import Path
 import sys
 import unittest
@@ -165,6 +167,20 @@ class TestScenarioEndpoints(unittest.TestCase):
             {"scenario_id", "title", "description", "target_metric"},
         )
 
+    def test_api_scenario_catalog_has_no_evaluation_answer_fields(self) -> None:
+        """The product API must select scenarios without importing Ground Truth answers."""
+        source = inspect.getsource(api_service)
+        self.assertNotIn("load_ground_truth_cases", source)
+        self.assertNotIn("GroundTruthCase", source)
+        self.assertNotIn("benchmark_cases.json", source)
+        self.assertFalse(hasattr(api_service, "get_benchmark_cases"))
+        self.assertEqual(
+            [(item.scenario_id, item.target_metric) for item in api_service.get_scenario_catalog()],
+            [(item["scenario_id"], item["target_metric"]) for item in json.loads(
+                (Path(__file__).resolve().parents[2] / "warehouse" / "scenario_catalog.json").read_text(encoding="utf-8")
+            )["scenarios"]],
+        )
+
     def test_inject_scenario_without_database_runs_explicit_dry_run(self) -> None:
         """Without DATABASE_URL, a successful fixture dry-run updates selected scenario."""
         completed = MagicMock(returncode=0, stderr="")
@@ -232,7 +248,7 @@ class TestInvestigationEndpoint(unittest.TestCase):
         data = response.json()
 
         # 1. Root response fields
-        self.assertTrue(data["request_id"].startswith("inv-canonical-"))
+        self.assertTrue(data["request_id"].startswith("fixture-canonical-"))
         self.assertEqual(data["mode"], "mock")
         self.assertEqual(data["target_metric"], "sales")
         self.assertEqual(data["target_date"], "2026-01-31")
@@ -243,15 +259,12 @@ class TestInvestigationEndpoint(unittest.TestCase):
         self.assertEqual(diag["status"], "diagnosed")
         self.assertEqual(diag["target_metric"], "sales")
         self.assertEqual(diag["primary_driver"], "conversion_rate")
-        self.assertEqual(
-            diag["affected_scope"],
-            {"marketplace": "US", "asin": "ASIN-A", "traffic_source": "Ads"},
-        )
+        self.assertEqual(diag["affected_scope"], {"marketplace": "US"})
         self.assertGreaterEqual(diag["confidence"], 0.90)
         self.assertIsNotNone(diag["change"])
         self.assertGreaterEqual(len(diag["evidence_ids"]), 1)
         self.assertTrue(len(diag["limitations"]) > 0)
-        self.assertIn("root cause", diag["limitations"][0].lower())
+        self.assertIn("fixture preview only", diag["limitations"][0].lower())
 
         # 3. Evidence portfolio contract
         evidence = data["evidence"]
@@ -284,15 +297,14 @@ class TestInvestigationEndpoint(unittest.TestCase):
 
         # 4. Investigation Trace contract
         trace = data["investigation_trace"]
-        self.assertEqual(len(trace), 5)
+        self.assertEqual(len(trace), 3)
         step_numbers = [step["step_number"] for step in trace]
-        self.assertEqual(step_numbers, [1, 2, 3, 4, 5])
+        self.assertEqual(step_numbers, [1, 2, 3])
         tool_names = [step["tool_name"] for step in trace]
         self.assertEqual(tool_names[0], "query_metric")
         self.assertEqual(tool_names[1], "query_related_metrics")
 
-        # Step 5 must be traffic source drill-down
-        self.assertEqual(trace[4]["dimensions"]["traffic_source"], "Ads")
+        self.assertTrue(all("Fixture-only" in step["summary"] for step in trace))
 
         # 5. Budget usage
         budget = data["budget"]
@@ -301,54 +313,22 @@ class TestInvestigationEndpoint(unittest.TestCase):
         self.assertGreater(budget["turns_count"], 0)
         self.assertGreater(budget["max_turns"], 0)
 
-    def test_investigate_mock_no_anomaly(self) -> None:
-        """POST /api/investigate for no_anomaly should return no_material_anomaly status."""
-        payload = {
-            "target_metric": "sales",
-            "scenario": "no_anomaly",
-            "mock_mode": True,
-        }
-        response = self.client.post("/api/investigate", json=payload)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-
-        diag = data["diagnosis"]
-        self.assertEqual(diag["status"], "no_material_anomaly")
-        self.assertIsNone(diag["primary_driver"])
-        self.assertEqual(diag["affected_scope"], {})
-        self.assertEqual(len(diag["evidence_ids"]), 1)
-
-    def test_investigate_mock_aov_driver(self) -> None:
-        """POST /api/investigate for AOV driver scenario should identify AOV as driver."""
-        payload = {
-            "target_metric": "sales",
-            "scenario": "aov_us_asin_b_organic",
-            "mock_mode": True,
-        }
-        response = self.client.post("/api/investigate", json=payload)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-
-        diag = data["diagnosis"]
-        self.assertEqual(diag["status"], "diagnosed")
-        self.assertEqual(diag["primary_driver"], "aov")
-        self.assertEqual(diag["affected_scope"]["asin"], "ASIN-B")
-        self.assertEqual(diag["affected_scope"]["traffic_source"], "Organic")
-
-    def test_investigate_mock_traffic_driver(self) -> None:
-        """POST /api/investigate for traffic scenario should identify sessions driver."""
-        payload = {
-            "target_metric": "sales",
-            "scenario": "traffic",
-            "mock_mode": True,
-        }
-        response = self.client.post("/api/investigate", json=payload)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-
-        diag = data["diagnosis"]
-        self.assertEqual(diag["status"], "diagnosed")
-        self.assertEqual(diag["primary_driver"], "sessions")
+    def test_fixture_preview_is_independent_of_selected_scenario(self) -> None:
+        """Fixture Preview cannot replay a benchmark answer for the selected scenario."""
+        canonical = self.client.post(
+            "/api/investigate", json={"scenario": "canonical", "mock_mode": True}
+        ).json()
+        traffic = self.client.post(
+            "/api/investigate", json={"scenario": "traffic", "mock_mode": True}
+        ).json()
+        self.assertEqual(canonical["scenario"], "canonical")
+        self.assertEqual(traffic["scenario"], "traffic")
+        self.assertEqual(canonical["diagnosis"]["primary_driver"], traffic["diagnosis"]["primary_driver"])
+        self.assertEqual(canonical["diagnosis"]["affected_scope"], traffic["diagnosis"]["affected_scope"])
+        self.assertEqual(
+            [step["tool_name"] for step in canonical["investigation_trace"]],
+            [step["tool_name"] for step in traffic["investigation_trace"]],
+        )
 
     def test_investigate_default_parameters(self) -> None:
         """POST /api/investigate with minimal payload should use defaults."""

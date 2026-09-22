@@ -26,14 +26,14 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
   - Phase 10 React Diagnosis Workspace 前端工程（`frontend/`：React + TS + Vite + 原生 Vanilla CSS，包含拓扑图、调查轨迹流、证据链看板、结构化诊断与追问交互）；
   - 项目学习与开发日志（[docs/project-learning-log.md](docs/project-learning-log.md)）；
   - Agent 运行状态与接管指南（[docs/agent-state.md](docs/agent-state.md), [AGENTS.md](AGENTS.md)）。
-* **当前权威验证（2026-09-22）**：后端 449 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
-* **演示口径**：Fixture Preview 是确定性离线预览，用于展示 UI 与数据契约，不得称为真实 Agent Run；Live 模式才用于真实 Provider 调查。
+* **当前权威验证（2026-09-22）**：后端 448 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
+* **演示口径**：Fixture Preview 是与所选场景和 Ground Truth 标签无关的通用 UI 样例，只展示数据契约，绝不是 Agent Run 或场景诊断；Live 模式才用于真实 Provider 调查。
 * **当前 Live 稳定性事实**：此前未校准的替代 Case 在全局 Sales 上仅下降 -1.75% 至 -4.39%，与 `<5%` 正常阈值冲突；现已通过调整 Synthetic 数据权重和注入强度校准为约 -10% 的全局影响，未降低生产阈值、未更换模型、未把 Benchmark 路径硬编码到 Runtime。校准后的 10 Case 单次 Live 结果为 100%。随后 10 Case × 3 次、显式 `gemini-3.8-flash-high` 的真实评测完整结束：28/30 成功，Completion / Macro Driver / Scope / Exact 均为 93.33%；两次 `DiagnosisValidationError` 被如实保留。Runner 每 Run 原子写入脱敏 checkpoint，保留已完成审计结果而不保存 Tool 值、Provider 原文或凭据。API 服务层直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
 * **明确延后**：复杂多租户/用户系统、Go Gateway、大规模云端多 Agent 编排。
 * **开发约束与文档**：
   - 后续所有开发工作必须严格遵守 [任务书.md](任务书.md)；
   - 面向展示的当前能力与边界参见 [docs/mvp-demo-brief.md](docs/mvp-demo-brief.md)，真实模型评测的脱敏验收摘要参见 [docs/evaluation-artifacts/live-evaluation-2026-09-22.md](docs/evaluation-artifacts/live-evaluation-2026-09-22.md)；
-  - `warehouse/ground_truth.json` 仅供评测评估（Evaluation Runner）使用，**严禁**暴露给未来的 Agent Runtime 或查询工具；
+  - `warehouse/ground_truth.json` 与 `warehouse/benchmark_cases.json` 仅供 Evaluation 使用，**严禁**被 API、Agent Runtime、Prompt 或查询工具读取；产品场景选择仅使用不含答案的 `warehouse/scenario_catalog.json`；
   - 详细的设计决策、历史踩坑复盘与知识总结参见 [docs/project-learning-log.md](docs/project-learning-log.md)。
 
 ## 验证指南
@@ -841,7 +841,7 @@ Pop-Location
 1. **顶部控制栏 (Header & Control Bar)**：
    - **连接状态指示灯**：展示 `FastAPI 1.0.0 (Connected)` 或离线保护状态；
    - **Benchmark 场景下拉菜单**：包含全部 10 个受控场景（Canonical / Traffic / No-anomaly / AOV / UK Ads / DE CR / Distractor 等）；
-   - **Fixture Preview / Live 模式切换**：Fixture Preview 用于无数据库或无 OpenAI Key 时展示确定性 UI 数据，不代表 Agent 推理；在已配置环境时可切换 Live 真实排查；
+   - **Fixture Preview / Live 模式切换**：Fixture Preview 用于无数据库或无 OpenAI Key 时展示通用确定性 UI 数据，且不反映所选场景或 Ground Truth；在已配置环境时可切换 Live 真实排查；
    - **「💉 注入场景数据」**：调用受控异常注入器更新仓库数据（带 Toast 反馈）；
    - **「⚡ 发起自主排查」**：触发 Agent 多步调查并全量驱动页面各板块数据刷新。
 2. **Metric Dependency Graph (指标拓扑与因果拆解)**：

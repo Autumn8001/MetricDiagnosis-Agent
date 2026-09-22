@@ -1,0 +1,15 @@
+{
+  "schema": "metricsleuth.stage1_scenario_catalog.v1",
+  "scenarios": [
+    {"scenario_id": "canonical", "target_metric": "sales"},
+    {"scenario_id": "traffic", "target_metric": "sales"},
+    {"scenario_id": "no_anomaly", "target_metric": "sales"},
+    {"scenario_id": "aov_us_asin_b_organic", "target_metric": "sales"},
+    {"scenario_id": "traffic_uk_asin_b_ads", "target_metric": "sales"},
+    {"scenario_id": "conversion_de_asin_c_ads", "target_metric": "sales"},
+    {"scenario_id": "traffic_us_asin_c_organic", "target_metric": "sales"},
+    {"scenario_id": "aov_uk_asin_a_ads", "target_metric": "sales"},
+    {"scenario_id": "conversion_us_asin_b_ads", "target_metric": "sales"},
+    {"scenario_id": "distractor_minor_fluctuation", "target_metric": "sales"}
+  ]
+}

@@ -806,7 +806,7 @@ configs/metrics.yaml
 - **Driver-at-Scope 必须由同一证据支撑** `[必须掌握]`：不能把全局 Driver Evidence 与另一个 Segment Evidence 拼接成“该 Driver 导致该 Scope”的结论。同一条 anomalous supporting Evidence 必须同时匹配 primary driver 并覆盖完整 affected scope。
 - **模型自由度应位于调查动作选择** `[必须掌握]`：Agent 可调用 `get_metric_definition`、`query_metric`、`query_related_metrics`，由 Semantic Layer 提供事实；生产 Prompt 不写死 Canonical 下钻序列。
 - **SDK Trace 与业务侧录不同** `[建议掌握]`：`InvestigationRunSummary.tool_trace` 从 SDK Tool Call 原始参数与时序派生，适合证明模型实际选择了什么。API 已完成接入，不再把 `query_related_metrics` 的内部 `query_metric` 复用记录成模型主动选择。
-- **Fixture Preview 不是 Agent** `[必须掌握]`：Fixture 是 Ground-Truth-backed 的确定性产品预览，只验证 UI 和数据契约；Live 模式才可用于证明 Agent Authenticity。场景列表也不得把 expected driver/scope/status 暴露给前端。
+- **Fixture Preview 不是 Agent** `[必须掌握]`：Fixture 是不读取所选场景 Ground Truth 的通用确定性 UI 样例，只验证 UI 和数据契约；Live 模式才可用于证明 Agent Authenticity。场景列表也不得把 expected driver/scope/status 暴露给前端。
 - **Core 中立不等于现在建设多行业框架** `[项目特有]`：Registry 已去掉固定五指标和单位白名单，但 Stage 1 YAML、Warehouse、Benchmark 仍只支持 Amazon Profile。没有引入 Domain Plugin、Factory 或 SaaS Adapter。
 - **凭据进入聊天或日志即视为泄露** `[必须掌握]`：示例配置只能使用占位符；任何暴露过的 Key 必须撤销并轮换，真实 `.env` 永不提交。
 - **历史快照说明**：本节记录当时的 438/438 测试与尚未完成的 Live Gate，已被后续 3.39–3.43 的真实验收结果取代。当前权威状态以 `docs/agent-state.md`、任务书及 `docs/evaluation-artifacts/` 为准。
@@ -871,6 +871,13 @@ configs/metrics.yaml
 - **最小修正**：保留 Runtime 已附加的 reference-only intent note；它只含 status、primary driver、scope 与 Evidence/Observation ID，不接受任意异常正文，因此不会把 Provider 原文、Tool 值、数据库连接或凭据写进 checkpoint。
 - **复现事实**：两个失败 Case 各运行 3 次均成功（6/6），所以失败暂时是低频波动而非 Case 或数据注入的确定性缺陷。正确措施是保留可审计失败边界、等待新的具体 artifact；不在无证据时加入自动重试或把校验退化为 Prompt 规则。
 - **验证事实**：专项测试新增安全 note 白名单，后端全量 449 项通过。
+
+### 3.44 2026-09-22 Product API 与 Evaluation Ground Truth 隔离
+
+- **问题**：产品 API 曾直接加载 `benchmark_cases.json`，虽然场景列表不返回标签，但 Fixture Preview 会根据 Case 的 status、driver 和 scope 回放答案。这会让“演示模式”在内部持有评测答案，破坏 Ground Truth 仅用于 Evaluation 的边界。
+- **最小修正**：新增只含 `scenario_id` 与 `target_metric` 的 `warehouse/scenario_catalog.json`。API 只从该目录校验场景和触发注入；Fixture Preview 改为明确标注的通用 UI 样例，所选场景只作为选择器回显，不能改变诊断、轨迹或证据内容。Live Runtime 的 Agent、Tool、Observation、Evidence、Diagnosis 链路不变。
+- **为什么重要** `[必须掌握]`：不向前端返回标签还不够；只要产品服务能读取并使用 Ground Truth，就可能在 Mock、日志或未来代码中意外泄漏。评测真值应留在 Evaluation 边界，产品只拥有运行时所需的最小元数据。
+- **验证事实**：API 专项与后端全量 448 项测试通过；回归测试同时检查 API 源码不导入 Ground Truth Loader/类型，且两个不同场景的 Fixture Preview 不会返回不同 Benchmark 答案。前端 lint/build 通过。
 
 ## 4. 面试高频问题与项目化回答
 

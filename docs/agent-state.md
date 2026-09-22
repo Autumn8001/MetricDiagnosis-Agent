@@ -6,8 +6,8 @@
 - **Snapshot Date**: 2026-09-22
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
 - **Current Task**: Stage 1 acceptance evidence consolidation and presentation readiness
-- **Current Task Status**: Core chain, three-case Live gate, one 10-Case Live run and a 30-run stability sample have completed; current work must not add new core capabilities without a demonstrated gap.
-- **Last Verified Batch**: 2026-09-22 full backend regression (449 tests), frontend lint/build, FastAPI health, explicit Gemini targeted 6-run reproduction.
+- **Current Task Status**: Core chain, three-case Live gate, one 10-Case Live run and a 30-run stability sample have completed; product API Ground Truth isolation has been reconciled and current work must not add new core capabilities without a demonstrated gap.
+- **Last Verified Batch**: 2026-09-22 full backend regression (448 tests), frontend lint/build; API scenario catalog and Fixture Preview Ground Truth boundary verified.
 - **Current Blocker**: No core blocker. The 30-run sample contains two low-frequency `DiagnosisValidationError` outcomes; safe intent-reference capture is now in place, but no deterministic root cause has been reproduced.
 - **Current Phase Status**: Portfolio MVP implementation complete and technically demo-ready; acceptance documentation and optional real-world validation remain.
 - **Later Work**: Real-world schema mapping validation, deployment decisions, or any feedback/retry design require a separate evidence-backed task.
@@ -261,7 +261,7 @@
   - 8 项专项测试覆盖 Manifest 对账、单次/多次运行管道、看板格式化与 JSON 导出。
 - Phase 10 FastAPI 最小后端服务与 RESTful 接口体系（`backend/app/api/` 与 `backend/app/main.py`）：
   - `backend/app/api/schemas.py`: Pydantic V2 请求与响应数据交换模型，包括 `MetricGraphNode`/`Edge`、`ScenarioItem`、`InvestigationRequest`、`InvestigationResponse`（包含完整的 `DiagnosisItem`、`EvidenceItem` 列表、`TraceStepItem` 轨迹及 `BudgetUsage`）；
-  - `backend/app/api/service.py`: 纯业务服务层，提供依赖图拓扑提取、10 场景清单加载、安全变异注入（无数据库时自动降级 Dry-run，非法场景阻断）、确定性离线 Mock 演示调查与真实 Live 调查编排；
+  - `backend/app/api/service.py`: 纯业务服务层，读取仅含 `scenario_id`/`target_metric` 的 `warehouse/scenario_catalog.json`，提供依赖图拓扑提取、10 场景清单加载、安全变异注入（无数据库时自动降级 Dry-run，非法场景阻断）、与所选场景无关的通用 Fixture Preview 及真实 Live 调查编排；不导入或读取 Benchmark / Ground Truth 标签；
   - `backend/app/api/routes.py`: 路由注册，暴露 `GET /health`、`GET /api/metrics/graph`、`GET /api/scenarios`、`POST /api/scenarios/inject`、`POST /api/investigate`；
   - `backend/app/main.py`: FastAPI 应用工厂，挂载 CORS 中间件（允许 Vite 前端 `http://localhost:5173` 等跨域访问）与 API 路由；
   - 15 项 API 专项单元测试全部通过。
@@ -328,7 +328,7 @@
 ## 4. 当前验证状态
 
 - **Last Verification Date**: 2026-09-22
-- **Backend Unit Tests**: 449/449 PASS
+- **Backend Unit Tests**: 448/448 PASS
 - **Frontend Lint**: PASS
 - **Frontend Production Build**: PASS
 - **10 Case Hermetic Evaluation**: PASS (`--hermetic --runs-per-case 1`)，仅证明评测管道与受控离线输入，不证明真实模型能力
@@ -343,7 +343,7 @@
 ## 5. 当前阻塞与下一步
 
 - **实现状态**：Stage 1 Portfolio MVP 的 Core、Evaluation、API 与 UI 已形成可运行实现；API 已直接使用可信 SDK Tool Trace，三场景脚本可原子输出脱敏验收 artifact。
-- **验证状态**：449 项后端测试通过；前端 lint/build 与 FastAPI health 已通过；真实 Provider 三场景、10 Case 单次与 30-run 样本的详细事实见第 4 节及 `docs/evaluation-artifacts/`。
+- **验证状态**：448 项后端测试通过；前端 lint/build 已通过；真实 Provider 三场景、10 Case 单次与 30-run 样本的详细事实见第 4 节及 `docs/evaluation-artifacts/`。
 - **验收状态**：Gemini Provider、真实数据库、三场景动态调查链和校准后的 10 Case 单次 Live Evaluation 均已通过。30-run 稳定性评测现有完整 artifact，但 2 次有效领域拒绝显示替代场景的结论生成仍非完全稳定；这不否定 MVP 核心链，却是下一项可靠性改进依据。
 - **安全边界**：真实 `.env` 保持本地且不得提交；artifact 不记录 API Key、数据库连接串或完整 Provider URL。
 - **恢复开发时的唯一优先级**：维持当前真实评估监控；若新的 `DiagnosisValidationError` artifact 出现，基于其 reference-only intent 摘要定位具体缺口后再决定是否需要受控反馈。不在没有可复现问题时提前引入自动重试、固定 Workflow 或 Prompt 特例。

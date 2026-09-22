@@ -243,15 +243,18 @@ export const App: React.FC = () => {
         prompt: customPrompt,
       })
       setInvestigation(res)
+      if (res.mode !== 'live') {
+        showToast(
+          'Fixture Preview 已加载：仅用于 UI 示意，不代表所选场景结果或 Agent 调查。',
+          'success'
+        )
+        return
+      }
       const isDiag = res.diagnosis.status === 'diagnosed'
-      const modeLabel =
-        res.mode === 'live'
-          ? 'Agent Investigation'
-          : 'Fixture Preview（固定夹具预览·不调用模型）'
       showToast(
         isDiag
-          ? `${modeLabel} 完成：识别主驱动指标「${res.diagnosis.primary_driver}」，定位至受影响维度。`
-          : `${modeLabel} 完成：目标指标在公差范围内正常波动（无实质性异常）。`,
+          ? `Agent Investigation 完成：识别主驱动指标「${res.diagnosis.primary_driver}」，定位至受影响维度。`
+          : 'Agent Investigation 完成：目标指标在公差范围内正常波动（无实质性异常）。',
         'success'
       )
     } catch (err: any) {

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import datetime
-from decimal import Decimal
+from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -26,15 +27,8 @@ from app.diagnosis import (
     Diagnosis,
     DiagnosisChange,
     DiagnosisComposition,
-    DiagnosisStatus,
-)
-from app.evidence import EvidenceRole, promote_observation_to_evidence
-from app.evaluation import (
-    GroundTruthCase,
-    load_ground_truth_cases,
 )
 from app.metrics.registry import MetricRegistry
-from app.observations import Observation, ObservationStatus
 
 from .schemas import (
     BudgetUsage,
@@ -53,12 +47,18 @@ from .schemas import (
 
 
 CONFIG_PATH = REPOSITORY_ROOT / "configs" / "metrics.yaml"
-BENCHMARK_CASES_PATH = REPOSITORY_ROOT / "warehouse" / "benchmark_cases.json"
-DEFAULT_DATE = "2026-01-31"
-
+SCENARIO_CATALOG_PATH = REPOSITORY_ROOT / "warehouse" / "scenario_catalog.json"
 _registry: Optional[MetricRegistry] = None
-_benchmark_cases: Optional[tuple[GroundTruthCase, ...]] = None
+_scenario_catalog: Optional[tuple["ScenarioCatalogEntry", ...]] = None
 _current_scenario: str = "canonical"
+
+
+@dataclass(frozen=True)
+class ScenarioCatalogEntry:
+    """Selector and injection metadata deliberately separated from Ground Truth."""
+
+    scenario_id: str
+    target_metric: str
 
 
 def get_metric_registry() -> MetricRegistry:
@@ -71,14 +71,37 @@ def get_metric_registry() -> MetricRegistry:
     return _registry
 
 
-def get_benchmark_cases() -> tuple[GroundTruthCase, ...]:
-    """Load or return cached 10 Benchmark cases."""
-    global _benchmark_cases
-    if _benchmark_cases is None:
-        if not BENCHMARK_CASES_PATH.is_file():
-            raise FileNotFoundError(f"Benchmark cases JSON not found at {BENCHMARK_CASES_PATH}")
-        _benchmark_cases = load_ground_truth_cases(BENCHMARK_CASES_PATH)
-    return _benchmark_cases
+def get_scenario_catalog() -> tuple[ScenarioCatalogEntry, ...]:
+    """Load public scenario IDs without importing evaluation answers into the API process."""
+    global _scenario_catalog
+    if _scenario_catalog is not None:
+        return _scenario_catalog
+    if not SCENARIO_CATALOG_PATH.is_file():
+        raise FileNotFoundError(f"Scenario catalog not found at {SCENARIO_CATALOG_PATH}")
+    raw = json.loads(SCENARIO_CATALOG_PATH.read_text(encoding="utf-8"))
+    if not isinstance(raw, Mapping) or raw.get("schema") != "metricsleuth.stage1_scenario_catalog.v1":
+        raise ValueError("Scenario catalog has an invalid schema.")
+    items = raw.get("scenarios")
+    if not isinstance(items, list) or not items:
+        raise ValueError("Scenario catalog must contain a non-empty scenarios list.")
+
+    catalog: list[ScenarioCatalogEntry] = []
+    seen_ids: set[str] = set()
+    for item in items:
+        if not isinstance(item, Mapping) or set(item) != {"scenario_id", "target_metric"}:
+            raise ValueError("Each scenario catalog item must contain only scenario_id and target_metric.")
+        scenario_id = item.get("scenario_id")
+        target_metric = item.get("target_metric")
+        if not isinstance(scenario_id, str) or not scenario_id.strip():
+            raise ValueError("Scenario catalog scenario_id must be a non-empty string.")
+        if not isinstance(target_metric, str) or not target_metric.strip():
+            raise ValueError("Scenario catalog target_metric must be a non-empty string.")
+        if scenario_id in seen_ids:
+            raise ValueError(f"Scenario catalog contains duplicate scenario_id: {scenario_id}")
+        seen_ids.add(scenario_id)
+        catalog.append(ScenarioCatalogEntry(scenario_id=scenario_id, target_metric=target_metric))
+    _scenario_catalog = tuple(catalog)
+    return _scenario_catalog
 
 
 def get_metric_graph() -> MetricGraphResponse:
@@ -123,14 +146,14 @@ def get_metric_graph() -> MetricGraphResponse:
 
 def get_scenarios() -> ScenarioListResponse:
     """Return selector-safe scenario metadata without benchmark answers."""
-    cases = get_benchmark_cases()
+    cases = get_scenario_catalog()
     scenarios: list[ScenarioItem] = []
 
     for index, case in enumerate(cases, start=1):
         case_number = f"{index:02d}"
         scenarios.append(
             ScenarioItem(
-                scenario_id=case.scenario,
+                scenario_id=case.scenario_id,
                 title=f"Controlled Case {case_number} / 受控基准场景 {case_number}",
                 description=(
                     "Controlled benchmark fixture for preview and data injection; "
@@ -150,7 +173,7 @@ def inject_scenario_data(scenario: str) -> tuple[str, str]:
     """
     global _current_scenario
 
-    valid_cases = {c.scenario for c in get_benchmark_cases()}
+    valid_cases = {c.scenario_id for c in get_scenario_catalog()}
     if scenario not in valid_cases:
         raise ValueError(
             f"Unknown scenario '{scenario}'. Valid scenarios: {sorted(valid_cases)}"
@@ -220,13 +243,13 @@ def resolve_live_model(request_model: Optional[str] = None) -> str:
 def execute_investigation(request: InvestigationRequest) -> InvestigationResponse:
     """Execute a live Agent Investigation or fixed Fixture Preview."""
     target_scenario = request.scenario or _current_scenario
-    cases = get_benchmark_cases()
-    matched_case = next((c for c in cases if c.scenario == target_scenario), None)
-    if matched_case is None:
+    scenarios = get_scenario_catalog()
+    matched_scenario = next((item for item in scenarios if item.scenario_id == target_scenario), None)
+    if matched_scenario is None:
         raise ValueError(f"Unknown investigation scenario '{target_scenario}'.")
 
     if request.mock_mode:
-        return _run_mock_investigation(request, matched_case)
+        return _run_mock_investigation(request, matched_scenario)
 
     # Fail-closed guards for live investigation
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -237,221 +260,66 @@ def execute_investigation(request: InvestigationRequest) -> InvestigationRespons
     if not db_url or not db_url.strip():
         raise ValueError("Missing required DATABASE_URL for live investigation.")
 
-    return _run_live_investigation(request, matched_case, db_url)
+    return _run_live_investigation(request, matched_scenario, db_url)
 
 
 def _run_mock_investigation(
     request: InvestigationRequest,
-    case: GroundTruthCase,
+    scenario: ScenarioCatalogEntry,
 ) -> InvestigationResponse:
-    """Return a deterministic Fixture Preview without calling a model."""
+    """Return a generic UI fixture without accessing evaluation Ground Truth.
+
+    This fixture is intentionally independent of the selected scenario.  It
+    demonstrates page layout only; it is not a scripted investigation result.
+    """
     now = datetime.datetime.now(datetime.timezone.utc)
-    request_id = f"inv-{case.scenario}-{int(time.time())}"
-    is_anomalous = case.status == DiagnosisStatus.DIAGNOSED
-
-    # 1. Build Trace Steps
-    trace: list[TraceStepItem] = []
-
-    # Step 1: Overall target metric check
-    trace.append(
-        TraceStepItem(
-            step_number=1,
-            tool_name="query_metric",
-            tool_call_id=f"call_{request_id}_1",
-            arguments={"metric": request.target_metric},
-            observation_id=f"obs_{request_id}_target",
-            status="ok",
-            metric=request.target_metric,
-            current_value=15840.0 if is_anomalous else 18240.0,
-            baseline_value=18240.0,
-            relative_change=-0.1316 if is_anomalous else 0.0,
-            dimensions={},
-            summary=f"Query overall {request.target_metric}: observed "
-            + ("-13.16% drop below baseline" if is_anomalous else "within <1% baseline normal fluctuation"),
-        )
-    )
-
-    # Step 2: Related metrics breakdown
-    driver = case.primary_driver or "conversion_rate"
-    trace.append(
-        TraceStepItem(
-            step_number=2,
-            tool_name="query_related_metrics",
-            tool_call_id=f"call_{request_id}_2",
-            arguments={"metric": request.target_metric},
-            observation_id=f"obs_{request_id}_related",
-            status="ok",
-            metric=request.target_metric,
-            current_value=None,
-            baseline_value=None,
-            relative_change=None,
-            dimensions={},
-            summary=f"Related metrics decomposed: identified primary anomalous driver '{driver}'"
-            if is_anomalous
-            else "Related metrics decomposed: all related metrics stable",
-        )
-    )
-
-    # Step 3: Marketplace drill-down
-    mkt = case.affected_scope.get("marketplace", "US")
-    trace.append(
-        TraceStepItem(
-            step_number=3,
-            tool_name="query_metric",
-            tool_call_id=f"call_{request_id}_3",
-            arguments={"metric": driver, "group_by": ["marketplace"]},
-            observation_id=f"obs_{request_id}_mkt",
-            status="ok",
-            metric=driver,
-            current_value=0.04 if driver == "conversion_rate" else 80.0,
-            baseline_value=0.08 if driver == "conversion_rate" else 100.0,
-            relative_change=-0.50 if is_anomalous else 0.0,
-            dimensions={"marketplace": mkt},
-            summary=f"Marketplace drill-down: isolated significant drop in '{mkt}' marketplace"
-            if is_anomalous
-            else "Marketplace drill-down: all marketplaces stable",
-        )
-    )
-
-    # Step 4: ASIN drill-down
-    asin = case.affected_scope.get("asin", "ASIN-A")
-    trace.append(
-        TraceStepItem(
-            step_number=4,
-            tool_name="query_metric",
-            tool_call_id=f"call_{request_id}_4",
-            arguments={"metric": driver, "group_by": ["asin"], "filters": [{"dimension": "marketplace", "value": mkt}]},
-            observation_id=f"obs_{request_id}_asin",
-            status="ok",
-            metric=driver,
-            current_value=0.04 if driver == "conversion_rate" else 80.0,
-            baseline_value=0.08 if driver == "conversion_rate" else 100.0,
-            relative_change=-0.50 if is_anomalous else 0.0,
-            dimensions={"marketplace": mkt, "asin": asin},
-            summary=f"ASIN drill-down in {mkt}: pinpointed product '{asin}' as anomaly focus"
-            if is_anomalous
-            else "ASIN drill-down: product performance within normal bounds",
-        )
-    )
-
-    # Step 5: Traffic Source drill-down
-    src = case.affected_scope.get("traffic_source", "Ads")
-    trace.append(
-        TraceStepItem(
-            step_number=5,
-            tool_name="query_metric",
-            tool_call_id=f"call_{request_id}_5",
-            arguments={
-                "metric": driver,
-                "group_by": ["traffic_source"],
-                "filters": [
-                    {"dimension": "marketplace", "value": mkt},
-                    {"dimension": "asin", "value": asin},
-                ],
-            },
-            observation_id=f"obs_{request_id}_src",
-            status="ok",
-            metric=driver,
-            current_value=0.02 if driver == "conversion_rate" else 50.0,
-            baseline_value=0.08 if driver == "conversion_rate" else 200.0,
-            relative_change=-0.75 if is_anomalous else 0.0,
-            dimensions={"marketplace": mkt, "asin": asin, "traffic_source": src},
-            summary=f"Traffic source drill-down: isolated drop strictly to '{src}' channel"
-            if is_anomalous
-            else "Traffic source drill-down: no channel-level discrepancy",
-        )
-    )
-
-    # 2. Build Evidence Portfolio
-    evidence_list: list[EvidenceItem] = []
-
-    # Target evidence
+    request_id = f"fixture-{scenario.scenario_id}-{int(time.time())}"
     ev_target_id = f"evidence:{request_id}_target:supporting"
-    evidence_list.append(
-        EvidenceItem(
-            evidence_id=ev_target_id,
-            observation_id=f"obs_{request_id}_target",
-            metric=request.target_metric,
-            role="supporting",
-            observation_status="anomalous" if is_anomalous else "normal",
-            current_value=15840.0 if is_anomalous else 18240.0,
-            baseline_value=18240.0,
-            relative_change=-0.1316 if is_anomalous else 0.0,
-            unit="usd",
-            sample_size=2850.0,
-            dimensions={},
-            filters={},
-        )
-    )
-
-    # Driver evidence
-    if is_anomalous and case.primary_driver is not None:
-        ev_driver_id = f"evidence:{request_id}_driver:supporting"
-        is_ratio = driver == "conversion_rate"
-        evidence_list.append(
-            EvidenceItem(
-                evidence_id=ev_driver_id,
-                observation_id=f"obs_{request_id}_src",
-                metric=driver,
-                role="supporting",
-                observation_status="anomalous",
-                current_value=0.02 if is_ratio else 50.0,
-                baseline_value=0.08 if is_ratio else 200.0,
-                relative_change=-0.75 if is_ratio else -0.50,
-                unit="ratio" if is_ratio else ("usd" if driver == "aov" else "count"),
-                sample_size=500.0,
-                dimensions=dict(case.affected_scope),
-                filters=dict(case.affected_scope),
-            )
-        )
-
-    # Negative control evidences
-    for ctrl_key, dim_name in [("marketplaces", "marketplace"), ("asins", "asin"), ("traffic_sources", "traffic_source")]:
-        for val in case.negative_controls.get(ctrl_key, ()):
-            ev_ctrl_id = f"evidence:{request_id}_ctrl_{dim_name}_{val}:negative_control"
-            evidence_list.append(
-                EvidenceItem(
-                    evidence_id=ev_ctrl_id,
-                    observation_id=f"obs_{request_id}_ctrl_{dim_name}_{val}",
-                    metric="sessions",
-                    role="negative_control",
-                    observation_status="normal",
-                    current_value=100.0,
-                    baseline_value=100.0,
-                    relative_change=0.0,
-                    unit="count",
-                    sample_size=500.0,
-                    dimensions={dim_name: val},
-                    filters={dim_name: val},
-                )
-            )
-
-    # 3. Build Diagnosis
+    ev_driver_id = f"evidence:{request_id}_driver:supporting"
+    ev_control_id = f"evidence:{request_id}_control:negative_control"
+    trace = [
+        TraceStepItem(
+            step_number=1, tool_name="query_metric", tool_call_id=f"call_{request_id}_1",
+            arguments={"metric": request.target_metric}, observation_id=f"obs_{request_id}_target",
+            metric=request.target_metric, current_value=15840.0, baseline_value=18240.0,
+            relative_change=-0.1316, summary="Fixture-only overall metric example; not selected scenario output.",
+        ),
+        TraceStepItem(
+            step_number=2, tool_name="query_related_metrics", tool_call_id=f"call_{request_id}_2",
+            arguments={"metric": request.target_metric}, observation_id=f"obs_{request_id}_related",
+            metric=request.target_metric, summary="Fixture-only related-metrics example; no Agent call was made.",
+        ),
+        TraceStepItem(
+            step_number=3, tool_name="query_metric", tool_call_id=f"call_{request_id}_3",
+            arguments={"metric": "conversion_rate", "group_by": ["marketplace"]}, observation_id=f"obs_{request_id}_driver",
+            metric="conversion_rate", current_value=0.04, baseline_value=0.08, relative_change=-0.50,
+            dimensions={"marketplace": "US"}, summary="Fixture-only segment example; not selected scenario output.",
+        ),
+    ]
+    evidence_list = [
+        EvidenceItem(evidence_id=ev_target_id, observation_id=f"obs_{request_id}_target", metric=request.target_metric, role="supporting", observation_status="anomalous", current_value=15840.0, baseline_value=18240.0, relative_change=-0.1316, unit="usd", sample_size=2850.0),
+        EvidenceItem(evidence_id=ev_driver_id, observation_id=f"obs_{request_id}_driver", metric="conversion_rate", role="supporting", observation_status="anomalous", current_value=0.04, baseline_value=0.08, relative_change=-0.50, unit="ratio", sample_size=500.0, dimensions={"marketplace": "US"}, filters={"marketplace": "US"}),
+        EvidenceItem(evidence_id=ev_control_id, observation_id=f"obs_{request_id}_related", metric="sessions", role="negative_control", observation_status="normal", current_value=100.0, baseline_value=100.0, relative_change=0.0, unit="count", sample_size=500.0, dimensions={"marketplace": "DE"}, filters={"marketplace": "DE"}),
+    ]
     change_item = DiagnosisChangeItem(
-        current_value=15840.0 if is_anomalous else 18240.0,
+        current_value=15840.0,
         baseline_value=18240.0,
-        relative_change=-0.1316 if is_anomalous else 0.0,
+        relative_change=-0.1316,
         unit="usd",
         evidence_id=ev_target_id,
     )
-
     diagnosis_item = DiagnosisItem(
         diagnosis_id=f"diag_{request_id}",
-        status=case.status.value,
+        status="diagnosed",
         target_metric=request.target_metric,
-        primary_driver=case.primary_driver,
-        affected_scope=dict(case.affected_scope),
-        confidence=0.92 if is_anomalous else 0.95,
+        primary_driver="conversion_rate",
+        affected_scope={"marketplace": "US"},
+        confidence=0.92,
         change=change_item,
-        evidence_ids=[
-            ev.evidence_id
-            for ev in evidence_list
-            if ev.role == "supporting"
-        ],
-        limitations=[case.causal_boundary],
+        evidence_ids=[ev_target_id, ev_driver_id],
+        limitations=["Fixture Preview only: static UI illustration, not a selected-scenario result or Agent conclusion."],
         created_at=now.isoformat(),
     )
-
     budget_item = BudgetUsage(
         tool_calls_count=len(trace),
         max_tool_calls=8,
@@ -464,7 +332,7 @@ def _run_mock_investigation(
         mode="mock",
         target_metric=request.target_metric,
         target_date=request.target_date,
-        scenario=case.scenario,
+        scenario=scenario.scenario_id,
         diagnosis=diagnosis_item,
         evidence=evidence_list,
         investigation_trace=trace,
@@ -665,7 +533,7 @@ def _build_live_trace_items(summary: object) -> list[TraceStepItem]:
 
 def _run_live_investigation(
     request: InvestigationRequest,
-    case: GroundTruthCase,
+    scenario: ScenarioCatalogEntry,
     database_url: str,
 ) -> InvestigationResponse:
     """Execute live autonomous investigation using Agents SDK runtime."""
@@ -677,11 +545,11 @@ def _run_live_investigation(
     )
 
     registry = get_metric_registry()
-    request_id = f"live-{case.scenario}-{int(time.time())}"
+    request_id = f"live-{scenario.scenario_id}-{int(time.time())}"
     resolved_model = resolve_live_model(request.model)
 
     # Inject target scenario
-    inject_scenario_data(case.scenario)
+    inject_scenario_data(scenario.scenario_id)
 
     with psycopg.connect(database_url) as conn:
         tools = AnalyticsTools(registry=registry, connection=conn)
@@ -757,7 +625,7 @@ def _run_live_investigation(
         mode="live",
         target_metric=request.target_metric,
         target_date=request.target_date,
-        scenario=case.scenario,
+        scenario=scenario.scenario_id,
         diagnosis=diagnosis_item,
         evidence=evidence_list,
         investigation_trace=trace_items,

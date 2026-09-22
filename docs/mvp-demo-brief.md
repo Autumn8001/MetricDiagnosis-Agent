@@ -51,7 +51,7 @@ It must not be presented as proof that an advertising strategy, a Listing change
 
 | Check | Current factual result | Boundary |
 |---|---|---|
-| Backend regression | 449 unit tests pass | Hermetic correctness; not real-model performance. |
+| Backend regression | 448 unit tests pass | Hermetic correctness; not real-model performance. |
 | Product build | React lint and production build pass; FastAPI `/health` returns `200` | Build and local API availability; not deployment. |
 | Live three-case gate | Explicit Gemini provider completed Canonical Conversion, Traffic Sessions and No-anomaly stop cases | Proves the core chain can execute dynamically through the compatible provider. |
 | Calibrated 10-case Live run | One run per Case achieved 100% completion / Driver / Scope / Exact Match | One controlled synthetic run, not a general accuracy claim. |
