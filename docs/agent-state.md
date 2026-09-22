@@ -6,8 +6,8 @@
 - **Snapshot Date**: 2026-09-22
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
 - **Current Task**: Phase 9 Olist source Profiling and real-world mapping decision
-- **Current Task Status**: Olist raw source has passed read-only source profiling; no staging adapter, existing Semantic Layer, Benchmark, Runtime, or API behavior has been changed.
-- **Last Verified Batch**: 2026-09-22 Olist profile on local raw source (2 dedicated tests); API scenario catalog / Fixture Preview Ground Truth boundary regression, 450 backend tests total, frontend lint/build.
+- **Current Task Status**: Olist raw source has passed profiling and isolated staging dry-run; `olist_validation` loader/verifier are ready but database materialization is BLOCKED until an explicit `DATABASE_URL` is supplied. Existing Semantic Layer, Benchmark, Runtime, and API behavior remain unchanged.
+- **Last Verified Batch**: 2026-09-22 Olist profile and staging dry-run on local raw source; API scenario catalog / Fixture Preview Ground Truth boundary regression, 451 backend tests total, frontend lint/build.
 - **Current Blocker**: No core blocker. The 30-run sample contains two low-frequency `DiagnosisValidationError` outcomes; safe intent-reference capture is now in place, but no deterministic root cause has been reproduced.
 - **Current Phase Status**: Portfolio MVP implementation complete and technically demo-ready; acceptance documentation and optional real-world validation remain.
 - **Later Work**: Real-world schema mapping validation, deployment decisions, or any feedback/retry design require a separate evidence-backed task.

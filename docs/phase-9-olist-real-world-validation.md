@@ -42,9 +42,25 @@ python backend/scripts/profile_olist_dataset.py `
   --output-json docs/evaluation-artifacts/olist-source-profile.json
 ```
 
+The isolated staging load is opt-in and never touches `warehouse`:
+
+```powershell
+# Source/join validation only; no database write.
+python backend/scripts/load_olist_validation.py --input-dir data/raw/olist --dry-run
+
+# Requires DATABASE_URL. First load creates only olist_validation.* tables.
+python backend/scripts/load_olist_validation.py --input-dir data/raw/olist
+python backend/scripts/verify_olist_validation.py
+```
+
+Re-loading an already populated validation schema is fail-closed. `--replace`
+must be supplied explicitly and truncates only `olist_validation.olist_orders`
+and `olist_validation.olist_order_items`.
+
 ## Phase 9 exit criterion
 
-The next and final Phase 9 decision is whether to add an **isolated read-only
-staging adapter** for the three supported metric candidates. It requires a
-separate task after reviewing this profile; it must not modify the existing
-Amazon Stage 1 Semantic Layer or claim support for unavailable funnel metrics.
+The isolated staging adapter now validates the raw joins and can materialize
+the source in `olist_validation.*`. The final Phase 9 decision is whether a
+separate, temporary validation Metric Registry should query these three
+supported metrics. It must not modify the existing Amazon Stage 1 Semantic
+Layer or claim support for unavailable funnel metrics.

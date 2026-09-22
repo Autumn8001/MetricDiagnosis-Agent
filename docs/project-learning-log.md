@@ -887,6 +887,12 @@ configs/metrics.yaml
 - **边界**：这一阶段只添加标准库只读 Profiling 脚本与映射文档。原始下载目录 git-ignore；不导入现有 Warehouse，不改 Agent Runtime、Semantic Layer 或 Ground Truth。
 - **验证事实**：两项专项测试覆盖完整最小源与缺失文件 fail-closed；真实 Olist 下载已生成脱敏聚合 profile。当前后端全量基线为 450 项测试。
 
+### 3.46 2026-09-22 Olist 隔离 Staging 与数据库验证边界
+
+- **最小实现**：`olist_validation` schema 保存原始订单和订单明细的可追溯映射；loader 仅从本地 CSV 构建 join，默认拒绝覆盖已有 validation 数据，只有显式 `--replace` 才能截断这两张隔离表。
+- **为什么不是直接改 `warehouse`** `[必须掌握]`：Synthetic Warehouse 是可控 Benchmark 的事实来源。把真实 Olist 行混入它会同时破坏 Benchmark 可复现性、Amazon 字段语义与 Ground Truth 评分。真实数据必须先在独立 schema 中被验证。
+- **验证边界**：实际 CSV dry-run 已通过（99,441 orders / 112,650 items），Loader 的源映射单测与全量 451 项后端测试通过。当前执行环境没有 `DATABASE_URL`，所以 materialized staging verification 正确报告 BLOCKED；未将“脚本已实现”写成“数据库已验收”。
+
 ## 4. 面试高频问题与项目化回答
 
 ### Q1: 什么是 Metric Semantic Layer（指标语义层）？它在 MetricSleuth 中起什么作用？ `[面试高频]`
