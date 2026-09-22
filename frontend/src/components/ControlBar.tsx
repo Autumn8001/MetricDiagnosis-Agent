@@ -9,6 +9,7 @@ interface ControlBarProps {
   isInjecting: boolean
   isInvestigating: boolean
   isMockMode: boolean
+  targetMetric: string
   onToggleMockMode: (val: boolean) => void
 }
 
@@ -21,6 +22,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   isInjecting,
   isInvestigating,
   isMockMode,
+  targetMetric,
   onToggleMockMode,
 }) => {
   const modeLabel = isMockMode
@@ -53,7 +55,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           <label className="control-label">分析目标与基准</label>
           <div className="meta-chip">
             <span>Target:</span>
-            <span className="meta-highlight">sales</span>
+            <span className="meta-highlight">{targetMetric}</span>
             <span>|</span>
             <span>Date:</span>
             <span className="meta-highlight">2026-01-31</span>

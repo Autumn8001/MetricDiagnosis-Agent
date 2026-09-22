@@ -355,6 +355,57 @@ class TestInvestigationEndpoint(unittest.TestCase):
         self.assertIn("Unknown investigation scenario", response.json()["detail"])
 
 
+class TestManualDailyScanEndpoint(unittest.TestCase):
+    """Test the product-facing trigger-discovery boundary."""
+
+    def setUp(self) -> None:
+        self.client = TestClient(app)
+
+    def test_scan_fails_closed_without_database_url(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DATABASE_URL", None)
+            response = self.client.post("/api/scans/daily", json={})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("DATABASE_URL", response.json()["detail"])
+
+    @patch("app.api.service.run_manual_daily_scan")
+    @patch("psycopg.connect")
+    def test_scan_returns_candidates_without_a_diagnosis(
+        self,
+        mock_connect: MagicMock,
+        mock_scan: MagicMock,
+    ) -> None:
+        mock_connect.return_value.__enter__.return_value = MagicMock()
+        mock_scan.return_value = {
+            "schema": "metricsleuth.manual_daily_scan.v1",
+            "target_date": "2026-01-31",
+            "comparison": "previous_7_days",
+            "mode": "manual_trigger_discovery",
+            "observations": [
+                {
+                    "metric": "sales",
+                    "status": "anomalous",
+                    "current_value": -12.0,
+                    "baseline_value": 100.0,
+                    "relative_change": -0.12,
+                    "unit": "usd",
+                    "sample_size": 50.0,
+                    "observation_id": "daily_scan_2026-01-31_sales_0",
+                }
+            ],
+            "anomaly_candidate_metrics": ["sales"],
+            "next_step": "A caller may start an investigation.",
+        }
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql://test/warehouse"}, clear=False):
+            response = self.client.post("/api/scans/daily", json={"target_date": "2026-01-31"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["mode"], "manual_trigger_discovery")
+        self.assertEqual(data["anomaly_candidate_metrics"], ["sales"])
+        self.assertNotIn("diagnosis", data)
+        self.assertNotIn("primary_driver", data)
+
+
 class TestLiveApiWiring(unittest.TestCase):
     """Test live autonomous agent investigation wiring, fail-closed behavior, and trace auditing."""
 

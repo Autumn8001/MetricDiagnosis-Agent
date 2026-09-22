@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 
@@ -171,6 +172,40 @@ class InvestigationResponse(BaseModel):
     evidence: list[EvidenceItem]
     investigation_trace: list[TraceStepItem]
     budget: BudgetUsage
+
+
+# ---------------------------------------------------------------------------
+# Manual Trigger Discovery Models
+# ---------------------------------------------------------------------------
+
+class DailyScanRequest(BaseModel):
+    """Request a global semantic-metric scan; this does not start an Agent run."""
+
+    target_date: datetime.date = datetime.date(2026, 1, 31)
+
+
+class DailyScanObservationItem(BaseModel):
+    """One global Observation produced by a manual trigger scan."""
+
+    metric: str
+    status: str
+    current_value: Optional[float] = None
+    baseline_value: Optional[float] = None
+    relative_change: Optional[float] = None
+    unit: str
+    sample_size: Optional[float] = None
+    observation_id: str
+
+
+class DailyScanResponse(BaseModel):
+    """Candidate metrics only; driver, scope, and next action remain undecided."""
+
+    target_date: str
+    comparison: str
+    mode: str
+    observations: list[DailyScanObservationItem]
+    anomaly_candidate_metrics: list[str]
+    next_step: str
 
 
 # ---------------------------------------------------------------------------

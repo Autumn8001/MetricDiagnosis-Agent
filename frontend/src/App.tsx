@@ -4,10 +4,12 @@ import {
   getMetricGraph,
   getScenarios,
   injectScenario,
+  runDailyScan,
   runInvestigation,
 } from './api'
 import type {
   InvestigationResponse,
+  DailyScanResponse,
   MetricGraphNode,
   ScenarioItem,
 } from './types'
@@ -20,6 +22,7 @@ import { InvestigationTimeline } from './components/InvestigationTimeline'
 import { EvidencePortfolio } from './components/EvidencePortfolio'
 import { ContinueInquiry } from './components/ContinueInquiry'
 import { NodeDetailModal } from './components/NodeDetailModal'
+import { ManualScanPanel } from './components/ManualScanPanel'
 
 // Safe local fallback definitions for metrics and scenarios
 const DEFAULT_METRIC_NODES: MetricGraphNode[] = [
@@ -150,6 +153,9 @@ export const App: React.FC = () => {
   const [isInjecting, setIsInjecting] = useState<boolean>(false)
   const [isInvestigating, setIsInvestigating] = useState<boolean>(false)
   const [isMockMode, setIsMockMode] = useState<boolean>(true)
+  const [targetMetric, setTargetMetric] = useState<string>('sales')
+  const [dailyScan, setDailyScan] = useState<DailyScanResponse | null>(null)
+  const [isScanning, setIsScanning] = useState<boolean>(false)
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [selectedNode, setSelectedNode] = useState<MetricGraphNode | null>(null)
@@ -231,11 +237,11 @@ export const App: React.FC = () => {
   }
 
   // Run Investigation
-  const handleRunInvestigation = async (customPrompt?: string) => {
+  const handleRunInvestigation = async (customPrompt?: string, selectedMetric = targetMetric) => {
     setIsInvestigating(true)
     try {
       const res = await runInvestigation({
-        target_metric: 'sales',
+        target_metric: selectedMetric,
         target_date: '2026-01-31',
         baseline_strategy: 'previous_7_days',
         scenario: selectedScenario,
@@ -270,6 +276,29 @@ export const App: React.FC = () => {
     setInvestigation(null)
   }
 
+  const handleRunDailyScan = async () => {
+    setIsScanning(true)
+    try {
+      const result = await runDailyScan()
+      setDailyScan(result)
+      showToast(
+        result.anomaly_candidate_metrics.length
+          ? `${result.anomaly_candidate_metrics.length} 个候选指标待人工选择是否调查。`
+          : '扫描完成：没有发现全局异常候选指标。',
+        'success'
+      )
+    } catch (err: any) {
+      showToast(`每日扫描失败: ${err.message}`, 'error')
+    } finally {
+      setIsScanning(false)
+    }
+  }
+
+  const handleCandidateSelection = (metric: string) => {
+    setTargetMetric(metric)
+    showToast(`候选指标「${metric}」已带入调查控制栏；选择 Fixture Preview 或 Live Agent 后再执行。`, 'success')
+  }
+
   return (
     <div className="app-container">
       {/* 1. Header */}
@@ -298,7 +327,15 @@ export const App: React.FC = () => {
         isInjecting={isInjecting}
         isInvestigating={isInvestigating}
         isMockMode={isMockMode}
+        targetMetric={targetMetric}
         onToggleMockMode={setIsMockMode}
+      />
+
+      <ManualScanPanel
+        scan={dailyScan}
+        isScanning={isScanning}
+        onRun={handleRunDailyScan}
+        onSelectCandidate={handleCandidateSelection}
       />
 
       {/* 3. Main Workspace Grid */}

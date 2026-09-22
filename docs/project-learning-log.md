@@ -907,6 +907,13 @@ configs/metrics.yaml
 - **真实结果**：在 canonical Synthetic Warehouse 的 2026-01-31 扫描中，Sales / Orders / Conversion Rate 被标记为候选，Sessions / AOV 正常。随后应由 Human 或已有 Agent Runtime 选择是否调查某一个 Trigger；扫描本身不宣称因果或诊断。
 - **边界** `[必须掌握]`：不添加 Cron、Scheduler、队列、自动重试、Session 存储或 Agent Loop。自动发现“值得查什么”和自主调查“下一步查什么”是不同责任。
 
+### 3.5 2026-09-22 Manual Trigger Discovery Product Alignment
+
+- `run_manual_daily_scan()` 被抽为 CLI 与 FastAPI 共用的薄领域函数，避免脚本和产品 API 各自复制语义查询与 Observation 转换逻辑。
+- `POST /api/scans/daily` 只接受日期，执行已声明指标的全局扫描；缺少 `DATABASE_URL` 直接 400 Fail-Closed，响应模型没有 Diagnosis、Driver 或 Scope 字段。
+- 工作台把扫描单独放在调查控制栏之后：候选按钮只更新 `target_metric`，用户仍需明确触发 Fixture Preview 或 Live Agent。这让“发现值得查什么”和“Agent 决定下一步查什么”保持不同职责。
+- `[必须掌握]` 这是一种产品边界设计：把系统触发入口接到 UI，不等于把候选筛选写成固定 Agent Workflow。
+
 ## 4. 面试高频问题与项目化回答
 
 ### Q1: 什么是 Metric Semantic Layer（指标语义层）？它在 MetricSleuth 中起什么作用？ `[面试高频]`

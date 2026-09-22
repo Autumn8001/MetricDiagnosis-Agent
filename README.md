@@ -792,6 +792,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | `GET` | `/api/metrics/graph` | 获取指标依赖拓扑图（节点元数据与有向依赖边） | 前端指标拓扑看板可视化渲染 |
 | `GET` | `/api/scenarios` | 获取 10 个受控 Benchmark 场景的中性展示信息（不返回 Ground Truth 标签） | 演示场景下拉选择器 |
 | `POST` | `/api/scenarios/inject` | 触发指定场景的数据注入（无数据库时自动降级 Dry-run） | 场景一键切换 |
+| `POST` | `/api/scans/daily` | 对语义层中每个声明指标进行一次全局扫描，只返回异常候选，不启动 Agent 或生成 Diagnosis | 手动 Trigger discovery |
 | `POST` | `/api/investigate` | 执行指标异常调查（`mock_mode=True` 为 Fixture Preview；关闭后为 Live Agent 路径） | 核心诊断执行与调查轨迹回放 |
 
 #### 31.4 API 单元测试与端点自检
@@ -799,7 +800,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 单元测试基于 `fastapi.testclient.TestClient`，完全离线运行且不依赖外部网络与数据库：
 
 ```powershell
-# 1. 执行 API 专项单元测试 (15 项)
+# 1. 执行 API 专项单元测试
 Push-Location backend
 python -m unittest discover -s tests -p "test_api.py" -v
 Pop-Location
@@ -849,20 +850,23 @@ Pop-Location
    - **Fixture Preview / Live 模式切换**：Fixture Preview 用于无数据库或无 OpenAI Key 时展示通用确定性 UI 数据，且不反映所选场景或 Ground Truth；在已配置环境时可切换 Live 真实排查；
    - **「💉 注入场景数据」**：调用受控异常注入器更新仓库数据（带 Toast 反馈）；
    - **「⚡ 发起自主排查」**：触发 Agent 多步调查并全量驱动页面各板块数据刷新。
-2. **Metric Dependency Graph (指标拓扑与因果拆解)**：
+2. **Manual Daily Scan（手动每日扫描）**：
+   - 通过 `/api/scans/daily` 用当前 Semantic Layer 对全部已声明指标做一次全局 Observation 扫描；
+   - 只显示候选指标。点击候选会更新调查目标，但不会自动注入场景、调用模型或生成 Diagnosis；用户仍需明确选择 Fixture Preview 或 Live Agent 后发起调查。
+3. **Metric Dependency Graph (指标拓扑与因果拆解)**：
    - 展示 `Sales` $\rightarrow$ `Orders` $\times$ `AOV`，`Orders` $\rightarrow$ `Sessions` $\times$ `Conversion Rate` 拓扑依赖树；
    - 异常驱动指标动态高亮（如 AOV 或 Conversion Rate 节点带有呼吸灯外发光与相对变化率 Badge）；
    - 点击任意节点弹出详情模态框，展示该指标的详细业务定义、公式与依赖列表。
-3. **Structured Diagnosis (结构化诊断报告)**：
+4. **Structured Diagnosis (结构化诊断报告)**：
    - 展示状态徽章（`DIAGNOSED` 或 `NO_MATERIAL_ANOMALY`）、Target 相对跌幅、Primary Driver 驱动因子、Affected Scope 维度标签组（Marketplace/ASIN/Traffic Source）、置信度百分比与预算开销；
    - 醒目标注因果隔离声明：“数据异常贡献定位，不外推现实业务最终因果”。
-4. **Investigation Trajectory (Agent 调查动作轨迹)**：
+5. **Investigation Trajectory (Agent 调查动作轨迹)**：
    - 阶梯式时序流展现调查轨迹；Fixture Preview 展示预置轨迹，Live 模式展示实际运行轨迹；
    - 支持展开查看每一步工具的入参与 Observation 原始回执。
-5. **Evidence Portfolio (证据链看板)**：
+6. **Evidence Portfolio (证据链看板)**：
    - 支持通过 Tab 自由切换“全部证据”、“支撑证据 (Supporting)”与“排除对照 (Negative Controls)”；
    - 卡片式展示指标、基准值对比、当前值、变化率与细分维度过滤器。
-6. **Continue Investigation (继续追问与深入下钻)**：
+7. **Continue Investigation (继续追问与深入下钻)**：
    - 提供快捷追问建议按钮（如“分析近30天内促销优惠对客单价 AOV 的影响”等）以及自定义自然语言输入框，支持 Human-in-the-Loop 追加排查。
 
 #### 32.4 生产构建与打包验证

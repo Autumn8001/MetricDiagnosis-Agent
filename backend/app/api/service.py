@@ -29,9 +29,11 @@ from app.diagnosis import (
     DiagnosisComposition,
 )
 from app.metrics.registry import MetricRegistry
+from app.monitoring import run_manual_daily_scan
 
 from .schemas import (
     BudgetUsage,
+    DailyScanResponse,
     DiagnosisChangeItem,
     DiagnosisItem,
     EvidenceItem,
@@ -238,6 +240,24 @@ def resolve_live_model(request_model: Optional[str] = None) -> str:
     if env_model and env_model.strip():
         return env_model.strip()
     return "gpt-4o-mini"
+
+
+def execute_manual_daily_scan(target_date: datetime.date) -> DailyScanResponse:
+    """Run controlled trigger discovery against the warehouse without invoking a model."""
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url or not database_url.strip():
+        raise ValueError("Missing required DATABASE_URL for manual daily scan.")
+
+    import psycopg
+
+    registry = get_metric_registry()
+    with psycopg.connect(database_url) as connection:
+        payload = run_manual_daily_scan(
+            AnalyticsTools(registry=registry, connection=connection),
+            registry,
+            target_date,
+        )
+    return DailyScanResponse.model_validate(payload)
 
 
 def execute_investigation(request: InvestigationRequest) -> InvestigationResponse:

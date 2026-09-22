@@ -127,3 +127,23 @@ export interface HealthResponse {
   version: string
   timestamp: string
 }
+
+export interface DailyScanObservationItem {
+  metric: string
+  status: string
+  current_value: number | null
+  baseline_value: number | null
+  relative_change: number | null
+  unit: string
+  sample_size: number | null
+  observation_id: string
+}
+
+export interface DailyScanResponse {
+  target_date: string
+  comparison: string
+  mode: 'manual_trigger_discovery'
+  observations: DailyScanObservationItem[]
+  anomaly_candidate_metrics: string[]
+  next_step: string
+}

@@ -388,6 +388,101 @@ body {
   gap: 24px;
 }
 
+/* Manual trigger discovery: candidates are intentionally separated from diagnosis. */
+.manual-scan-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 24px;
+}
+
+.manual-scan-heading,
+.candidate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.manual-scan-heading h2 {
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.manual-scan-heading p,
+.manual-scan-empty,
+.manual-scan-boundary,
+.manual-scan-clear {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.manual-scan-heading p {
+  margin-top: 4px;
+  max-width: 72ch;
+}
+
+.manual-scan-empty {
+  margin-top: 16px;
+}
+
+.manual-scan-result {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.manual-scan-meta {
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  gap: 12px;
+}
+
+.candidate-row {
+  margin-top: 14px;
+}
+
+.candidate-label {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.candidate-button {
+  background: var(--primary-green-dim);
+  border: 1px solid rgba(16, 163, 127, 0.38);
+  border-radius: var(--radius-sm);
+  color: #77e2c5;
+  cursor: pointer;
+  font: 600 0.8rem var(--font-sans);
+  padding: 7px 10px;
+  transition: var(--transition-fast);
+}
+
+.candidate-button:hover,
+.candidate-button:focus-visible {
+  background: rgba(16, 163, 127, 0.22);
+  border-color: var(--primary-green);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.manual-scan-boundary,
+.manual-scan-clear {
+  margin-top: 12px;
+}
+
 .full-width-section {
   grid-column: 1 / -1;
 }
@@ -1099,6 +1194,14 @@ body {
   }
   .scenario-select {
     min-width: 100%;
+  }
+  .manual-scan-heading,
+  .candidate-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .candidate-actions {
+    justify-content: flex-start;
   }
   .diagnosis-metrics-grid {
     grid-template-columns: 1fr;

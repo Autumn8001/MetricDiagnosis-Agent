@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import importlib.util
 from decimal import Decimal
 from pathlib import Path
 import sys
@@ -14,15 +13,9 @@ from unittest.mock import MagicMock
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
-SCRIPT_PATH = BACKEND_ROOT / "scripts" / "run_daily_scan.py"
-SPEC = importlib.util.spec_from_file_location("run_daily_scan", SCRIPT_PATH)
-assert SPEC is not None and SPEC.loader is not None
-daily_scan = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = daily_scan
-SPEC.loader.exec_module(daily_scan)
-
 from app.analytics.models import DateRange, MetricQueryResult, MetricQueryRow
 from app.metrics.registry import MetricDefinition
+from app.monitoring import run_manual_daily_scan
 
 
 def result(metric: str, change: str) -> MetricQueryResult:
@@ -46,7 +39,7 @@ class TestManualDailyScan(unittest.TestCase):
         tools = MagicMock()
         tools.query_metric.side_effect = [result("sales", "-0.12"), result("sessions", "0.01")]
 
-        payload = daily_scan.run_daily_scan(tools, registry, datetime.date(2026, 1, 31))
+        payload = run_manual_daily_scan(tools, registry, datetime.date(2026, 1, 31))
 
         self.assertEqual(payload["mode"], "manual_trigger_discovery")
         self.assertEqual(payload["anomaly_candidate_metrics"], ["sales"])

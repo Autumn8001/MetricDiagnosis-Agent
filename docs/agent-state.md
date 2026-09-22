@@ -5,9 +5,9 @@
 - **Document Role**: Dynamic operational state
 - **Snapshot Date**: 2026-09-22
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
-- **Current Task**: Phase 11 minimal manual Trigger discovery
-- **Current Task Status**: Phase 9 Olist real-world mapping/tool compatibility is complete. A manual scan now produces global metric anomaly candidates from the existing semantic layer without an Agent call, scheduler, queue, or automatic investigation.
-- **Last Verified Batch**: 2026-09-22 Olist profile / staging load / mapping and tool-compatibility artifacts; real manual daily scan artifact; API scenario catalog / Fixture Preview Ground Truth boundary regression, 453 backend tests total.
+- **Current Task**: Phase 11 manual Trigger discovery product alignment
+- **Current Task Status**: The controlled daily scan is now shared by CLI and API (`POST /api/scans/daily`) and visible in the workspace. It returns candidates only; choosing one updates the investigation target but never automatically starts an Agent run.
+- **Last Verified Batch**: 2026-09-22 Olist profile / staging load / mapping and tool-compatibility artifacts; real manual daily scan API smoke; API scenario catalog / Fixture Preview Ground Truth boundary regression.
 - **Current Blocker**: No core blocker. The 30-run sample contains two low-frequency `DiagnosisValidationError` outcomes; safe intent-reference capture is now in place, but no deterministic root cause has been reproduced.
 - **Current Phase Status**: Portfolio MVP implementation complete and technically demo-ready; acceptance documentation and optional real-world validation remain.
 - **Later Work**: Real-world schema mapping validation, deployment decisions, or any feedback/retry design require a separate evidence-backed task.
@@ -72,6 +72,7 @@
 | `MS-P8-014` | Phase 8 | Benchmark 评测管道与自动化报告生成脚本 | Implemented — Hermetic run verified |
 | `MS-P10-001` | Phase 10 | FastAPI 最小后端服务与 RESTful 接口 | Accepted |
 | `MS-P10-002` | Phase 10 | React Diagnosis Workspace 前端工作台 | Implemented — lint/build verified |
+| `MS-P11-001` | Phase 11 | Manual Trigger Discovery API 与工作台对齐 | Implemented — 455 backend tests, frontend lint/build, local Warehouse API smoke verified |
 
 > **注意**：执行 Agent（Gemini）无权自行将任何任务或 Phase 标记为 `Accepted`。
 
@@ -328,7 +329,7 @@
 ## 4. 当前验证状态
 
 - **Last Verification Date**: 2026-09-22
-- **Backend Unit Tests**: 453/453 PASS
+- **Backend Unit Tests**: 455/455 PASS
 - **Frontend Lint**: PASS
 - **Frontend Production Build**: PASS
 - **10 Case Hermetic Evaluation**: PASS (`--hermetic --runs-per-case 1`)，仅证明评测管道与受控离线输入，不证明真实模型能力
@@ -343,7 +344,7 @@
 ## 5. 当前阻塞与下一步
 
 - **实现状态**：Stage 1 Portfolio MVP 的 Core、Evaluation、API 与 UI 已形成可运行实现；API 已直接使用可信 SDK Tool Trace，三场景脚本可原子输出脱敏验收 artifact。
-- **验证状态**：453 项后端测试通过；前端 lint/build 已通过；真实 Provider 三场景、10 Case 单次与 30-run 样本的详细事实见第 4 节及 `docs/evaluation-artifacts/`。
+- **验证状态**：455 项后端测试、前端 lint/build 通过；本轮已完成每日扫描 API 的真实本地 Warehouse smoke，确认仅返回候选、不含 Diagnosis。真实 Provider 三场景、10 Case 单次与 30-run 样本的详细事实见第 4 节及 `docs/evaluation-artifacts/`。
 - **验收状态**：Gemini Provider、真实数据库、三场景动态调查链和校准后的 10 Case 单次 Live Evaluation 均已通过。30-run 稳定性评测现有完整 artifact，但 2 次有效领域拒绝显示替代场景的结论生成仍非完全稳定；这不否定 MVP 核心链，却是下一项可靠性改进依据。
 - **安全边界**：真实 `.env` 保持本地且不得提交；artifact 不记录 API Key、数据库连接串或完整 Provider URL。
 - **恢复开发时的唯一优先级**：维持当前真实评估监控；若新的 `DiagnosisValidationError` artifact 出现，基于其 reference-only intent 摘要定位具体缺口后再决定是否需要受控反馈。不在没有可复现问题时提前引入自动重试、固定 Workflow 或 Prompt 特例。

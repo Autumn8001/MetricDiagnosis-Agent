@@ -4,6 +4,7 @@
 
 import type {
   HealthResponse,
+  DailyScanResponse,
   InjectScenarioResponse,
   InvestigationRequest,
   InvestigationResponse,
@@ -62,4 +63,13 @@ export async function runInvestigation(
     body: JSON.stringify(req),
   })
   return handleResponse<InvestigationResponse>(res)
+}
+
+export async function runDailyScan(targetDate = '2026-01-31'): Promise<DailyScanResponse> {
+  const res = await fetch(`${API_BASE}/api/scans/daily`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target_date: targetDate }),
+  })
+  return handleResponse<DailyScanResponse>(res)
 }
