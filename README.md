@@ -25,8 +25,9 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
   - Phase 10 最小 FastAPI 后端服务层（`backend/app/api`：健康检查、指标图谱、场景注入、模拟/真实调查接口）；
   - Phase 10 React Diagnosis Workspace 前端工程（`frontend/`：React + TS + Vite + 原生 Vanilla CSS，包含拓扑图、调查轨迹流、证据链看板、结构化诊断与追问交互）；
   - 项目学习与开发日志（[docs/project-learning-log.md](docs/project-learning-log.md)）；
+  - Phase 9 Olist 真实公开数据只读 Profiling 与映射契约（[docs/phase-9-olist-real-world-validation.md](docs/phase-9-olist-real-world-validation.md)，不替换 Synthetic Benchmark）；
   - Agent 运行状态与接管指南（[docs/agent-state.md](docs/agent-state.md), [AGENTS.md](AGENTS.md)）。
-* **当前权威验证（2026-09-22）**：后端 448 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
+* **当前权威验证（2026-09-22）**：后端 450 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
 * **演示口径**：Fixture Preview 是与所选场景和 Ground Truth 标签无关的通用 UI 样例，只展示数据契约，绝不是 Agent Run 或场景诊断；Live 模式才用于真实 Provider 调查。
 * **当前 Live 稳定性事实**：此前未校准的替代 Case 在全局 Sales 上仅下降 -1.75% 至 -4.39%，与 `<5%` 正常阈值冲突；现已通过调整 Synthetic 数据权重和注入强度校准为约 -10% 的全局影响，未降低生产阈值、未更换模型、未把 Benchmark 路径硬编码到 Runtime。校准后的 10 Case 单次 Live 结果为 100%。随后 10 Case × 3 次、显式 `gemini-3.8-flash-high` 的真实评测完整结束：28/30 成功，Completion / Macro Driver / Scope / Exact 均为 93.33%；两次 `DiagnosisValidationError` 被如实保留。Runner 每 Run 原子写入脱敏 checkpoint，保留已完成审计结果而不保存 Tool 值、Provider 原文或凭据。API 服务层直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
 * **明确延后**：复杂多租户/用户系统、Go Gateway、大规模云端多 Agent 编排。
@@ -34,6 +35,7 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
   - 后续所有开发工作必须严格遵守 [任务书.md](任务书.md)；
   - 面向展示的当前能力与边界参见 [docs/mvp-demo-brief.md](docs/mvp-demo-brief.md)，真实模型评测的脱敏验收摘要参见 [docs/evaluation-artifacts/live-evaluation-2026-09-22.md](docs/evaluation-artifacts/live-evaluation-2026-09-22.md)；
   - `warehouse/ground_truth.json` 与 `warehouse/benchmark_cases.json` 仅供 Evaluation 使用，**严禁**被 API、Agent Runtime、Prompt 或查询工具读取；产品场景选择仅使用不含答案的 `warehouse/scenario_catalog.json`；
+  - 本地第三方原始数据位于 git-ignored 的 `data/raw/`；只提交可复现的 Profiling 脚本、映射契约与脱敏聚合结果，不提交下载文件；
   - 详细的设计决策、历史踩坑复盘与知识总结参见 [docs/project-learning-log.md](docs/project-learning-log.md)。
 
 ## 验证指南

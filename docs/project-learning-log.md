@@ -879,6 +879,14 @@ configs/metrics.yaml
 - **为什么重要** `[必须掌握]`：不向前端返回标签还不够；只要产品服务能读取并使用 Ground Truth，就可能在 Mock、日志或未来代码中意外泄漏。评测真值应留在 Evaluation 边界，产品只拥有运行时所需的最小元数据。
 - **验证事实**：API 专项与后端全量 448 项测试通过；回归测试同时检查 API 源码不导入 Ground Truth Loader/类型，且两个不同场景的 Fixture Preview 不会返回不同 Benchmark 答案。前端 lint/build 通过。
 
+### 3.45 2026-09-22 Olist 真实公开数据 Source Profiling
+
+- **目标**：验证 MetricSleuth 的核心边界能否面对真实订单数据，而不是把 Olist 强行改造成 Amazon 漏斗数据。
+- **事实**：本地 Olist 原始数据包含 99,441 笔订单、112,650 条订单明细，订单购买时间覆盖 2016-09-04 至 2018-10-17。订单→客户、明细→订单、明细→商品/卖家的关联缺失均为 0；但存在 775 笔无订单明细订单和 1 笔无支付订单，必须作为真实数据质量事实保留。
+- **可用与不可用** `[必须掌握]`：`SUM(order_items.price)`（排除 freight）可作为明确命名的 Merchandise GMV 候选，Orders 和聚合 AOV 可计算；Customer/Seller State、Product Category 可切片。Sessions、Conversion Rate、Marketplace、Traffic Source、ASIN 没有来源字段，必须返回 unavailable/不支持，不能用代理字段冒充测量值。
+- **边界**：这一阶段只添加标准库只读 Profiling 脚本与映射文档。原始下载目录 git-ignore；不导入现有 Warehouse，不改 Agent Runtime、Semantic Layer 或 Ground Truth。
+- **验证事实**：两项专项测试覆盖完整最小源与缺失文件 fail-closed；真实 Olist 下载已生成脱敏聚合 profile。当前后端全量基线为 450 项测试。
+
 ## 4. 面试高频问题与项目化回答
 
 ### Q1: 什么是 Metric Semantic Layer（指标语义层）？它在 MetricSleuth 中起什么作用？ `[面试高频]`

@@ -5,9 +5,9 @@
 - **Document Role**: Dynamic operational state
 - **Snapshot Date**: 2026-09-22
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
-- **Current Task**: Stage 1 acceptance evidence consolidation and presentation readiness
-- **Current Task Status**: Core chain, three-case Live gate, one 10-Case Live run and a 30-run stability sample have completed; product API Ground Truth isolation has been reconciled and current work must not add new core capabilities without a demonstrated gap.
-- **Last Verified Batch**: 2026-09-22 full backend regression (448 tests), frontend lint/build; API scenario catalog and Fixture Preview Ground Truth boundary verified.
+- **Current Task**: Phase 9 Olist source Profiling and real-world mapping decision
+- **Current Task Status**: Olist raw source has passed read-only source profiling; no staging adapter, existing Semantic Layer, Benchmark, Runtime, or API behavior has been changed.
+- **Last Verified Batch**: 2026-09-22 Olist profile on local raw source (2 dedicated tests); API scenario catalog / Fixture Preview Ground Truth boundary regression, 450 backend tests total, frontend lint/build.
 - **Current Blocker**: No core blocker. The 30-run sample contains two low-frequency `DiagnosisValidationError` outcomes; safe intent-reference capture is now in place, but no deterministic root cause has been reproduced.
 - **Current Phase Status**: Portfolio MVP implementation complete and technically demo-ready; acceptance documentation and optional real-world validation remain.
 - **Later Work**: Real-world schema mapping validation, deployment decisions, or any feedback/retry design require a separate evidence-backed task.

@@ -23,3 +23,7 @@ frontend/dist/
 # Node
 node_modules/
 frontend/node_modules/
+
+# Local third-party datasets; provenance and mapping contracts are documented,
+# but raw downloads must not enter source control.
+data/raw/
