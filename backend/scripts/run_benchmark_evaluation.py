@@ -281,6 +281,23 @@ def _checkpoint_record_to_dict(record: EvaluationRunRecord) -> dict[str, Any]:
     }
 
 
+def _safe_runtime_failure_code(exc: Exception) -> str:
+    """Return a bounded failure code without serializing provider or database details.
+
+    ``run_evidence_driven_diagnosis`` deliberately adds one compact, reference-only
+    note when its domain composition rejects a runtime intent.  Preserve that note
+    for a later evaluation audit; arbitrary exception messages remain excluded.
+    """
+    code = f"RUNTIME_ERROR: {type(exc).__name__}"
+    notes = getattr(exc, "__notes__", ())
+    if not isinstance(notes, list):
+        return code
+    for note in notes:
+        if isinstance(note, str) and note.startswith("Runtime intent references: "):
+            return f"{code} | {note}"
+    return code
+
+
 def write_checkpoint_json(
     path: str | Path,
     manifest: EvaluationManifest,
@@ -382,7 +399,7 @@ def execute_evaluation_pipeline(
                             max_tool_calls=DEFAULT_EVIDENCE_DRIVEN_MAX_TOOL_CALLS,
                             turns_count=None,
                             max_turns=DEFAULT_EVIDENCE_DRIVEN_MAX_TURNS,
-                            failure_code=f"RUNTIME_ERROR: {type(exc).__name__}",
+                            failure_code=_safe_runtime_failure_code(exc),
                         )
                         append_record(
                             EvaluationRunRecord(

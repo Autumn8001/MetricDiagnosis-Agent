@@ -26,7 +26,7 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
   - Phase 10 React Diagnosis Workspace 前端工程（`frontend/`：React + TS + Vite + 原生 Vanilla CSS，包含拓扑图、调查轨迹流、证据链看板、结构化诊断与追问交互）；
   - 项目学习与开发日志（[docs/project-learning-log.md](docs/project-learning-log.md)）；
   - Agent 运行状态与接管指南（[docs/agent-state.md](docs/agent-state.md), [AGENTS.md](AGENTS.md)）。
-* **当前权威验证（2026-09-22）**：后端 448 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
+* **当前权威验证（2026-09-22）**：后端 449 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
 * **演示口径**：Fixture Preview 是确定性离线预览，用于展示 UI 与数据契约，不得称为真实 Agent Run；Live 模式才用于真实 Provider 调查。
 * **当前 Live 稳定性事实**：此前未校准的替代 Case 在全局 Sales 上仅下降 -1.75% 至 -4.39%，与 `<5%` 正常阈值冲突；现已通过调整 Synthetic 数据权重和注入强度校准为约 -10% 的全局影响，未降低生产阈值、未更换模型、未把 Benchmark 路径硬编码到 Runtime。校准后的 10 Case 单次 Live 结果为 100%。随后 10 Case × 3 次、显式 `gemini-3.8-flash-high` 的真实评测完整结束：28/30 成功，Completion / Macro Driver / Scope / Exact 均为 93.33%；两次 `DiagnosisValidationError` 被如实保留。Runner 每 Run 原子写入脱敏 checkpoint，保留已完成审计结果而不保存 Tool 值、Provider 原文或凭据。API 服务层直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
 * **明确延后**：复杂多租户/用户系统、Go Gateway、大规模云端多 Agent 编排。

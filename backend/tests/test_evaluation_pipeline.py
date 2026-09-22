@@ -29,6 +29,7 @@ from scripts.run_benchmark_evaluation import (
     main,
     make_hermetic_run_record,
     report_to_dict,
+    _safe_runtime_failure_code,
     write_checkpoint_json,
 )
 
@@ -210,6 +211,19 @@ class TestEvaluationPipeline(unittest.TestCase):
         self.assertEqual(data["completed_run_count"], 1)
         self.assertEqual(data["records"][0]["run_id"], "checkpoint-run")
         self.assertEqual(data["records"][0]["diagnosis"]["primary_driver"], "conversion_rate")
+
+    def test_runtime_failure_code_only_preserves_reference_only_note(self) -> None:
+        """Failure artifacts retain approved diagnosis references, never arbitrary exception text."""
+        diagnostic = RuntimeError("provider response with sensitive content")
+        diagnostic.add_note("Runtime intent references: {'status': 'diagnosed'}")
+        self.assertEqual(
+            _safe_runtime_failure_code(diagnostic),
+            "RUNTIME_ERROR: RuntimeError | Runtime intent references: {'status': 'diagnosed'}",
+        )
+
+        untrusted = RuntimeError("provider response with sensitive content")
+        untrusted.add_note("untrusted diagnostic payload")
+        self.assertEqual(_safe_runtime_failure_code(untrusted), "RUNTIME_ERROR: RuntimeError")
 
     def test_cli_main_hermetic_flag_returns_zero(self) -> None:
         """Test CLI main() invocation in hermetic mode with --runs-per-case."""

@@ -865,6 +865,13 @@ configs/metrics.yaml
 - **失败语义**：两个失败是 `DiagnosisValidationError`，并非 Provider、数据库、工具预算或 Trace 失败。它表示领域边界没有为了刷分放行不完整结论；同时也说明该模型在两个替代场景中尚未达到完全稳定。
 - **验证事实**：模型优先级新增专项测试，后端全量 448 项通过。
 
+### 3.43 2026-09-22 低频 Diagnosis 拒绝的可审计化
+
+- **问题**：30 次真实评测中有两次 `DiagnosisValidationError`，原 artifact 只保存异常类型，无法区分模型最终 Intent 的引用缺口和任意其他运行时问题。
+- **最小修正**：保留 Runtime 已附加的 reference-only intent note；它只含 status、primary driver、scope 与 Evidence/Observation ID，不接受任意异常正文，因此不会把 Provider 原文、Tool 值、数据库连接或凭据写进 checkpoint。
+- **复现事实**：两个失败 Case 各运行 3 次均成功（6/6），所以失败暂时是低频波动而非 Case 或数据注入的确定性缺陷。正确措施是保留可审计失败边界、等待新的具体 artifact；不在无证据时加入自动重试或把校验退化为 Prompt 规则。
+- **验证事实**：专项测试新增安全 note 白名单，后端全量 449 项通过。
+
 ## 4. 面试高频问题与项目化回答
 
 ### Q1: 什么是 Metric Semantic Layer（指标语义层）？它在 MetricSleuth 中起什么作用？ `[面试高频]`

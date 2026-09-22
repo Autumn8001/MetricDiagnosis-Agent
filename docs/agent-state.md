@@ -314,6 +314,7 @@
 - 重复 Live 结果：完成率、Macro Driver、Macro Scope、Macro Exact 均为 **93.33%**（28/30）。两个失败均为 `DiagnosisValidationError`：`conversion_de_asin_c_ads` 第 2 次与 `traffic_us_asin_c_organic` 第 3 次；没有 Provider、数据库、Tool Budget 或 trace 失败。失败必须保留在稳定性分母中，不得按成功样本重算为 100%。
 - Live Evaluation Runner 在每一条 Run 结束后原子写入脱敏 checkpoint：仅含 Run 身份、运行结果、诊断字段和 Evidence ID，不含 Tool 原始值、Provider 原文、数据库连接串或凭据。该机制的 2 项专项测试已覆盖逐 Run 重写和脱敏边界。
 - Runner 的模型选择现在是：显式 `--model-id` 优先、`METRICSLEUTH_AGENT_MODEL` 其次、历史 `gpt-4o-mini` 最后。此前一次 30-run 的 `BadRequestError` 全失败来自 CLI 遗漏环境模型、错误落到历史默认模型；该配置错误的 0% 结果不计入 Agent 能力结论。
+- Runner 现会在 `DiagnosisValidationError` 的 failure artifact 中保留 Runtime 已生成的 reference-only intent note（状态、Driver、Scope 与 Evidence 引用），任意 Provider/数据库异常原文仍不落盘。针对两个历史失败 Case 的 3×2 次显式 Gemini 复现均成功，因此当前证据只支持“低频波动”，不足以授权引入自动重试或新 Workflow。
 
 ### 3.4 明确未实现或未验收能力
 - 云端多租户与生产级用户账号系统（属于 Stage 2 规划）
@@ -327,7 +328,7 @@
 ## 4. 当前验证状态
 
 - **Last Verification Date**: 2026-09-22
-- **Backend Unit Tests**: 448/448 PASS
+- **Backend Unit Tests**: 449/449 PASS
 - **Frontend Lint**: PASS
 - **Frontend Production Build**: PASS
 - **10 Case Hermetic Evaluation**: PASS (`--hermetic --runs-per-case 1`)，仅证明评测管道与受控离线输入，不证明真实模型能力
@@ -345,7 +346,7 @@
 - **验证状态**：447 项后端测试通过；真实 Provider 已被调用，失败运行没有生成 PASS artifact。
 - **验收状态**：Gemini Provider、真实数据库、三场景动态调查链和校准后的 10 Case 单次 Live Evaluation 均已通过。30-run 稳定性评测现有完整 artifact，但 2 次有效领域拒绝显示替代场景的结论生成仍非完全稳定；这不否定 MVP 核心链，却是下一项可靠性改进依据。
 - **安全边界**：真实 `.env` 保持本地且不得提交；artifact 不记录 API Key、数据库连接串或完整 Provider URL。
-- **恢复开发时的唯一优先级**：在不放宽领域校验、不给 Agent Ground Truth 的前提下，定位两次 `DiagnosisValidationError` 的具体最终结论缺口，并评估是否应以受控反馈让 Runtime 重新提交；不改变 Benchmark、阈值或调查路径。
+- **恢复开发时的唯一优先级**：维持当前真实评估监控；若新的 `DiagnosisValidationError` artifact 出现，基于其 reference-only intent 摘要定位具体缺口后再决定是否需要受控反馈。不在没有可复现问题时提前引入自动重试、固定 Workflow 或 Prompt 特例。
 
 ---
 
