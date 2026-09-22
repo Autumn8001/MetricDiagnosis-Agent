@@ -306,7 +306,7 @@
 - `configs/metrics.yaml` 新增受控 `driver_metrics`：Stage 1 中 `sales → (orders, aov)`、`orders → (sessions, conversion_rate)`；叶指标为空。它表示调查解释关系，明确不同于公式 `dependencies` 与泛关联 `related_metrics`，不规定固定调查顺序。
 - Registry 对该字段执行与其他指标引用一致的 fail-closed 校验；每个查询工具输出同时携带本次涉及指标的受控定义，因此 Agent 不必为已返回的语义额外消耗一个 Tool Call。
 - Runtime 对成功 Diagnosis 执行语义闭环：带有 `driver_metrics` 的中间指标，若任一直接 Driver 未被观察或已异常，不能作为最终 `primary_driver`。该规则不选择下一步工具，只拒绝不完整的最终结论。
-- 已完成 447/447 后端单元测试；Gemini `gemini-3.8-flash-high` 已通过真实 PostgreSQL 三场景 Live 验收：Canonical=`conversion_rate`/`US-ASIN-A-Ads`、Traffic=`sessions`/`US-ASIN-A-Ads`、No-anomaly 正确停止；引用 Evidence 均来自同次 Tool Output，场景后 Warehouse 已恢复 canonical。
+- 当时完成 447/447 后端单元测试；随后 Gemini `gemini-3.8-flash-high` 已通过真实 PostgreSQL 三场景 Live 验收：Canonical=`conversion_rate`/`US-ASIN-A-Ads`、Traffic=`sessions`/`US-ASIN-A-Ads`、No-anomaly 正确停止；引用 Evidence 均来自同次 Tool Output，场景后 Warehouse 已恢复 canonical。当前全量测试数见第 4 节。
 - 随后执行 10 Case、每 Case 1 次的真实 Live Evaluation：完成率 80%，Macro Driver / Scope / Exact 均为 40%。三项开发场景与 minor-fluctuation 通过；其余 AOV / 非 Canonical Conversion / Traffic 场景未达 Ground Truth。
 - **Benchmark calibration**：保持全局 Sales Trigger 与 `<5%` 正常阈值不变，仅调整 Synthetic Profile 中被测目标分群的权重及注入幅度。数据库逐场景核对后，8 个 `diagnosed` Case 的全局 Sales 变化为 `-10.37%` 至 `-12.06%`；两个 normal Case 分别为 `-0.07%` 与 `-0.37%`。
 - 校准后 10 Case × 1 次 Gemini Live Evaluation：完成率、Macro Driver、Macro Scope、Macro Exact 均为 **100%**；每个 Case 的真实 Tool Call 数均在预算内。此前 40% 的无效 Benchmark 结果已被该校准取代，不用于评判模型。
@@ -318,7 +318,7 @@
 
 ### 3.4 明确未实现或未验收能力
 - 云端多租户与生产级用户账号系统（属于 Stage 2 规划）
-- 真实模型在开发集上的自主调查与 Diagnosis 验收（MS-P6-004 已执行；该兼容端点的两个可用模型均未通过 Canonical 的 Driver / Evidence / Scope 校验）
+- 尚未验收的开发集外扩能力：更大规模 Holdout 盲测与独立真实世界数据集验证；当前三场景与受控 Benchmark 的真实 Live 验收已经完成。
 - 大规模 Holdout 盲测数据集与在线全量 Agent 评测运行
 - Go Gateway（Stage 1 保持轻量单体，严格避免过度工程）
 - 有状态的连续追问 Session；当前追问是新的独立调查请求
@@ -343,7 +343,7 @@
 ## 5. 当前阻塞与下一步
 
 - **实现状态**：Stage 1 Portfolio MVP 的 Core、Evaluation、API 与 UI 已形成可运行实现；API 已直接使用可信 SDK Tool Trace，三场景脚本可原子输出脱敏验收 artifact。
-- **验证状态**：447 项后端测试通过；真实 Provider 已被调用，失败运行没有生成 PASS artifact。
+- **验证状态**：449 项后端测试通过；前端 lint/build 与 FastAPI health 已通过；真实 Provider 三场景、10 Case 单次与 30-run 样本的详细事实见第 4 节及 `docs/evaluation-artifacts/`。
 - **验收状态**：Gemini Provider、真实数据库、三场景动态调查链和校准后的 10 Case 单次 Live Evaluation 均已通过。30-run 稳定性评测现有完整 artifact，但 2 次有效领域拒绝显示替代场景的结论生成仍非完全稳定；这不否定 MVP 核心链，却是下一项可靠性改进依据。
 - **安全边界**：真实 `.env` 保持本地且不得提交；artifact 不记录 API Key、数据库连接串或完整 Provider URL。
 - **恢复开发时的唯一优先级**：维持当前真实评估监控；若新的 `DiagnosisValidationError` artifact 出现，基于其 reference-only intent 摘要定位具体缺口后再决定是否需要受控反馈。不在没有可复现问题时提前引入自动重试、固定 Workflow 或 Prompt 特例。

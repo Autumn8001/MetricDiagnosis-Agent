@@ -432,7 +432,7 @@ python backend/scripts/verify_phase6_live_investigation.py
 6. **证据溯源**：所有引用的 Evidence 100% 对应本场 Run 产生的真实数据库 Observation；
 7. **环境恢复**：执行完毕后自动恢复数据库至 `canonical` 演示场景。
 
-截至 2026-09-22，使用 CLI / 环境变量显式指定的兼容 Provider 模型完成了真实调用与多次 Analytics Tool 调用，但尚未通过三场景验收。Gemini Chat Completions Provider 已生成真实 Observation、Evidence 与 Structured Diagnosis；其 Canonical Run 输出 `primary_driver=orders` 且 Scope 缺少 ASIN，不满足 Canonical 的 `conversion_rate` 与 `US / ASIN-A / Ads` 合同，系统按设计 Fail-Closed；数据库已恢复到 canonical，失败运行未生成 PASS artifact。这里记录的是 Provider 输出契约不合格，不是脚本未执行，也不是验收通过。
+> **Historical, superseded run:** An earlier compatible-provider Canonical run produced `primary_driver=orders` and a Scope without ASIN, so it correctly failed the Canonical contract and did not produce a PASS artifact. This is not the current acceptance status: later explicit Gemini runs passed the three-case gate and are recorded in [docs/evaluation-artifacts/live-evaluation-2026-09-22.md](docs/evaluation-artifacts/live-evaluation-2026-09-22.md).
 
 ### 13. Phase 7 Structured Diagnosis Domain Contract
 

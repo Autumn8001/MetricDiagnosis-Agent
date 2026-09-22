@@ -45,7 +45,7 @@
 | `MS-P6-001` | Phase 6 | Runtime Analytics Tool Bridge | Accepted | `investigation_tools.py`, `test_investigation_tools.py` |
 | `MS-P6-002` | Phase 6 | Investigation Run Contract 与多调用 Trace 验证 | Accepted | `investigation_runtime.py`, `test_investigation_runtime.py` |
 | `MS-P6-003` | Phase 6 | Development Scenario Investigation Harness | Accepted | `verify_phase6_development_scenarios.py`, `test_development_scenarios.py` |
-| `MS-P6-004` | Phase 6 | Live Development Set Agent Evaluation | Executed — FAIL | 兼容 Provider 的两个可用模型均未通过 Canonical 的 Driver / Evidence / Scope 合同；无 PASS artifact |
+| `MS-P6-004` | Phase 6 | Live Development Set Agent Evaluation | Historical failure superseded | 早期兼容 Provider Canonical 输出不合格；后续显式 Gemini 三场景与受控 Benchmark Live 验收已完成，详见 3.39–3.43 |
 | `MS-P7-001` | Phase 7 | Structured Diagnosis Domain Contract | Accepted | `backend/app/diagnosis/`, `test_diagnosis.py` |
 | `MS-P7-002` | Phase 7 | Diagnosis Draft Resolution 与 Evidence Citation Verification | Accepted | `diagnosis/draft.py`, `test_diagnosis_draft.py` |
 | `MS-P7-003` | Phase 7 | Evidence Selection Draft 与 Observation Citation Resolution | Accepted | `evidence/selection.py`, `test_evidence_selection.py` |
@@ -809,7 +809,7 @@ configs/metrics.yaml
 - **Fixture Preview 不是 Agent** `[必须掌握]`：Fixture 是 Ground-Truth-backed 的确定性产品预览，只验证 UI 和数据契约；Live 模式才可用于证明 Agent Authenticity。场景列表也不得把 expected driver/scope/status 暴露给前端。
 - **Core 中立不等于现在建设多行业框架** `[项目特有]`：Registry 已去掉固定五指标和单位白名单，但 Stage 1 YAML、Warehouse、Benchmark 仍只支持 Amazon Profile。没有引入 Domain Plugin、Factory 或 SaaS Adapter。
 - **凭据进入聊天或日志即视为泄露** `[必须掌握]`：示例配置只能使用占位符；任何暴露过的 Key 必须撤销并轮换，真实 `.env` 永不提交。
-- **当前权威验证**：后端 438/438 PASS，API 与 Live Validator 专项各 23/23 PASS，前端 lint/build PASS，10 Case Hermetic Evaluation PASS；真实三场景尚未通过，Live 10 Case 尚未执行。历史章节中的测试数量仅代表对应任务完成时的快照。
+- **历史快照说明**：本节记录当时的 438/438 测试与尚未完成的 Live Gate，已被后续 3.39–3.43 的真实验收结果取代。当前权威状态以 `docs/agent-state.md`、任务书及 `docs/evaluation-artifacts/` 为准。
 
 **面试自测题**：为什么 438 项测试全部通过仍不能证明 Agent 会自主调查？为什么 API Tool Trace 应优先来自 SDK Runner，而不是业务工具 wrapper？
 
@@ -836,7 +836,7 @@ configs/metrics.yaml
 - **问题**：`dependencies` 描述公式输入，`related_metrics` 描述可比较候选；两者都不能表达“Orders 还应由 Sessions / Conversion Rate 继续解释”。因此真实 Agent 虽已查到 Conversion Rate 异常，仍可能合法地把 Orders 当作最终 Driver。
 - **最小修正**：语义层新增 `driver_metrics`，并在成功 Diagnosis 前校验直接 Driver 已观察且没有异常。该校验只拒绝未闭环的最终声明，绝不决定下一次调用哪个 Tool，也不把 Canonical 的维度路径写进 Runtime。
 - **工具信息密度**：受控 query 工具返回本次涉及指标的受控定义，避免模型为了获取已知语义额外浪费预算；这不读取 Ground Truth，也不放宽 SQL 或指标定义边界。
-- **验证边界**：445 项后端单测通过；真实 Provider 仍必须以新的完整三场景 artifact 验收，不能用 Hermetic 测试或“请求已发出”代替真实模型能力。
+- **历史验证边界**：当时 445 项后端单测通过，真实 Provider 尚待完整三场景 artifact 验收；该待办已在后续 3.39–3.43 完成。
 
 ### 3.39 2026-09-22 Gemini Live Gate 与全量 Benchmark 事实
 
