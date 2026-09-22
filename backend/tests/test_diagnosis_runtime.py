@@ -22,6 +22,7 @@ from app.analytics.models import DateRange, MetricQueryResult, MetricQueryRow, R
 from app.analytics.tools import AnalyticsTools
 from app.diagnosis import DiagnosisStatus, DiagnosisValidationError
 from app.evidence import EvidenceValidationError
+from app.metrics.registry import MetricDefinition
 from app.observations.mapper import observations_from_tool_result
 
 
@@ -104,6 +105,26 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
     def setUp(self) -> None:
         self.analytics = MagicMock(spec=AnalyticsTools)
 
+        def metric_definition(metric_id: str) -> MetricDefinition:
+            return MetricDefinition(
+                metric_id=metric_id,
+                display_name=metric_id.replace("_", " ").title(),
+                description="Test-only semantic definition.",
+                metric_type="ratio" if metric_id == "conversion_rate" else "additive",
+                unit="ratio" if metric_id == "conversion_rate" else "count",
+                formula=metric_id,
+                source_fields=(metric_id,),
+                dimensions=("marketplace",),
+                dependencies=(),
+                related_metrics=(),
+                driver_metrics={
+                    "sales": ("orders", "aov"),
+                    "orders": ("sessions", "conversion_rate"),
+                }.get(metric_id, ()),
+            )
+
+        self.analytics.get_metric_definition.side_effect = metric_definition
+
         def query_metric(*, metric: str, **kwargs):
             values = {
                 "sales": metric_result("sales", "-0.20", current="80"),
@@ -134,7 +155,7 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
                             "metric": "sales",
                             "start_date": "2026-08-28",
                             "end_date": "2026-08-28",
-                            "filters": [{"dimension": "marketplace", "value": "US"}],
+                            "filters": {"marketplace": "US"},
                         },
                         call_id="target_call",
                     )
@@ -146,7 +167,7 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
                             "metric": "conversion_rate",
                             "start_date": "2026-08-28",
                             "end_date": "2026-08-28",
-                            "filters": [{"dimension": "marketplace", "value": "US"}],
+                            "filters": {"marketplace": "US"},
                         },
                         call_id="driver_call",
                     )
@@ -158,7 +179,7 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
                             "metric": "sessions",
                             "start_date": "2026-08-28",
                             "end_date": "2026-08-28",
-                            "filters": [{"dimension": "marketplace", "value": "DE"}],
+                            "filters": {"marketplace": "DE"},
                         },
                         call_id="control_call",
                     )
@@ -177,7 +198,7 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
                             "metric": "sales",
                             "start_date": "2026-08-28",
                             "end_date": "2026-08-28",
-                            "filters": [{"dimension": "marketplace", "value": "US"}],
+                            "filters": {"marketplace": "US"},
                         },
                         call_id="related_call",
                     )
@@ -189,7 +210,7 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
                             "metric": "sessions",
                             "start_date": "2026-08-28",
                             "end_date": "2026-08-28",
-                            "filters": [{"dimension": "marketplace", "value": "DE"}],
+                            "filters": {"marketplace": "DE"},
                         },
                         call_id="unused_call",
                     )
@@ -356,11 +377,15 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
         self.assertIn("same selected anomalous supporting Observation", agent.instructions)
         self.assertIn("primary_driver is always a metric identifier", agent.instructions)
         self.assertIn("related metrics to identify the primary driver", agent.instructions)
+        self.assertIn("hard maximum of eight analytics tool calls", agent.instructions)
+        self.assertIn("Avoid duplicate evidence", agent.instructions)
+        self.assertIn("reserve individual metric queries", agent.instructions)
         self.assertIn("do not use the target metric itself", agent.instructions)
         self.assertIn("metric equal to primary_driver", agent.instructions)
         self.assertIn("Do not splice primary_driver", agent.instructions)
         self.assertIn("cross-check every observation_id and Evidence ID", agent.instructions)
         self.assertIn("evidence:{observation_id}:{role}", agent.instructions)
+        self.assertIn("driver_metrics in a definition", agent.instructions)
         self.assertIn("fixed drill-down sequence", agent.instructions)
         self.assertNotIn("root_cause", RuntimeDiagnosisIntent.model_fields)
 
@@ -434,6 +459,84 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
                 model=missing_model,
                 run_config=self._run_config(),
             )
+
+    def test_intermediate_primary_driver_with_anomalous_direct_driver_is_rejected(self) -> None:
+        payload = diagnosed_intent_payload()
+        payload["evidence_selections"][1]["observation_id"] = "driver_call_orders_0"
+        payload["primary_driver"] = "orders"
+        payload["driver_evidence_id"] = "evidence:driver_call_orders_0:supporting"
+        payload["evidence_ids"][1] = "evidence:driver_call_orders_0:supporting"
+
+        model = ScriptedModel(
+            [
+                [
+                    function_call(
+                        "query_metric",
+                        {
+                            "metric": "sales",
+                            "start_date": "2026-08-28",
+                            "end_date": "2026-08-28",
+                            "filters": {"marketplace": "US"},
+                        },
+                        call_id="target_call",
+                    )
+                ],
+                [
+                    function_call(
+                        "query_metric",
+                        {
+                            "metric": "orders",
+                            "start_date": "2026-08-28",
+                            "end_date": "2026-08-28",
+                            "filters": {"marketplace": "US"},
+                        },
+                        call_id="driver_call",
+                    )
+                ],
+                [
+                    function_call(
+                        "query_metric",
+                        {
+                            "metric": "conversion_rate",
+                            "start_date": "2026-08-28",
+                            "end_date": "2026-08-28",
+                            "filters": {"marketplace": "US"},
+                        },
+                        call_id="control_call",
+                    )
+                ],
+                [
+                    function_call(
+                        "query_metric",
+                        {
+                            "metric": "sessions",
+                            "start_date": "2026-08-28",
+                            "end_date": "2026-08-28",
+                            "filters": {"marketplace": "DE"},
+                        },
+                        call_id="sessions_call",
+                    )
+                ],
+                [assistant_message(json.dumps(payload))],
+            ]
+        )
+        self.analytics.query_metric.side_effect = lambda *, metric, **kwargs: {
+            "sales": metric_result("sales", "-0.20", current="80"),
+            "orders": metric_result("orders", "-0.20", current="80"),
+            "conversion_rate": metric_result("conversion_rate", "-0.30"),
+            "sessions": metric_result("sessions", "0.01"),
+        }[metric]
+
+        with self.assertRaisesRegex(RuntimeTraceError, "intermediate metric.*conversion_rate"):
+            run_evidence_driven_diagnosis(
+                "Investigate sales.",
+                diagnosis_id="diag-intermediate-driver",
+                analytics_tools=self.analytics,
+                model=model,
+                run_config=self._run_config(),
+                created_at=FIXED_NOW,
+            )
+        model.assert_complete()
 
 
 if __name__ == "__main__":

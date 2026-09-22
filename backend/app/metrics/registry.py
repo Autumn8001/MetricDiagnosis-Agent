@@ -71,6 +71,7 @@ class MetricDefinition:
     dimensions: tuple[str, ...]
     dependencies: tuple[str, ...]
     related_metrics: tuple[str, ...]
+    driver_metrics: tuple[str, ...] = ()
 
 
 class MetricRegistry:
@@ -123,6 +124,11 @@ class MetricRegistry:
         """Returns MetricDefinitions for all direct dependencies of the given metric."""
         metric = self.get(metric_id)
         return [self.get(dep_id) for dep_id in metric.dependencies]
+
+    def get_driver_metrics(self, metric_id: str) -> list[MetricDefinition]:
+        """Returns MetricDefinitions for all direct driver metrics of the given metric."""
+        metric = self.get(metric_id)
+        return [self.get(driver_id) for driver_id in metric.driver_metrics]
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "MetricRegistry":
@@ -247,6 +253,15 @@ class MetricRegistry:
                 allow_self=False,
             )
 
+            driver_metrics = _validate_string_list(
+                m_conf.get("driver_metrics"),
+                "driver_metrics",
+                m_id,
+                allow_empty=True,
+                valid_universe=declared_metric_ids,
+                allow_self=False,
+            )
+
             related = _validate_string_list(
                 m_conf.get("related_metrics"),
                 "related_metrics",
@@ -267,6 +282,7 @@ class MetricRegistry:
                 dimensions=dims,
                 dependencies=deps,
                 related_metrics=related,
+                driver_metrics=driver_metrics,
             )
 
         return cls(

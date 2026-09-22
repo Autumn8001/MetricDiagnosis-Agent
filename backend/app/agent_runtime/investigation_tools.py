@@ -64,6 +64,7 @@ _METRIC_DEFINITION_JSON_KEYS = frozenset(
         "source_fields",
         "dimensions",
         "dependencies",
+        "driver_metrics",
         "related_metrics",
     }
 )
@@ -81,12 +82,21 @@ _DIAGNOSIS_PROTOCOL = (
 
 
 class DimensionFilter(BaseModel):
-    """Strict SDK input item for one semantic dimension filter."""
+    """Legacy structured filter item kept for package API compatibility.
+
+    Production FunctionTools expose filters as a string-valued JSON object map;
+    this model remains available to callers importing the earlier public symbol.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    dimension: str = Field(min_length=1)
-    value: str
+    dimension: str = Field(
+        min_length=1,
+        description="Semantic dimension name, such as marketplace or asin.",
+    )
+    value: str = Field(
+        description="String value for the selected semantic dimension, such as US.",
+    )
 
 
 def _parse_iso_date(value: str, field_name: str) -> datetime.date:
@@ -106,16 +116,6 @@ def _decimal_to_string(value: Decimal | None) -> str | None:
     return None if value is None else str(value)
 
 
-def _dimension_filters_to_mapping(filters: list[DimensionFilter] | None) -> dict[str, str]:
-    """Convert strict SDK filter items to the AnalyticsTools mapping contract."""
-    result: dict[str, str] = {}
-    for item in filters or []:
-        if item.dimension in result:
-            raise ValueError(f"Duplicate filter dimension: '{item.dimension}'.")
-        result[item.dimension] = item.value
-    return result
-
-
 def _metric_definition_to_json(definition: MetricDefinition) -> dict[str, Any]:
     """Serialize only fields declared by the semantic registry."""
     if not isinstance(definition, MetricDefinition):
@@ -132,6 +132,7 @@ def _metric_definition_to_json(definition: MetricDefinition) -> dict[str, Any]:
         "source_fields": list(definition.source_fields),
         "dimensions": list(definition.dimensions),
         "dependencies": list(definition.dependencies),
+        "driver_metrics": list(definition.driver_metrics),
         "related_metrics": list(definition.related_metrics),
     }
 
@@ -332,10 +333,24 @@ def _query_observations_adapter(
         query_or_result_reference=f"tool-result:{tool_call_id}",
         created_at=timestamp,
     )
+    # Semantic definitions travel with query results so the Agent can interpret
+    # a candidate metric without spending another scarce tool call.  This is a
+    # registry read, not a query and never exposes benchmark ground truth.
+    definition_ids = [metric]
+    if operation == "query_related_metrics":
+        definition_ids.extend(item.metric_id for item in result.results)
+    metric_definitions = {
+        metric_id: _metric_definition_to_json(
+            analytics_tools.get_metric_definition(metric_id)
+        )
+        for metric_id in dict.fromkeys(definition_ids)
+    }
+
     payload = {
         "tool_name": operation,
         "tool_call_id": tool_call_id,
         "metric": metric,
+        "metric_definitions": metric_definitions,
         "observations": [observation_to_json(item) for item in observations],
         "diagnosis_protocol": _DIAGNOSIS_PROTOCOL,
     }
@@ -415,7 +430,7 @@ def create_query_metric_tool(
         start_date: str,
         end_date: str,
         compare_to: str = "previous_7_days",
-        filters: list[DimensionFilter] | None = None,
+        filters: dict[str, str] | None = None,
         group_by: list[str] | None = None,
     ) -> dict[str, Any]:
         """Query one controlled metric and return traceable observations.
@@ -425,7 +440,10 @@ def create_query_metric_tool(
             start_date: Single-day current-period date in YYYY-MM-DD format. Must equal end_date.
             end_date: Single-day current-period date in YYYY-MM-DD format. Must equal start_date.
             compare_to: Baseline strategy; use previous_7_days instead of widening the current date range.
-            filters: Optional semantic dimension/value filter items.
+            filters: Optional JSON object mapping each semantic dimension name to its string value.
+                Example: ``{"marketplace": "US"}``. Use an object/map, not an array, tuple,
+                or JSON string; do not use ``[{"dimension": "marketplace", "value": "US"}]``
+                or ``["marketplace", "US"]``.
             group_by: Optional semantic dimensions used to segment the result.
         """
         return query_metric_observations_adapter(
@@ -435,13 +453,17 @@ def create_query_metric_tool(
             start_date=start_date,
             end_date=end_date,
             compare_to=compare_to,
-            filters=_dimension_filters_to_mapping(filters),
+            filters=filters,
             group_by=group_by,
             budget_guard=budget_guard,
             created_at=now(),
         )
 
-    return function_tool(query_metric, failure_error_function=None)
+    # A free-form string map is represented by ``additionalProperties`` in JSON
+    # Schema, which the SDK's strict-schema normalizer rejects.  Keep the
+    # Python/Pydantic input contract strict while allowing this schema shape;
+    # invocation still rejects arrays and JSON strings before the adapter runs.
+    return function_tool(query_metric, failure_error_function=None, strict_mode=False)
 
 
 def create_get_metric_definition_tool(
@@ -485,7 +507,7 @@ def create_query_related_metrics_tool(
         start_date: str,
         end_date: str,
         compare_to: str = "previous_7_days",
-        filters: list[DimensionFilter] | None = None,
+        filters: dict[str, str] | None = None,
         group_by: list[str] | None = None,
     ) -> dict[str, Any]:
         """Query declared related metrics and return traceable observations.
@@ -495,7 +517,10 @@ def create_query_related_metrics_tool(
             start_date: Single-day current-period date in YYYY-MM-DD format. Must equal end_date.
             end_date: Single-day current-period date in YYYY-MM-DD format. Must equal start_date.
             compare_to: Baseline strategy; use previous_7_days instead of widening the current date range.
-            filters: Optional semantic dimension/value filter items.
+            filters: Optional JSON object mapping each semantic dimension name to its string value.
+                Example: ``{"marketplace": "US"}``. Use an object/map, not an array, tuple,
+                or JSON string; do not use ``[{"dimension": "marketplace", "value": "US"}]``
+                or ``["marketplace", "US"]``.
             group_by: Optional semantic dimensions used to segment the result.
         """
         return query_related_metrics_observations_adapter(
@@ -505,13 +530,17 @@ def create_query_related_metrics_tool(
             start_date=start_date,
             end_date=end_date,
             compare_to=compare_to,
-            filters=_dimension_filters_to_mapping(filters),
+            filters=filters,
             group_by=group_by,
             budget_guard=budget_guard,
             created_at=now(),
         )
 
-    return function_tool(query_related_metrics, failure_error_function=None)
+    return function_tool(
+        query_related_metrics,
+        failure_error_function=None,
+        strict_mode=False,
+    )
 
 
 def create_investigation_tools(

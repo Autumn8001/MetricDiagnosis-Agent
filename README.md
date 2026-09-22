@@ -4,7 +4,7 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
 
 ## 当前状态
 
-* **当前阶段**：Stage 1 Portfolio MVP 已完成实现，处于 Stabilization / Acceptance 收尾。FastAPI 与 React Diagnosis Workspace 已落地；Hermetic 测试和构建已通过。真实 Provider + PostgreSQL 验收已实际启动，但 Canonical 场景因模型引用了本次 Tool Output 中不存在的 `observation_id` 而 Fail-Closed，三场景尚未通过，因此不能宣称 Agent 自主调查已经最终验收。
+* **当前阶段**：Stage 1 Portfolio MVP 已完成实现，处于 Stabilization / Acceptance 收尾。FastAPI 与 React Diagnosis Workspace 已落地；Hermetic 测试和构建已通过。Gemini Chat Completions Provider 已通过真实 PostgreSQL 三场景验收：Canonical=Conversion Rate、Traffic=Sessions、No-anomaly 正确停止，且均形成可追溯 Tool/Observation/Evidence/Diagnosis 链路。校准后的 10 Case 单次 Live Evaluation 达到 100% Completion / Driver / Scope / Exact Match。
 * **当前范围**：
   - 基础 Python 3.12+ 脚手架与元数据（当前验证解释器：Python 3.13.5）；
   - Phase 0 人工调查契约规格（[docs/phase-0-manual-investigation.md](docs/phase-0-manual-investigation.md)）；
@@ -26,9 +26,9 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
   - Phase 10 React Diagnosis Workspace 前端工程（`frontend/`：React + TS + Vite + 原生 Vanilla CSS，包含拓扑图、调查轨迹流、证据链看板、结构化诊断与追问交互）；
   - 项目学习与开发日志（[docs/project-learning-log.md](docs/project-learning-log.md)）；
   - Agent 运行状态与接管指南（[docs/agent-state.md](docs/agent-state.md), [AGENTS.md](AGENTS.md)）。
-* **当前权威验证（2026-09-21）**：后端 438 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
+* **当前权威验证（2026-09-22）**：后端 448 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
 * **演示口径**：Fixture Preview 是确定性离线预览，用于展示 UI 与数据契约，不得称为真实 Agent Run；Live 模式才用于真实 Provider 调查。
-* **未完成验收**：真实 Provider + PostgreSQL 的 Canonical / Traffic / No-anomaly 三场景，以及 10 Case Live Evaluation。已对该 Provider 的全部两个可用模型执行 Canonical；均因未遵守 Metric Driver / Evidence / Scope 合同而被 Fail-Closed（未生成 PASS artifact），数据库均已恢复。API 服务层已直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
+* **当前 Live 稳定性事实**：此前未校准的替代 Case 在全局 Sales 上仅下降 -1.75% 至 -4.39%，与 `<5%` 正常阈值冲突；现已通过调整 Synthetic 数据权重和注入强度校准为约 -10% 的全局影响，未降低生产阈值、未更换模型、未把 Benchmark 路径硬编码到 Runtime。校准后的 10 Case 单次 Live 结果为 100%。随后 10 Case × 3 次、显式 `gemini-3.8-flash-high` 的真实评测完整结束：28/30 成功，Completion / Macro Driver / Scope / Exact 均为 93.33%；两次 `DiagnosisValidationError` 被如实保留。Runner 每 Run 原子写入脱敏 checkpoint，保留已完成审计结果而不保存 Tool 值、Provider 原文或凭据。API 服务层直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
 * **明确延后**：复杂多租户/用户系统、Go Gateway、大规模云端多 Agent 编排。
 * **开发约束与文档**：
   - 后续所有开发工作必须严格遵守 [任务书.md](任务书.md)；
@@ -431,7 +431,7 @@ python backend/scripts/verify_phase6_live_investigation.py
 6. **证据溯源**：所有引用的 Evidence 100% 对应本场 Run 产生的真实数据库 Observation；
 7. **环境恢复**：执行完毕后自动恢复数据库至 `canonical` 演示场景。
 
-截至 2026-09-12，使用 CLI / 环境变量显式指定的兼容 Provider 模型完成了真实调用与多次 Analytics Tool 调用，但尚未通过三场景验收。最新 Canonical Run 的 Diagnosis Draft 引用了本次 Tool Output 中不存在的 `observation_id`，系统按设计 Fail-Closed；数据库已恢复到 canonical，失败运行未生成 PASS artifact。这里记录的是 Provider 输出契约不合格，不是脚本未执行，也不是验收通过。
+截至 2026-09-22，使用 CLI / 环境变量显式指定的兼容 Provider 模型完成了真实调用与多次 Analytics Tool 调用，但尚未通过三场景验收。Gemini Chat Completions Provider 已生成真实 Observation、Evidence 与 Structured Diagnosis；其 Canonical Run 输出 `primary_driver=orders` 且 Scope 缺少 ASIN，不满足 Canonical 的 `conversion_rate` 与 `US / ASIN-A / Ads` 合同，系统按设计 Fail-Closed；数据库已恢复到 canonical，失败运行未生成 PASS artifact。这里记录的是 Provider 输出契约不合格，不是脚本未执行，也不是验收通过。
 
 ### 13. Phase 7 Structured Diagnosis Domain Contract
 
@@ -740,6 +740,7 @@ $env:DATABASE_URL = "postgresql://metricsleuth:metricsleuth@127.0.0.1:5432/metri
 
 # 2. 端到端执行全量 10 Case 真实模型评测
 # 退出码语义：评测完成退出 0，缺少凭据退出 2 (BLOCKED)，管道异常退出 1
+# --model-id 优先；未显式传入时会使用 METRICSLEUTH_AGENT_MODEL，并把实际值写入 Manifest。
 python backend/scripts/run_benchmark_evaluation.py --runs-per-case 1 --output-json live_benchmark_report.json
 ```
 

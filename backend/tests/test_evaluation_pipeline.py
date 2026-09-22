@@ -29,6 +29,7 @@ from scripts.run_benchmark_evaluation import (
     main,
     make_hermetic_run_record,
     report_to_dict,
+    write_checkpoint_json,
 )
 
 
@@ -162,10 +163,81 @@ class TestEvaluationPipeline(unittest.TestCase):
             self.assertEqual(data["macro_driver_accuracy"], 1.0)
             self.assertEqual(len(data["case_summaries"]), 10)
 
+    def test_hermetic_pipeline_writes_redacted_atomic_checkpoint_per_run(self) -> None:
+        manifest = EvaluationManifest(
+            manifest_id="manifest-checkpoint-test",
+            model_id="test-model",
+            prompt=DEFAULT_PROMPT,
+            metric_config_version="v1.0.0",
+            dataset_version="v1.0.0",
+            run_counts_by_case={c.case_id: 1 for c in self.cases},
+            created_at=NOW,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpoint = Path(tmpdir) / "checkpoint.json"
+            execute_evaluation_pipeline(
+                manifest,
+                self.cases,
+                hermetic=True,
+                checkpoint_path=checkpoint,
+            )
+            data = json.loads(checkpoint.read_text(encoding="utf-8"))
+
+        self.assertEqual(data["schema"], "metricsleuth.live_evaluation_checkpoint.v1")
+        self.assertEqual(data["manifest_id"], "manifest-checkpoint-test")
+        self.assertEqual(data["expected_run_count"], 10)
+        self.assertEqual(data["completed_run_count"], 10)
+        self.assertEqual(len(data["records"]), 10)
+        self.assertNotIn("current_value", json.dumps(data))
+        self.assertNotIn("DATABASE_URL", json.dumps(data))
+
+    def test_checkpoint_rewrites_latest_partial_record_set(self) -> None:
+        manifest = EvaluationManifest(
+            manifest_id="manifest-partial-checkpoint-test",
+            model_id="test-model",
+            prompt=DEFAULT_PROMPT,
+            metric_config_version="v1.0.0",
+            dataset_version="v1.0.0",
+            run_counts_by_case={self.cases[0].case_id: 1},
+            created_at=NOW,
+        )
+        record = make_hermetic_run_record(self.cases[0], "checkpoint-run", now=NOW)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpoint = Path(tmpdir) / "checkpoint.json"
+            write_checkpoint_json(checkpoint, manifest, [record])
+            data = json.loads(checkpoint.read_text(encoding="utf-8"))
+
+        self.assertEqual(data["completed_run_count"], 1)
+        self.assertEqual(data["records"][0]["run_id"], "checkpoint-run")
+        self.assertEqual(data["records"][0]["diagnosis"]["primary_driver"], "conversion_rate")
+
     def test_cli_main_hermetic_flag_returns_zero(self) -> None:
         """Test CLI main() invocation in hermetic mode with --runs-per-case."""
         exit_code = main(["--hermetic", "--runs-per-case", "2"])
         self.assertEqual(exit_code, 0)
+
+    def test_cli_model_resolution_prefers_explicit_then_environment(self) -> None:
+        """Live-run manifests must record the same model selected by runtime configuration."""
+        report = execute_evaluation_pipeline(
+            EvaluationManifest(
+                manifest_id="model-resolution-report",
+                model_id="test-model",
+                prompt=DEFAULT_PROMPT,
+                metric_config_version="v1.0.0",
+                dataset_version="v1.0.0",
+                run_counts_by_case={c.case_id: 1 for c in self.cases},
+                created_at=NOW,
+            ),
+            self.cases,
+            hermetic=True,
+        )
+        with patch.dict("os.environ", {"METRICSLEUTH_AGENT_MODEL": "env-model"}, clear=True):
+            with patch("scripts.run_benchmark_evaluation.execute_evaluation_pipeline", return_value=report) as run_mock:
+                self.assertEqual(main(["--hermetic"]), 0)
+                self.assertEqual(run_mock.call_args.kwargs["manifest"].model_id, "env-model")
+
+                self.assertEqual(main(["--hermetic", "--model-id", "explicit-model"]), 0)
+                self.assertEqual(run_mock.call_args.kwargs["manifest"].model_id, "explicit-model")
 
     def test_cli_main_missing_credentials_exits_with_code_two(self) -> None:
         """Test CLI main() invocation in live mode without credentials returns exit code 2."""

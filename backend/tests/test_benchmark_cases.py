@@ -150,7 +150,7 @@ class TestAnomalyInjector(unittest.TestCase):
     def test_traffic_drop(self) -> None:
         records = generate_current_normal_records()
         normal_target = [r for r in records if (r["marketplace"], r["asin"], r["traffic_source"]) == ("US", "ASIN-A", "Ads")][0]
-        expected_sessions = int(round(normal_target["sessions"] * 0.25))
+        expected_sessions = int(round(normal_target["sessions"] * 0.20))
 
         mutated = apply_scenario(records, "traffic")
         target = [r for r in mutated if (r["marketplace"], r["asin"], r["traffic_source"]) == ("US", "ASIN-A", "Ads")][0]
@@ -166,12 +166,12 @@ class TestAnomalyInjector(unittest.TestCase):
         mutated = apply_scenario(records, "aov_us_asin_b_organic")
         target = [r for r in mutated if (r["marketplace"], r["asin"], r["traffic_source"]) == ("US", "ASIN-B", "Organic")][0]
         self.assertEqual(target["orders"], normal_orders)
-        self.assertEqual(target["sales"], round(normal_orders * 48.0, 2))
+        self.assertEqual(target["sales"], round(normal_orders * 8.0, 2))
 
     def test_traffic_uk_asin_b_ads(self) -> None:
         records = generate_current_normal_records()
         normal_target = [r for r in records if (r["marketplace"], r["asin"], r["traffic_source"]) == ("UK", "ASIN-B", "Ads")][0]
-        expected_sessions = int(round(normal_target["sessions"] * 0.40))
+        expected_sessions = int(round(normal_target["sessions"] * 0.10))
 
         mutated = apply_scenario(records, "traffic_uk_asin_b_ads")
         target = [r for r in mutated if (r["marketplace"], r["asin"], r["traffic_source"]) == ("UK", "ASIN-B", "Ads")][0]
@@ -182,7 +182,7 @@ class TestAnomalyInjector(unittest.TestCase):
     def test_conversion_de_asin_c_ads(self) -> None:
         records = generate_current_normal_records()
         normal_target = [r for r in records if (r["marketplace"], r["asin"], r["traffic_source"]) == ("DE", "ASIN-C", "Ads")][0]
-        expected_orders = int(round(normal_target["orders"] * 0.50))
+        expected_orders = int(round(normal_target["orders"] * 0.10))
 
         mutated = apply_scenario(records, "conversion_de_asin_c_ads")
         target = [r for r in mutated if (r["marketplace"], r["asin"], r["traffic_source"]) == ("DE", "ASIN-C", "Ads")][0]
@@ -192,7 +192,7 @@ class TestAnomalyInjector(unittest.TestCase):
     def test_traffic_us_asin_c_organic(self) -> None:
         records = generate_current_normal_records()
         normal_target = [r for r in records if (r["marketplace"], r["asin"], r["traffic_source"]) == ("US", "ASIN-C", "Organic")][0]
-        expected_sessions = int(round(normal_target["sessions"] * 0.50))
+        expected_sessions = int(round(normal_target["sessions"] * 0.10))
 
         mutated = apply_scenario(records, "traffic_us_asin_c_organic")
         target = [r for r in mutated if (r["marketplace"], r["asin"], r["traffic_source"]) == ("US", "ASIN-C", "Organic")][0]
@@ -208,12 +208,12 @@ class TestAnomalyInjector(unittest.TestCase):
         mutated = apply_scenario(records, "aov_uk_asin_a_ads")
         target = [r for r in mutated if (r["marketplace"], r["asin"], r["traffic_source"]) == ("UK", "ASIN-A", "Ads")][0]
         self.assertEqual(target["orders"], normal_orders)
-        self.assertEqual(target["sales"], round(normal_orders * 52.0, 2))
+        self.assertEqual(target["sales"], round(normal_orders * 8.0, 2))
 
     def test_conversion_us_asin_b_ads(self) -> None:
         records = generate_current_normal_records()
         normal_target = [r for r in records if (r["marketplace"], r["asin"], r["traffic_source"]) == ("US", "ASIN-B", "Ads")][0]
-        expected_orders = int(round(normal_target["orders"] * 0.50))
+        expected_orders = int(round(normal_target["orders"] * 0.10))
 
         mutated = apply_scenario(records, "conversion_us_asin_b_ads")
         target = [r for r in mutated if (r["marketplace"], r["asin"], r["traffic_source"]) == ("US", "ASIN-B", "Ads")][0]

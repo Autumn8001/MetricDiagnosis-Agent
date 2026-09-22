@@ -831,6 +831,40 @@ configs/metrics.yaml
 
 ---
 
+### 3.38 2026-09-22 Driver Semantic Graph：中间指标不能替代最终解释
+
+- **问题**：`dependencies` 描述公式输入，`related_metrics` 描述可比较候选；两者都不能表达“Orders 还应由 Sessions / Conversion Rate 继续解释”。因此真实 Agent 虽已查到 Conversion Rate 异常，仍可能合法地把 Orders 当作最终 Driver。
+- **最小修正**：语义层新增 `driver_metrics`，并在成功 Diagnosis 前校验直接 Driver 已观察且没有异常。该校验只拒绝未闭环的最终声明，绝不决定下一次调用哪个 Tool，也不把 Canonical 的维度路径写进 Runtime。
+- **工具信息密度**：受控 query 工具返回本次涉及指标的受控定义，避免模型为了获取已知语义额外浪费预算；这不读取 Ground Truth，也不放宽 SQL 或指标定义边界。
+- **验证边界**：445 项后端单测通过；真实 Provider 仍必须以新的完整三场景 artifact 验收，不能用 Hermetic 测试或“请求已发出”代替真实模型能力。
+
+### 3.39 2026-09-22 Gemini Live Gate 与全量 Benchmark 事实
+
+- Gemini `gemini-3.8-flash-high` 在兼容 Chat Completions Provider 上通过真实 PostgreSQL 三场景验收：Canonical 定位 Conversion Rate / US / ASIN-A / Ads，Traffic 定位 Sessions / US / ASIN-A / Ads，No-anomaly 正确停止；所有关键 Evidence 都能追溯到同一运行的 Tool Observation。
+- 同一模型随后完成 10 Case、每 Case 1 次的 Live Evaluation；结果为完成率 80%，Macro Driver / Scope / Exact 各 40%。这说明三场景 Gate 证明核心链可工作，但绝不等价于模型在完整受控 Benchmark 上可靠。
+- **数据有效性复核**：6 个被 Ground Truth 标为 `diagnosed` 的替代场景，其全局 Sales 实测仅下降 1.75%–4.39%，落在 Phase 0 `<5%` 的正常区间；固定 Prompt 却要求调查全局 Sales anomaly。此时模型给出 no-material-anomaly 不应自动计为模型错误。
+- **工程原则**：下一步不能把 Case Ground Truth 或 Canonical 路径写入 Prompt，也不能悄悄降低生产异常阈值刷分。必须先让 Benchmark 的 Trigger、注入数据与 Ground Truth 一致：要么让目标分群具备足够的全局贡献，要么明确改为 segment-level Trigger，并在作出产品选择后重跑。
+
+### 3.40 2026-09-22 Benchmark Trigger 校准与真实复验
+
+- **选择**：保留产品入口“调查全局 Sales 异常”，不新增 segment-level Trigger。于是只校准 Synthetic Benchmark：提高被测目标分群的基线贡献，并将替代 Case 的异常幅度提高至足以让全局 Sales 下降约 10%；normal / distractor Case 保持 `<5%`。
+- **证明链**：内存注入计算、真实 PostgreSQL 逐场景查询均验证 8 个诊断 Case 为材料性下降；校准后的 Gemini 10 Case × 1 次真实评测得到 100% Completion / Driver / Scope / Exact Match。该结果应描述为当前受控 Synthetic Benchmark 上的一次真实运行，不应扩大为现实世界准确率声明。
+- **稳定性边界**：30 次重复评测在第 27 次后没有 stderr 即终止，也没有生成最终 artifact，不能选择性拿前 27 次宣称稳定性。Warehouse 已显式恢复至 canonical。后续应做 checkpoint，而不是重复扩大 Prompt 或评测作弊。
+
+### 3.41 2026-09-22 Live Evaluation 逐 Run Checkpoint
+
+- **问题**：重复 Live Evaluation 只有在全部完成时才导出聚合报告；一次外部 Provider 长运行在 27/30 后中断，已完成的真实运行没有独立 artifact。
+- **最小修正**：Runner 在每个 Run 结束后以临时文件加原子替换写入 checkpoint。内容限定为 Run 身份、操作结果、结构化 Diagnosis 与 Evidence ID；不保存 Tool 原始值、Provider 文本、数据库 URL 或任何凭据。
+- **边界**：checkpoint 只改善中断后的审计与恢复，不参与 Agent 决策、不改变 Prompt、阈值、Ground Truth 或评分公式，也不把未完成的重复评测包装为稳定性结论。
+- **验证事实**：新增 2 项专项测试覆盖逐 Run 最新记录写入和脱敏字段边界；后端全量 447 项通过。
+
+### 3.42 2026-09-22 模型选择对账与 30 Run 真实稳定性结果
+
+- **配置事实**：Benchmark CLI 曾保留历史默认 `gpt-4o-mini`，没有继承 `METRICSLEUTH_AGENT_MODEL`；在 Gemini-only Provider 上会导致 `BadRequestError`，这不是模型推理质量结论。现改为显式 CLI 参数优先、环境变量其次、历史默认最后，并把解析后的模型写入 Manifest。
+- **真实结果**：显式 `gemini-3.8-flash-high` 的 10 Case × 3 次评测全部运行结束，30 条 checkpoint record 与最终聚合报告均生成；28/30 成功，Completion / Macro Driver / Scope / Exact 均为 93.33%。
+- **失败语义**：两个失败是 `DiagnosisValidationError`，并非 Provider、数据库、工具预算或 Trace 失败。它表示领域边界没有为了刷分放行不完整结论；同时也说明该模型在两个替代场景中尚未达到完全稳定。
+- **验证事实**：模型优先级新增专项测试，后端全量 448 项通过。
+
 ## 4. 面试高频问题与项目化回答
 
 ### Q1: 什么是 Metric Semantic Layer（指标语义层）？它在 MetricSleuth 中起什么作用？ `[面试高频]`

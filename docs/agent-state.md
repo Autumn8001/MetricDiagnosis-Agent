@@ -3,12 +3,12 @@
 ## 0. 状态元数据
 
 - **Document Role**: Dynamic operational state
-- **Snapshot Date**: 2026-09-12
+- **Snapshot Date**: 2026-09-22
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
 - **Current Task**: Final factual reconciliation and live acceptance gate
-- **Current Task Status**: Real Provider runs executed against all available compatible models; Live Agent acceptance remains Fail-Closed
-- **Last Verified Batch**: 2026-09-21 live contract hardening and model comparison
-- **Current Blocker**: neither available compatible model demonstrated the required Metric Driver / Evidence / Scope contract on Canonical
+- **Current Task Status**: Gemini Chat Completions Provider connected and Canonical executed; Live Agent acceptance remains Fail-Closed
+- **Last Verified Batch**: 2026-09-22 Gemini Provider compatibility hardening and Canonical run
+- **Current Blocker**: Gemini completed a real Tool/Observation/Evidence/Diagnosis run but did not demonstrate the required Metric Driver / Evidence / Scope contract on Canonical
 - **Current Phase Status**: Portfolio MVP implementation complete; final Live acceptance not passed
 - **Later Work**: only after the Live gate; no new feature task is active
 
@@ -294,7 +294,28 @@
 | `LIVE-REF-001` | Verified hermetically | 仅对可唯一映射的 Observation-ID-as-Evidence-ID 表达差异做确定性归一化；未知或歧义引用继续 Fail-Closed |
 | `LIVE-DIAG-002` | Verified hermetically | Structured Intent 显式 driver_evidence_id、Tool Output 证据协议与失败审计备注；Driver-at-Scope 不变量未被放宽 |
 
-### 3.3 明确未实现或未验收能力
+### 3.3 2026-09-22 Gemini Chat Completions Provider 事实
+
+- `OPENAI_API_MODE=chat_completions` 已使官方 Agents SDK 使用兼容 Provider 的 Chat Completions 路径；Provider 的 Responses 路径未被假定可用。
+- 真实模型目录暴露的 Stage 1 候选为 `gemini-3.8-flash-high`；标准 Chat Completions smoke call 成功，服务端返回模型名为 `gemini-3.8-flash`。
+- Provider 对数组内嵌对象的 Function Tool 参数存在二次编码问题；生产 Tool 的 `filters` 表面已最小化为严格的字符串值 JSON object map，例如 `{"marketplace": "US"}`。数组或 JSON 字符串仍由 Pydantic 拒绝；底层 AnalyticsTools 的语义、SQL 安全和预算未放宽。
+- Canonical Live Run 实际记录 8 次 Tool Calls / 9 轮，形成真实 Observation、Evidence 和 Structured Diagnosis；但其 `primary_driver=orders`，`affected_scope={marketplace: US, traffic_source: Ads}`，不符合 Canonical 要求的 `conversion_rate` 与 `US / ASIN-A / Ads`，因此无 PASS artifact。
+
+### 3.4 2026-09-22 Driver Semantic Graph 最小校准
+
+- `configs/metrics.yaml` 新增受控 `driver_metrics`：Stage 1 中 `sales → (orders, aov)`、`orders → (sessions, conversion_rate)`；叶指标为空。它表示调查解释关系，明确不同于公式 `dependencies` 与泛关联 `related_metrics`，不规定固定调查顺序。
+- Registry 对该字段执行与其他指标引用一致的 fail-closed 校验；每个查询工具输出同时携带本次涉及指标的受控定义，因此 Agent 不必为已返回的语义额外消耗一个 Tool Call。
+- Runtime 对成功 Diagnosis 执行语义闭环：带有 `driver_metrics` 的中间指标，若任一直接 Driver 未被观察或已异常，不能作为最终 `primary_driver`。该规则不选择下一步工具，只拒绝不完整的最终结论。
+- 已完成 447/447 后端单元测试；Gemini `gemini-3.8-flash-high` 已通过真实 PostgreSQL 三场景 Live 验收：Canonical=`conversion_rate`/`US-ASIN-A-Ads`、Traffic=`sessions`/`US-ASIN-A-Ads`、No-anomaly 正确停止；引用 Evidence 均来自同次 Tool Output，场景后 Warehouse 已恢复 canonical。
+- 随后执行 10 Case、每 Case 1 次的真实 Live Evaluation：完成率 80%，Macro Driver / Scope / Exact 均为 40%。三项开发场景与 minor-fluctuation 通过；其余 AOV / 非 Canonical Conversion / Traffic 场景未达 Ground Truth。
+- **Benchmark calibration**：保持全局 Sales Trigger 与 `<5%` 正常阈值不变，仅调整 Synthetic Profile 中被测目标分群的权重及注入幅度。数据库逐场景核对后，8 个 `diagnosed` Case 的全局 Sales 变化为 `-10.37%` 至 `-12.06%`；两个 normal Case 分别为 `-0.07%` 与 `-0.37%`。
+- 校准后 10 Case × 1 次 Gemini Live Evaluation：完成率、Macro Driver、Macro Scope、Macro Exact 均为 **100%**；每个 Case 的真实 Tool Call 数均在预算内。此前 40% 的无效 Benchmark 结果已被该校准取代，不用于评判模型。
+- 历史 30-run 在第 27/30 次后无 artifact 中断；加入逐 Run checkpoint 后，使用显式 `gemini-3.8-flash-high` 完整执行了 10 Case × 3 次真实评测。30 条记录、聚合报告与 checkpoint 均落盘，Warehouse 最终恢复 canonical。
+- 重复 Live 结果：完成率、Macro Driver、Macro Scope、Macro Exact 均为 **93.33%**（28/30）。两个失败均为 `DiagnosisValidationError`：`conversion_de_asin_c_ads` 第 2 次与 `traffic_us_asin_c_organic` 第 3 次；没有 Provider、数据库、Tool Budget 或 trace 失败。失败必须保留在稳定性分母中，不得按成功样本重算为 100%。
+- Live Evaluation Runner 在每一条 Run 结束后原子写入脱敏 checkpoint：仅含 Run 身份、运行结果、诊断字段和 Evidence ID，不含 Tool 原始值、Provider 原文、数据库连接串或凭据。该机制的 2 项专项测试已覆盖逐 Run 重写和脱敏边界。
+- Runner 的模型选择现在是：显式 `--model-id` 优先、`METRICSLEUTH_AGENT_MODEL` 其次、历史 `gpt-4o-mini` 最后。此前一次 30-run 的 `BadRequestError` 全失败来自 CLI 遗漏环境模型、错误落到历史默认模型；该配置错误的 0% 结果不计入 Agent 能力结论。
+
+### 3.4 明确未实现或未验收能力
 - 云端多租户与生产级用户账号系统（属于 Stage 2 规划）
 - 真实模型在开发集上的自主调查与 Diagnosis 验收（MS-P6-004 已执行；该兼容端点的两个可用模型均未通过 Canonical 的 Driver / Evidence / Scope 校验）
 - 大规模 Holdout 盲测数据集与在线全量 Agent 评测运行
@@ -305,14 +326,15 @@
 
 ## 4. 当前验证状态
 
-- **Last Verification Date**: 2026-09-21
-- **Backend Unit Tests**: 438/438 PASS
+- **Last Verification Date**: 2026-09-22
+- **Backend Unit Tests**: 448/448 PASS
 - **Frontend Lint**: PASS
 - **Frontend Production Build**: PASS
 - **10 Case Hermetic Evaluation**: PASS (`--hermetic --runs-per-case 1`)，仅证明评测管道与受控离线输入，不证明真实模型能力
 - **Credential Scan**: PASS（显式排除本地 `.env`、`.git`、`node_modules` 与构建产物）
-- **Real Provider + PostgreSQL Three-case Run**: EXECUTED / both available compatible models FAIL-CLOSED during Canonical / no PASS artifact
-- **Real Provider 10 Case Evaluation**: NOT EXECUTED
+- **Real Provider + PostgreSQL Three-case Run**: PASS（Gemini `gemini-3.8-flash-high`，Canonical / Traffic / No-anomaly；真实 Tool / Observation / Evidence / Diagnosis）
+- **Real Provider 10 Case Evaluation**: PASS（校准后 10 runs，completion / Macro Driver / Scope / Exact 均为 100%）
+- **Real Provider 30 Run Stability Evaluation**: COMPLETE（显式 Gemini 模型，28/30 完成；Completion / Macro Driver / Scope / Exact 均为 93.33%，2 次 `DiagnosisValidationError`；checkpoint 与最终报告均已生成）
 - **Historical Browser Verification**: 文档保留历史报告，但本轮未重新执行，不作为当前新增验收证据
 
 ---
@@ -320,10 +342,10 @@
 ## 5. 当前阻塞与下一步
 
 - **实现状态**：Stage 1 Portfolio MVP 的 Core、Evaluation、API 与 UI 已形成可运行实现；API 已直接使用可信 SDK Tool Trace，三场景脚本可原子输出脱敏验收 artifact。
-- **验证状态**：438 项后端测试通过；API 与 Live Validator 专项各 23 项通过。真实 Provider 已被调用，失败运行没有生成 PASS artifact。
-- **验收阻塞**：用户已授权发送 Synthetic Benchmark 数据；本地 PostgreSQL 可用。当前 Provider 仅提供 grok-4.5 与 grok-4.6：前者能查询 related metrics 但会把 target metric 当 Driver 或在没有 scope 时结束，后者曾把维度当 Driver 或给出空 no-anomaly。两者均被 Evidence 与 Diagnosis 的领域边界拒绝。
+- **验证状态**：447 项后端测试通过；真实 Provider 已被调用，失败运行没有生成 PASS artifact。
+- **验收状态**：Gemini Provider、真实数据库、三场景动态调查链和校准后的 10 Case 单次 Live Evaluation 均已通过。30-run 稳定性评测现有完整 artifact，但 2 次有效领域拒绝显示替代场景的结论生成仍非完全稳定；这不否定 MVP 核心链，却是下一项可靠性改进依据。
 - **安全边界**：真实 `.env` 保持本地且不得提交；artifact 不记录 API Key、数据库连接串或完整 Provider URL。
-- **恢复开发时的唯一优先级**：获得可稳定支持 Tool Calling 与 JSON Schema 的模型/Provider 后重新执行三场景 Live 验收；或单独 ADR 决定是否增加可让 SDK Runtime 依据领域校验错误继续 replan 的最终提交工具。两者完成前不启动新 Phase。
+- **恢复开发时的唯一优先级**：在不放宽领域校验、不给 Agent Ground Truth 的前提下，定位两次 `DiagnosisValidationError` 的具体最终结论缺口，并评估是否应以受控反馈让 Runtime 重新提交；不改变 Benchmark、阈值或调查路径。
 
 ---
 

@@ -18,16 +18,16 @@ EXPECTED_SEGMENT_COUNT = 18
 # Normal baseline segment parameters matching seed.py
 SEGMENT_CONFIGS = {
     # US Marketplace
-    ("US", "ASIN-A", "Ads"): (10000, 600, 500, 0.08, 80.0, 300.0, 50.0),
+    ("US", "ASIN-A", "Ads"): (22000, 1320, 1100, 0.08, 80.0, 660.0, 110.0),
     ("US", "ASIN-A", "Organic"): (5000, 300, 250, 0.08, 80.0, 0.0, 25.0),
-    ("US", "ASIN-B", "Ads"): (5000, 300, 250, 0.08, 80.0, 150.0, 25.0),
-    ("US", "ASIN-B", "Organic"): (3000, 180, 150, 0.08, 80.0, 0.0, 15.0),
+    ("US", "ASIN-B", "Ads"): (18760, 1126, 938, 0.08, 80.0, 562.8, 93.8),
+    ("US", "ASIN-B", "Organic"): (18760, 1126, 938, 0.08, 80.0, 0.0, 93.8),
     ("US", "ASIN-C", "Ads"): (4000, 240, 200, 0.08, 80.0, 120.0, 20.0),
-    ("US", "ASIN-C", "Organic"): (3000, 180, 150, 0.08, 80.0, 0.0, 15.0),
+    ("US", "ASIN-C", "Organic"): (18760, 1126, 938, 0.08, 80.0, 0.0, 93.8),
     # UK Marketplace
-    ("UK", "ASIN-A", "Ads"): (4000, 240, 200, 0.08, 80.0, 120.0, 20.0),
+    ("UK", "ASIN-A", "Ads"): (18760, 1126, 938, 0.08, 80.0, 562.8, 93.8),
     ("UK", "ASIN-A", "Organic"): (2000, 120, 100, 0.08, 80.0, 0.0, 10.0),
-    ("UK", "ASIN-B", "Ads"): (2000, 120, 100, 0.08, 80.0, 60.0, 10.0),
+    ("UK", "ASIN-B", "Ads"): (18760, 1126, 938, 0.08, 80.0, 562.8, 93.8),
     ("UK", "ASIN-B", "Organic"): (2000, 120, 100, 0.08, 80.0, 0.0, 10.0),
     ("UK", "ASIN-C", "Ads"): (2000, 120, 100, 0.08, 80.0, 60.0, 10.0),
     ("UK", "ASIN-C", "Organic"): (2000, 120, 100, 0.08, 80.0, 0.0, 10.0),
@@ -36,7 +36,7 @@ SEGMENT_CONFIGS = {
     ("DE", "ASIN-A", "Organic"): (2000, 120, 100, 0.08, 80.0, 0.0, 10.0),
     ("DE", "ASIN-B", "Ads"): (2000, 120, 100, 0.08, 80.0, 60.0, 10.0),
     ("DE", "ASIN-B", "Organic"): (2000, 120, 100, 0.08, 80.0, 0.0, 10.0),
-    ("DE", "ASIN-C", "Ads"): (2000, 120, 100, 0.08, 80.0, 60.0, 10.0),
+    ("DE", "ASIN-C", "Ads"): (18760, 1126, 938, 0.08, 80.0, 562.8, 93.8),
     ("DE", "ASIN-C", "Organic"): (2000, 120, 100, 0.08, 80.0, 0.0, 10.0),
 }
 
@@ -130,44 +130,44 @@ def apply_scenario(records, scenario):
                 r["sales"] = round(10 * 80.0, 2)
         elif scenario == "traffic":
             if key == ("US", "ASIN-A", "Ads"):
-                r["impressions"] = int(round(r["impressions"] * 0.25))
-                r["clicks"] = int(round(r["clicks"] * 0.25))
-                r["sessions"] = int(round(r["sessions"] * 0.25))
+                r["impressions"] = int(round(r["impressions"] * 0.20))
+                r["clicks"] = int(round(r["clicks"] * 0.20))
+                r["sessions"] = int(round(r["sessions"] * 0.20))
                 r["orders"] = int(round(r["sessions"] * 0.08))
                 r["sales"] = round(r["orders"] * 80.0, 2)
         elif scenario == "aov_us_asin_b_organic":
             if key == ("US", "ASIN-B", "Organic"):
-                # Price/AOV drops 40% (80.0 -> 48.0)
-                r["sales"] = round(r["orders"] * 48.0, 2)
+                # Price/AOV drops 90% (80.0 -> 8.0).
+                r["sales"] = round(r["orders"] * 8.0, 2)
         elif scenario == "traffic_uk_asin_b_ads":
             if key == ("UK", "ASIN-B", "Ads"):
-                # Traffic drops 60%
-                r["impressions"] = int(round(r["impressions"] * 0.40))
-                r["clicks"] = int(round(r["clicks"] * 0.40))
-                r["sessions"] = int(round(r["sessions"] * 0.40))
+                # Traffic drops 90%.
+                r["impressions"] = int(round(r["impressions"] * 0.10))
+                r["clicks"] = int(round(r["clicks"] * 0.10))
+                r["sessions"] = int(round(r["sessions"] * 0.10))
                 r["orders"] = int(round(r["sessions"] * 0.08))
                 r["sales"] = round(r["orders"] * 80.0, 2)
         elif scenario == "conversion_de_asin_c_ads":
             if key == ("DE", "ASIN-C", "Ads"):
-                # Orders halved (CR drops 50%)
-                r["orders"] = int(round(r["orders"] * 0.50))
+                # Orders drop 90% (CR drops materially).
+                r["orders"] = int(round(r["orders"] * 0.10))
                 r["sales"] = round(r["orders"] * 80.0, 2)
         elif scenario == "traffic_us_asin_c_organic":
             if key == ("US", "ASIN-C", "Organic"):
-                # Traffic drops 50%
-                r["impressions"] = int(round(r["impressions"] * 0.50))
-                r["clicks"] = int(round(r["clicks"] * 0.50))
-                r["sessions"] = int(round(r["sessions"] * 0.50))
+                # Traffic drops 90%.
+                r["impressions"] = int(round(r["impressions"] * 0.10))
+                r["clicks"] = int(round(r["clicks"] * 0.10))
+                r["sessions"] = int(round(r["sessions"] * 0.10))
                 r["orders"] = int(round(r["sessions"] * 0.08))
                 r["sales"] = round(r["orders"] * 80.0, 2)
         elif scenario == "aov_uk_asin_a_ads":
             if key == ("UK", "ASIN-A", "Ads"):
-                # Price drops 35% (80.0 -> 52.0)
-                r["sales"] = round(r["orders"] * 52.0, 2)
+                # Price/AOV drops 90% (80.0 -> 8.0).
+                r["sales"] = round(r["orders"] * 8.0, 2)
         elif scenario == "conversion_us_asin_b_ads":
             if key == ("US", "ASIN-B", "Ads"):
-                # Orders halved (CR drops 50%)
-                r["orders"] = int(round(r["orders"] * 0.50))
+                # Orders drop 90% (CR drops materially).
+                r["orders"] = int(round(r["orders"] * 0.10))
                 r["sales"] = round(r["orders"] * 80.0, 2)
         elif scenario == "distractor_minor_fluctuation":
             if key == ("DE", "ASIN-C", "Organic"):

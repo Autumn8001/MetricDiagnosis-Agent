@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from agents import Agent
+from agents.exceptions import ModelBehaviorError
 from agents.tool_context import ToolContext
 
 from app.agent_runtime.investigation_tools import (
@@ -65,6 +66,21 @@ class CountingAnalyticsTools:
             self.calls += 1
         return RelatedMetricQueryResult(source_metric_id=kwargs["metric"], results=(self.result,))
 
+    def get_metric_definition(self, metric_id: str) -> MetricDefinition:
+        return MetricDefinition(
+            metric_id=metric_id,
+            display_name=metric_id,
+            description="Test-only semantic definition.",
+            metric_type="additive",
+            unit="count",
+            formula=metric_id,
+            source_fields=(metric_id,),
+            dimensions=("marketplace",),
+            dependencies=(),
+            related_metrics=(),
+            driver_metrics=(),
+        )
+
 
 class TestInvestigationTools(unittest.TestCase):
     def setUp(self) -> None:
@@ -80,6 +96,7 @@ class TestInvestigationTools(unittest.TestCase):
             dimensions=("marketplace", "product_id"),
             dependencies=(),
             related_metrics=("orders", "conversion_rate"),
+            driver_metrics=("orders", "aov"),
         )
         self.analytics.query_metric.return_value = metric_result()
         self.analytics.query_related_metrics.return_value = RelatedMetricQueryResult(
@@ -117,6 +134,7 @@ class TestInvestigationTools(unittest.TestCase):
                 "source_fields",
                 "dimensions",
                 "dependencies",
+                "driver_metrics",
                 "related_metrics",
             },
         )
@@ -125,6 +143,7 @@ class TestInvestigationTools(unittest.TestCase):
             payload["definition"]["related_metrics"],
             ["orders", "conversion_rate"],
         )
+        self.assertEqual(payload["definition"]["driver_metrics"], ["orders", "aov"])
         self.assertNotIn("sql", payload["definition"])
         self.assertNotIn("table", payload["definition"])
         self.assertEqual(guard.current_calls, 1)
@@ -159,6 +178,7 @@ class TestInvestigationTools(unittest.TestCase):
         self.assertEqual(obs["relative_change"], "-0.1315789473684210526")
         self.assertEqual(obs["status"], "anomalous")
         self.assertEqual(obs["created_at"], "2026-08-29T12:00:00+00:00")
+        self.assertEqual(payload["metric_definitions"]["sales"]["driver_metrics"], ["orders", "aov"])
         json.dumps(payload)
 
     def test_strict_iso_dates_rejected_and_failed_call_consumes_budget(self) -> None:
@@ -194,6 +214,10 @@ class TestInvestigationTools(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertTrue(ids[0].startswith("call_related_001_rel0_"))
         self.assertTrue(ids[1].startswith("call_related_001_rel1_"))
+        self.assertEqual(
+            set(payload["metric_definitions"]),
+            {"sales", "orders", "sessions"},
+        )
         json.dumps(payload)
 
     def test_empty_result_returns_empty_observations(self) -> None:
@@ -264,11 +288,14 @@ class TestInvestigationTools(unittest.TestCase):
         )
         with self.assertRaises(RuntimeBudgetExceededError):
             asyncio.run(query_tool.on_invoke_tool(context, query_arguments))
+        # Query tools executed five times (three registry-definition tool calls
+        # account for the rest of the shared eight-call budget).  Query-result
+        # envelopes may read semantic definitions internally without consuming
+        # model-facing query budget.
         self.assertEqual(
-            self.analytics.get_metric_definition.call_count
-            + self.analytics.query_metric.call_count
+            self.analytics.query_metric.call_count
             + self.analytics.query_related_metrics.call_count,
-            8,
+            5,
         )
 
     def test_sdk_schema_hides_context_and_clock(self) -> None:
@@ -290,6 +317,30 @@ class TestInvestigationTools(unittest.TestCase):
             self.assertIn("start_date", properties)
             self.assertIn("filters", properties)
 
+    def test_sdk_filter_schema_exposes_string_map_and_rejects_array_shape(self) -> None:
+        _, query_tool, related_tool = create_investigation_tools(
+            self.analytics,
+            clock=lambda: FIXED_NOW,
+        )
+
+        for tool in (query_tool, related_tool):
+            with self.subTest(tool=tool.name):
+                filters_schema = tool.params_json_schema["properties"]["filters"]
+                description = filters_schema["description"]
+                self.assertIn('{"marketplace": "US"}', description)
+                self.assertIn("object/map", description)
+                self.assertIn("[{\"dimension\": \"marketplace\", \"value\": \"US\"}]", description)
+                self.assertIn('["marketplace", "US"]', description)
+
+                map_schema = next(
+                    item
+                    for item in filters_schema["anyOf"]
+                    if item.get("type") == "object"
+                )
+                self.assertEqual(map_schema["type"], "object")
+                self.assertEqual(map_schema["additionalProperties"], {"type": "string"})
+                self.assertNotIn("$defs", tool.params_json_schema)
+
     def test_sdk_structured_filters_reach_analytics_mapping(self) -> None:
         _, query_tool, _ = create_investigation_tools(
             self.analytics,
@@ -299,7 +350,7 @@ class TestInvestigationTools(unittest.TestCase):
             "metric": "sales",
             "start_date": "2026-08-28",
             "end_date": "2026-08-28",
-            "filters": [{"dimension": "marketplace", "value": "US"}],
+            "filters": {"marketplace": "US"},
             "group_by": ["marketplace"],
         })
         context = ToolContext(
@@ -317,6 +368,37 @@ class TestInvestigationTools(unittest.TestCase):
             self.analytics.query_metric.call_args.kwargs["filters"],
             {"marketplace": "US"},
         )
+
+    def test_sdk_filter_input_rejects_arrays_and_json_strings(self) -> None:
+        _, query_tool, _ = create_investigation_tools(
+            self.analytics,
+            clock=lambda: FIXED_NOW,
+        )
+        base_arguments = {
+            "metric": "sales",
+            "start_date": "2026-08-28",
+            "end_date": "2026-08-28",
+        }
+        invalid_filters = [
+            ["marketplace", "US"],
+            [{"dimension": "marketplace", "value": "US"}],
+            '{"marketplace": "US"}',
+        ]
+
+        for invalid in invalid_filters:
+            with self.subTest(invalid=invalid):
+                arguments = json.dumps({**base_arguments, "filters": invalid})
+                context = ToolContext(
+                    context=None,
+                    agent=Agent(name="InvalidFilterBridgeAgent"),
+                    tool_call_id="call_invalid_filter",
+                    tool_name=query_tool.name,
+                    tool_arguments=arguments,
+                )
+                with self.assertRaises(ModelBehaviorError):
+                    asyncio.run(query_tool.on_invoke_tool(context, arguments))
+
+        self.analytics.query_metric.assert_not_called()
 
     def test_concurrent_budget_never_exceeds_underlying_execution_limit(self) -> None:
         analytics = CountingAnalyticsTools(metric_result())

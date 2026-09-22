@@ -245,22 +245,88 @@ def make_hermetic_run_record(
     )
 
 
+def _checkpoint_record_to_dict(record: EvaluationRunRecord) -> dict[str, Any]:
+    """Serialize only run identity, operational outcome, and diagnosis references.
+
+    A checkpoint is intentionally not a copy of Tool Output, database values,
+    credentials, or provider responses.  It exists solely to make a partially
+    completed live evaluation auditable after an interrupted process.
+    """
+    composition = record.composition
+    diagnosis = None
+    if composition is not None:
+        resolved = composition.diagnosis
+        diagnosis = {
+            "status": resolved.status.value,
+            "target_metric": resolved.target_metric,
+            "primary_driver": resolved.primary_driver,
+            "affected_scope": dict(resolved.affected_scope),
+            "evidence_ids": list(resolved.evidence_ids),
+        }
+    outcome = record.outcome
+    return {
+        "run_id": record.run_id,
+        "case_id": record.case.case_id,
+        "scenario": record.case.scenario,
+        "outcome": {
+            "status": outcome.status.value,
+            "tool_calls_attempted": outcome.tool_calls_attempted,
+            "tool_calls_succeeded": outcome.tool_calls_succeeded,
+            "max_tool_calls": outcome.max_tool_calls,
+            "turns_count": outcome.turns_count,
+            "max_turns": outcome.max_turns,
+            "failure_code": outcome.failure_code,
+        },
+        "diagnosis": diagnosis,
+    }
+
+
+def write_checkpoint_json(
+    path: str | Path,
+    manifest: EvaluationManifest,
+    records: Sequence[EvaluationRunRecord],
+) -> None:
+    """Atomically persist an intentionally partial, redacted evaluation checkpoint."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema": "metricsleuth.live_evaluation_checkpoint.v1",
+        "manifest_id": manifest.manifest_id,
+        "model_id": manifest.model_id,
+        "expected_run_count": manifest.total_run_count,
+        "completed_run_count": len(records),
+        "records": [_checkpoint_record_to_dict(record) for record in records],
+    }
+    temporary = target.with_name(target.name + ".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, ensure_ascii=False)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, target)
+
+
 def execute_evaluation_pipeline(
     manifest: EvaluationManifest,
     cases: Sequence[GroundTruthCase],
     *,
     hermetic: bool = True,
     database_url: str | None = None,
+    checkpoint_path: str | Path | None = None,
 ) -> RepeatedRunEvaluationReport:
     """Execute the full evaluation pipeline and aggregate into a RepeatedRunEvaluationReport."""
     records: list[EvaluationRunRecord] = []
+
+    def append_record(record: EvaluationRunRecord) -> None:
+        records.append(record)
+        if checkpoint_path is not None:
+            write_checkpoint_json(checkpoint_path, manifest, records)
 
     if hermetic:
         for case in cases:
             runs_count = manifest.run_counts_by_case[case.case_id]
             for run_idx in range(1, runs_count + 1):
                 run_id = f"{case.case_id}-hermetic-run-{run_idx}"
-                records.append(make_hermetic_run_record(case, run_id))
+                append_record(make_hermetic_run_record(case, run_id))
     else:
         # Live mode: import dependencies lazily
         import psycopg
@@ -299,7 +365,7 @@ def execute_evaluation_pipeline(
                                 max_turns=DEFAULT_EVIDENCE_DRIVEN_MAX_TURNS,
                             )
                             outcome = completed_run_outcome(case.case_id, summary)
-                            records.append(
+                            append_record(
                                 EvaluationRunRecord(
                                     run_id=run_id,
                                     case=case,
@@ -318,7 +384,7 @@ def execute_evaluation_pipeline(
                             max_turns=DEFAULT_EVIDENCE_DRIVEN_MAX_TURNS,
                             failure_code=f"RUNTIME_ERROR: {type(exc).__name__}",
                         )
-                        records.append(
+                        append_record(
                             EvaluationRunRecord(
                                 run_id=run_id,
                                 case=case,
@@ -410,10 +476,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--manifest-id", type=str, default=None, help="Manifest identifier")
     parser.add_argument("--runs-per-case", type=int, default=1, help="Evaluation runs per case (default 1)")
     parser.add_argument("--cases-path", type=str, default=None, help="Path to benchmark cases JSON")
-    parser.add_argument("--model-id", type=str, default=DEFAULT_MODEL_ID, help="LLM model identifier")
+    parser.add_argument(
+        "--model-id",
+        type=str,
+        default=None,
+        help="LLM model identifier (defaults to METRICSLEUTH_AGENT_MODEL, then gpt-4o-mini)",
+    )
     parser.add_argument("--hermetic", action="store_true", help="Run hermetic offline simulation")
     parser.add_argument("--database-url", type=str, default=None, help="PostgreSQL connection string")
     parser.add_argument("--output-json", type=str, default=None, help="File path to save JSON report")
+    parser.add_argument(
+        "--checkpoint-json",
+        type=str,
+        default=None,
+        help="Atomically update a redacted per-run checkpoint after each completed run",
+    )
 
     args = parser.parse_args(argv)
 
@@ -444,12 +521,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("Live Status: BLOCKED. DATABASE_URL environment variable is not set.", file=sys.stderr)
             return 2
 
+    configured_model_id = os.environ.get("METRICSLEUTH_AGENT_MODEL", "").strip()
+    model_id = args.model_id.strip() if isinstance(args.model_id, str) and args.model_id.strip() else configured_model_id
+    if not model_id:
+        model_id = DEFAULT_MODEL_ID
+
     manifest_id = args.manifest_id or datetime.datetime.now(datetime.timezone.utc).strftime("manifest-benchmark-%Y%m%d-%H%M%S")
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     manifest = EvaluationManifest(
         manifest_id=manifest_id,
-        model_id=args.model_id,
+        model_id=model_id,
         prompt=DEFAULT_PROMPT,
         metric_config_version="v1.0.0",
         dataset_version="v1.0.0",
@@ -457,9 +539,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         created_at=now_utc,
     )
 
-    mode_label = "Hermetic (Offline Simulation)" if args.hermetic else f"Live Agent ({args.model_id})"
+    mode_label = "Hermetic (Offline Simulation)" if args.hermetic else f"Live Agent ({model_id})"
     print(f"\nStarting MetricSleuth Benchmark Evaluation: {mode_label}")
     print(f"Loaded {len(cases)} cases from {cases_path.name}. Runs per case: {args.runs_per_case} (Total Runs: {manifest.total_run_count}).")
+
+    checkpoint_path = args.checkpoint_json
+    if checkpoint_path is None and not args.hermetic and args.output_json:
+        output_path = Path(args.output_json)
+        checkpoint_path = str(output_path.with_name(output_path.name + ".checkpoint.json"))
 
     try:
         report = execute_evaluation_pipeline(
@@ -467,6 +554,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             cases=cases,
             hermetic=args.hermetic,
             database_url=db_url,
+            checkpoint_path=checkpoint_path,
         )
     except Exception as exc:
         print(f"Evaluation pipeline failed: {exc}", file=sys.stderr)
@@ -477,6 +565,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.output_json:
         export_report_json(report, args.output_json)
         print(f"\nReport successfully exported to: {args.output_json}")
+    if checkpoint_path:
+        print(f"Checkpoint path: {checkpoint_path}")
 
     return 0
 

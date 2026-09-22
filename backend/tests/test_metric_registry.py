@@ -63,6 +63,7 @@ class TestMetricRegistry(unittest.TestCase):
                     "source_fields": ["events", "accounts"],
                     "dimensions": ["segment"],
                     "dependencies": ["metric_alpha"],
+                    "driver_metrics": ["metric_alpha"],
                     "related_metrics": ["metric_alpha"],
                 },
                 "metric_alpha": {
@@ -74,6 +75,7 @@ class TestMetricRegistry(unittest.TestCase):
                     "source_fields": ["widgets"],
                     "dimensions": ["segment"],
                     "dependencies": [],
+                    "driver_metrics": [],
                     "related_metrics": [],
                 },
             },
@@ -105,6 +107,7 @@ class TestMetricRegistry(unittest.TestCase):
         self.assertEqual(sales.source_fields, ("sales",))
         self.assertEqual(sales.dimensions, ("marketplace", "asin", "traffic_source"))
         self.assertEqual(sales.dependencies, ())
+        self.assertEqual(sales.driver_metrics, ("orders", "aov"))
         self.assertEqual(
             sales.related_metrics,
             ("orders", "sessions", "conversion_rate", "aov"),
@@ -117,6 +120,8 @@ class TestMetricRegistry(unittest.TestCase):
             [m.metric_id for m in related_objs],
             ["orders", "sessions", "conversion_rate", "aov"],
         )
+        driver_objs = registry.get_driver_metrics("sales")
+        self.assertEqual([m.metric_id for m in driver_objs], ["orders", "aov"])
 
     def test_domain_neutral_metrics_preserve_declaration_order_and_custom_units(self):
         registry = self._load_config(self._domain_neutral_config())
@@ -129,13 +134,16 @@ class TestMetricRegistry(unittest.TestCase):
         alpha = registry.get("metric_alpha")
         self.assertEqual(beta.unit, "events_per_account")
         self.assertEqual(beta.dependencies, ("metric_alpha",))
+        self.assertEqual(beta.driver_metrics, ("metric_alpha",))
         self.assertEqual(
             [metric.metric_id for metric in registry.get_dependencies("metric_beta")],
             ["metric_alpha"],
         )
         self.assertEqual(alpha.unit, "widgets")
         self.assertEqual(alpha.related_metrics, ())
+        self.assertEqual(alpha.driver_metrics, ())
         self.assertEqual(registry.get_related_metrics("metric_alpha"), [])
+        self.assertEqual(registry.get_driver_metrics("metric_alpha"), [])
 
     def test_metric_ids_are_non_empty_strings_without_surrounding_whitespace(self):
         base = self._domain_neutral_config()
@@ -156,8 +164,10 @@ class TestMetricRegistry(unittest.TestCase):
     def test_domain_neutral_references_remain_fail_closed(self):
         for field, value in (
             ("dependencies", ["not_declared"]),
+            ("driver_metrics", ["not_declared"]),
             ("related_metrics", ["not_declared"]),
             ("dependencies", ["metric_beta"]),
+            ("driver_metrics", ["metric_beta"]),
             ("related_metrics", ["metric_beta"]),
         ):
             bad = self._domain_neutral_config()
@@ -174,6 +184,7 @@ class TestMetricRegistry(unittest.TestCase):
         self.assertEqual(cr.unit, "ratio")
         self.assertEqual(cr.formula, "SUM(orders) / NULLIF(SUM(sessions), 0)")
         self.assertEqual(cr.dependencies, ("orders", "sessions"))
+        self.assertEqual(cr.driver_metrics, ())
         self.assertIn("unavailable", cr.description.lower())
 
         dep_objs = registry.get_dependencies("conversion_rate")
@@ -188,6 +199,7 @@ class TestMetricRegistry(unittest.TestCase):
         self.assertEqual(aov.unit, "usd")
         self.assertEqual(aov.formula, "SUM(sales) / NULLIF(SUM(orders), 0)")
         self.assertEqual(aov.dependencies, ("sales", "orders"))
+        self.assertEqual(aov.driver_metrics, ())
 
         dep_objs = registry.get_dependencies("aov")
         self.assertEqual([d.metric_id for d in dep_objs], ["sales", "orders"])
@@ -204,6 +216,9 @@ class TestMetricRegistry(unittest.TestCase):
 
         with self.assertRaises(MetricNotFoundError):
             registry.get_dependencies("unknown_metric")
+
+        with self.assertRaises(MetricNotFoundError):
+            registry.get_driver_metrics("unknown_metric")
 
         self.assertFalse(registry.has_metric("refunds"))
         self.assertTrue(registry.has_metric("sales"))
@@ -223,6 +238,7 @@ class TestMetricRegistry(unittest.TestCase):
         self.assertIsInstance(sales.source_fields, tuple)
         self.assertIsInstance(sales.dimensions, tuple)
         self.assertIsInstance(sales.dependencies, tuple)
+        self.assertIsInstance(sales.driver_metrics, tuple)
         self.assertIsInstance(sales.related_metrics, tuple)
 
     def test_validation_rejects_missing_fields(self):
@@ -246,6 +262,7 @@ class TestMetricRegistry(unittest.TestCase):
                         "source_fields": ["sales"],
                         "dimensions": ["marketplace"],
                         "dependencies": [],
+                        "driver_metrics": [],
                         "related_metrics": ["orders", "sessions", "conversion_rate", "aov"],
                     },
                     "orders": {},
@@ -271,6 +288,18 @@ class TestMetricRegistry(unittest.TestCase):
         bad_related["metrics"]["sales"]["related_metrics"] = ["orders", "non_existent_metric"]
         self._assert_config_error(bad_related)
 
+    def test_validation_rejects_missing_driver_metrics(self):
+        """Verify that every metric must declare driver_metrics explicitly."""
+        bad_config = deepcopy(self.valid_raw)
+        del bad_config["metrics"]["sales"]["driver_metrics"]
+        self._assert_config_error(bad_config)
+
+    def test_validation_rejects_unknown_driver_metric(self):
+        """Verify that driver_metrics cannot reference an undeclared metric."""
+        bad_driver = deepcopy(self.valid_raw)
+        bad_driver["metrics"]["sales"]["driver_metrics"] = ["non_existent_metric"]
+        self._assert_config_error(bad_driver)
+
     def test_validation_rejects_self_dependency(self):
         """Verify that a metric cannot list itself as a dependency."""
         bad_self_dep = deepcopy(self.valid_raw)
@@ -283,6 +312,18 @@ class TestMetricRegistry(unittest.TestCase):
         bad_self_rel["metrics"]["sales"]["related_metrics"] = ["sales", "orders"]
         self._assert_config_error(bad_self_rel)
 
+    def test_validation_rejects_self_driver_metric(self):
+        """Verify that a metric cannot list itself in driver_metrics."""
+        bad_self_driver = deepcopy(self.valid_raw)
+        bad_self_driver["metrics"]["sales"]["driver_metrics"] = ["sales"]
+        self._assert_config_error(bad_self_driver)
+
+    def test_validation_rejects_duplicate_driver_metrics(self):
+        """Verify that duplicate driver metric IDs are rejected."""
+        bad_duplicate_driver = deepcopy(self.valid_raw)
+        bad_duplicate_driver["metrics"]["sales"]["driver_metrics"] = ["orders", "orders"]
+        self._assert_config_error(bad_duplicate_driver)
+
     def test_validation_rejects_invalid_element_types(self):
         """Verify that non-string or whitespace-only elements in dependencies/related_metrics raise MetricConfigError."""
         invalid_cases = [
@@ -291,6 +332,11 @@ class TestMetricRegistry(unittest.TestCase):
             ("dependencies", [123]),
             ("dependencies", [""]),
             ("dependencies", ["   "]),
+            ("driver_metrics", [[]]),
+            ("driver_metrics", [{}]),
+            ("driver_metrics", [123]),
+            ("driver_metrics", [""]),
+            ("driver_metrics", ["   "]),
             ("related_metrics", [[]]),
             ("related_metrics", [{}]),
             ("related_metrics", [None]),

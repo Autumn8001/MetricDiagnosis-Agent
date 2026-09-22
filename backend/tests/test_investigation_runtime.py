@@ -67,7 +67,7 @@ class TestInvestigationRuntime(unittest.TestCase):
             }, call_id="call_related")],
             [function_call("query_metric", {
                 "metric": "conversion_rate", "start_date": "2026-08-28", "end_date": "2026-08-28",
-                "filters": [{"dimension": "marketplace", "value": "US"}],
+                "filters": {"marketplace": "US"},
                 "group_by": ["marketplace"],
             }, call_id="call_metric")],
             [assistant_message("Conversion rate is the material data-level driver; external cause is unproven.")],
@@ -107,14 +107,14 @@ class TestInvestigationRuntime(unittest.TestCase):
         self.assertEqual(query_arguments["end_date"], "2026-08-28")
         self.assertEqual(query_arguments["group_by"], ("marketplace",))
         self.assertEqual(
-            dict(query_arguments["filters"][0]),
-            {"dimension": "marketplace", "value": "US"},
+            dict(query_arguments["filters"]),
+            {"marketplace": "US"},
         )
         with self.assertRaises(TypeError):
             query_arguments["metric"] = "sales"  # type: ignore[index]
         with self.assertRaises(TypeError):
-            query_arguments["filters"][0]["value"] = "DE"  # type: ignore[index]
-        self.analytics.get_metric_definition.assert_called_once_with("sales")
+            query_arguments["filters"]["marketplace"] = "DE"  # type: ignore[index]
+        self.analytics.get_metric_definition.assert_any_call("sales")
         self.analytics.query_related_metrics.assert_called_once()
         self.analytics.query_metric.assert_called_once()
         model.assert_complete()
@@ -185,6 +185,7 @@ class TestInvestigationRuntime(unittest.TestCase):
                 "source_fields": ["sales_amount"],
                 "dimensions": ["marketplace"],
                 "dependencies": [],
+                "driver_metrics": [],
                 "related_metrics": ["orders", "conversion_rate"],
             },
         }

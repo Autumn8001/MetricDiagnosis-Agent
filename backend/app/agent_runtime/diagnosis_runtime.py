@@ -30,12 +30,18 @@ from app.agent_runtime.investigation_tools import (
     DEFAULT_INVESTIGATION_TOOL_BUDGET,
     create_investigation_tools,
 )
-from app.agent_runtime.spike import RuntimeTraceError, ToolCallBudgetGuard
+from app.agent_runtime.spike import (
+    RuntimeTraceError,
+    ToolCallBudgetGuard,
+    configure_openai_api_from_env,
+)
 from app.analytics.tools import AnalyticsTools
 from app.diagnosis.composition import (
     DiagnosisComposition,
     compose_diagnosis_from_observations,
 )
+from app.diagnosis.models import DiagnosisStatus
+from app.observations.models import Observation, ObservationStatus
 
 
 DEFAULT_EVIDENCE_DRIVEN_MAX_TOOL_CALLS = DEFAULT_INVESTIGATION_TOOL_BUDGET
@@ -82,9 +88,21 @@ def create_evidence_driven_agent(
         output_type=RuntimeDiagnosisIntent,
         instructions=(
             "Investigate the requested business metric using only the available controlled "
-            "analytics tools. Before returning a diagnosed intent, use get_metric_definition for "
-            "the target metric. When the target definition declares related metrics, investigate "
-            "the relevant related metrics to identify the primary driver before attributing scope. "
+            "analytics tools. Query outputs include controlled metric definitions; use "
+            "get_metric_definition only when the needed definition is not already present. "
+            "driver_metrics in a definition are the direct metrics that can explain movement in "
+            "that metric (they are not formula dependencies or a fixed workflow). Before a "
+            "diagnosed intent names a primary_driver that has driver_metrics, observe every one "
+            "of those direct drivers. If any is anomalous, continue with that anomalous driver "
+            "instead of stopping at the intermediate metric. When the target definition declares "
+            "related metrics, investigate the relevant related metrics to identify the primary "
+            "driver before attributing scope. "
+            "Each run has a hard maximum of eight analytics tool calls. Avoid duplicate evidence: "
+            "when declared related metrics need comparison, use query_related_metrics before "
+            "querying those same related metrics individually; reserve individual metric queries "
+            "for drilling a candidate driver at a scope. Before each additional tool call, decide "
+            "whether its result can change the diagnosis; if the remaining budget or evidence "
+            "cannot support a successful diagnosis, finish with an appropriate non-success status. "
             "A primary_driver is always a metric identifier, never a dimension or dimension value. "
             "If a related metric is anomalous, do not use the target metric itself as its primary "
             "driver and do not finish diagnosed yet: investigate that candidate driver across "
@@ -146,6 +164,52 @@ def _trace_audit_view(result: RunResult) -> SimpleNamespace:
     )
 
 
+def _verify_primary_driver_semantic_closure(
+    intent: RuntimeDiagnosisIntent,
+    observation_catalog: tuple[Observation, ...],
+    analytics_tools: AnalyticsTools,
+) -> None:
+    """Reject a diagnosed intermediate metric before domain composition.
+
+    ``driver_metrics`` is the controlled semantic graph for *what can explain a
+    metric*, distinct from formula dependencies and generic related metrics. A
+    model may freely choose the investigation path, but it cannot finish on a
+    non-leaf metric while declared direct drivers remain uninspected or an
+    observed direct driver is anomalous.
+    """
+    if intent.status is not DiagnosisStatus.DIAGNOSED:
+        return
+    if intent.primary_driver is None:
+        return
+
+    definition = analytics_tools.get_metric_definition(intent.primary_driver)
+    direct_drivers = definition.driver_metrics
+    if not direct_drivers:
+        return
+
+    observed_metrics = {item.metric for item in observation_catalog}
+    missing = tuple(metric for metric in direct_drivers if metric not in observed_metrics)
+    if missing:
+        raise RuntimeTraceError(
+            "Diagnosed primary_driver is not semantically closed: declared direct "
+            f"driver metrics were not observed: {', '.join(missing)}."
+        )
+
+    anomalous = tuple(
+        metric
+        for metric in direct_drivers
+        if any(
+            item.metric == metric and item.status is ObservationStatus.ANOMALOUS
+            for item in observation_catalog
+        )
+    )
+    if anomalous:
+        raise RuntimeTraceError(
+            "Diagnosed primary_driver is an intermediate metric with anomalous "
+            f"direct driver metrics: {', '.join(anomalous)}."
+        )
+
+
 def run_evidence_driven_diagnosis(
     prompt: str,
     *,
@@ -171,6 +235,8 @@ def run_evidence_driven_diagnosis(
         raise ValueError("'max_tool_calls' must be a positive integer.")
     if isinstance(max_turns, bool) or not isinstance(max_turns, int) or max_turns <= 0:
         raise ValueError("'max_turns' must be a positive integer.")
+
+    configure_openai_api_from_env()
 
     guard = ToolCallBudgetGuard(max_calls=max_tool_calls)
     agent = create_evidence_driven_agent(
@@ -208,6 +274,12 @@ def run_evidence_driven_diagnosis(
     investigation = replace(
         investigation,
         final_output=final_output.model_dump_json(),
+    )
+
+    _verify_primary_driver_semantic_closure(
+        final_output,
+        observation_catalog,
+        analytics_tools,
     )
 
     evidence_selection_draft, diagnosis_draft = runtime_intent_to_drafts(final_output)

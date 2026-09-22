@@ -32,6 +32,7 @@ from app.agent_runtime.spike import (
     RuntimeBudgetExceededError,
     RuntimeTraceError,
     ToolCallBudgetGuard,
+    configure_openai_api_from_env,
 )
 from app.analytics.tools import AnalyticsTools
 from app.observations.models import Observation
@@ -57,6 +58,7 @@ _METRIC_DEFINITION_KEYS = frozenset(
         "source_fields",
         "dimensions",
         "dependencies",
+        "driver_metrics",
         "related_metrics",
     }
 )
@@ -72,6 +74,7 @@ _METRIC_DEFINITION_LIST_FIELDS = (
     "source_fields",
     "dimensions",
     "dependencies",
+    "driver_metrics",
     "related_metrics",
 )
 
@@ -593,6 +596,7 @@ def run_investigation(
         raise ValueError("'prompt' must be a non-empty string.")
     _positive_int(max_tool_calls, "max_tool_calls")
     _positive_int(max_turns, "max_turns")
+    configure_openai_api_from_env()
 
     guard = ToolCallBudgetGuard(max_calls=max_tool_calls)
     agent = create_investigation_agent(

@@ -22,6 +22,8 @@ from agents import (
     ToolCallItem,
     ToolCallOutputItem,
     function_tool,
+    set_default_openai_api,
+    set_tracing_disabled,
 )
 from app.analytics.tools import AnalyticsTools
 from app.metrics.registry import MetricRegistry
@@ -45,6 +47,29 @@ class RuntimeTraceError(RuntimeSpikeError):
 
 class RuntimeValidationError(RuntimeSpikeError):
     """Raised when the structured final output fails cross-validation against factual tool outputs."""
+
+
+def configure_openai_api_from_env() -> None:
+    """Select the Agents SDK transport requested by the local environment."""
+    api_mode = os.environ.get("OPENAI_API_MODE", "").strip().lower()
+    if api_mode:
+        if api_mode not in {"responses", "chat_completions"}:
+            raise RuntimeConfigError(
+                "Environment variable 'OPENAI_API_MODE' must be 'responses' "
+                "or 'chat_completions'."
+            )
+        set_default_openai_api(api_mode)  # type: ignore[arg-type]
+
+    tracing_setting = os.environ.get("OPENAI_AGENTS_DISABLE_TRACING", "").strip().lower()
+    if tracing_setting:
+        if tracing_setting in {"1", "true", "yes", "on"}:
+            set_tracing_disabled(True)
+        elif tracing_setting in {"0", "false", "no", "off"}:
+            set_tracing_disabled(False)
+        else:
+            raise RuntimeConfigError(
+                "Environment variable 'OPENAI_AGENTS_DISABLE_TRACING' must be a boolean value."
+            )
 
 
 def _validate_positive_int(value: Any, param_name: str) -> int:
@@ -425,6 +450,8 @@ def run_runtime_spike(
         raise RuntimeConfigError(
             "Environment variable 'OPENAI_API_KEY' is required but not set or empty."
         )
+
+    configure_openai_api_from_env()
 
     target_prompt = (
         prompt
