@@ -1,9 +1,4 @@
-"""Pure persistence-boundary contracts for MetricSleuth.
-
-This package intentionally contains no database driver or repository code yet.
-It defines the application-state values that the future persistence adapter must
-store and a read-only locator for the versioned SQL migration.
-"""
+"""Persistence-boundary contracts and the small application-state repository."""
 
 from app.data_sources.capabilities import SourceEnvironment
 from app.persistence.migrations import (
@@ -15,22 +10,31 @@ from app.persistence.migrations import (
 )
 from app.persistence.models import (
     DataSourceReference,
+    DataSourceState,
+    DataSourceStatus,
     InvalidRunTransitionError,
     InvalidStateTransitionError,
     PersistenceError,
+    PersistenceRepositoryError,
     PersistenceValidationError,
     RunState,
     RunStatus,
     SourceReference,
 )
+from app.persistence.repository import ApplicationStateRepository, InvestigationRunSummary
 
 __all__ = [
     "DEFAULT_MIGRATION_NAME",
     "MIGRATIONS_DIRECTORY",
     "DataSourceReference",
+    "DataSourceState",
+    "DataSourceStatus",
+    "ApplicationStateRepository",
+    "InvestigationRunSummary",
     "InvalidRunTransitionError",
     "InvalidStateTransitionError",
     "PersistenceError",
+    "PersistenceRepositoryError",
     "PersistenceValidationError",
     "RunState",
     "RunStatus",

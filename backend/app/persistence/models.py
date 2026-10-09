@@ -23,6 +23,10 @@ class PersistenceValidationError(PersistenceError, ValueError):
     """Raised when a persistence value violates its domain contract."""
 
 
+class PersistenceRepositoryError(PersistenceError):
+    """Raised when a repository operation cannot satisfy its persistence contract."""
+
+
 class InvalidRunTransitionError(PersistenceError, ValueError):
     """Raised when a run status transition is not part of the lifecycle."""
 
@@ -55,6 +59,19 @@ TERMINAL_RUN_STATUSES: Final[frozenset[RunStatus]] = frozenset(
         RunStatus.CANCELLED,
     }
 )
+
+
+class DataSourceState(StrEnum):
+    """Lifecycle states stored for an application data-source record."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    RETIRED = "retired"
+
+
+# ``DataSourceStatus`` is a readable alias for callers that use status
+# terminology at the API boundary.  There is still only one enum vocabulary.
+DataSourceStatus = DataSourceState
 
 
 ALLOWED_RUN_TRANSITIONS: Final[dict[RunStatus, frozenset[RunStatus]]] = {
@@ -164,9 +181,12 @@ class RunState:
 __all__ = [
     "ALLOWED_RUN_TRANSITIONS",
     "DataSourceReference",
+    "DataSourceState",
+    "DataSourceStatus",
     "InvalidRunTransitionError",
     "InvalidStateTransitionError",
     "PersistenceError",
+    "PersistenceRepositoryError",
     "PersistenceValidationError",
     "RunState",
     "RunStatus",

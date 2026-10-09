@@ -2,10 +2,10 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-09
-> Git 基线：`main`（R1-001/R1-002 已提交；R1-003 已由主线程验收，随本次提交落库）
-> 最近完成：R0 认知与权威基线；R1-001 数据源能力契约；R1-002 指标 × 维度 × grain 矩阵与纯内存适配；R1-003 Olist 能力降级表达
+> Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-002 已提交）
+> 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化应用状态 Repository
 > 当前阶段：R2 持久化应用基础（进行中）
-> 当前任务：R2-001 已由主线程验收；下一步实现 repository 与最小持久化接线；R1-004 仍需等待外部接入资源
+> 当前任务：R2-003 最小运行时接线与 provenance 一致性边界；R1-004 仍需等待外部接入资源
 
 ## 当前结论
 
@@ -44,6 +44,24 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - 本切片尚未接入 repository、FastAPI、Agent Runtime、worker 或真实 PostgreSQL；
   测试不代表迁移执行、重启恢复或真实持久化验收。
 
+## R2-002：已完成并由主线程验收
+
+- `backend/app/persistence/repository.py` 新增 `ApplicationStateRepository` 和
+  `InvestigationRunSummary`，仅接受已建立的 DB-API connection；调用者负责
+  transaction，不保存 `DATABASE_URL`，不自动 commit/rollback，不执行 migration。
+- repository 使用参数绑定 SQL 保存 data source、queued investigation run、受
+  `RunState` 规则约束的条件状态迁移、Tool Call、Observation、Evidence、
+  Diagnosis 及 `diagnosis_evidence` 链接，并支持按 run id 读取最小摘要。
+- 写入前统一校验 source/environment、状态枚举、空 ID、递归敏感 key 和 JSON
+  可序列化性；认证字段不会写入 arguments、parameters、capabilities 或 payload。
+- `backend/tests/test_persistence_repository.py` 提供 FakeConnection/FakeCursor
+  合同测试；专项 9/9 PASS，全量 Hermetic unittest 490/490 PASS。
+- 这是 repository 合同层证据；未执行 `001_app_state.sql`，未接线 FastAPI、
+  Agent Runtime 或 worker，未证明真实 PostgreSQL、事务提交和重启恢复。
+- Schema 目前只保证各事实所引用的来源/环境有效；尚未在数据库层保证它们一定
+  等同于所属 Investigation Run 的来源/环境。R2-003 必须在应用接线与最终迁移
+  设计中落实这项 provenance 一致性，当前不得宣称完整持久化隔离。
+
 ## 尚未实现
 
 - 能力契约与 API、Agent Runtime、数据库来源发现及外部连接器的产品级接入（当前仅完成 Registry/AnalyticsTools 的纯内存适配，以及 Olist 验证合同表达）。
@@ -64,10 +82,12 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 ## 下一步具体工作
 
-继续推进 Roadmap R1：
+继续推进 Roadmap R2：
 
-1. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
-2. 在等待 R1-004 资源期间，按 R2 开展不涉及外部凭据的应用状态持久化基础。
+1. R2-003：实现最小运行时持久化接线，明确连接/transaction owner，并在写入边界
+   强制 Tool Call、Observation、Evidence、Diagnosis 与其 Investigation Run 使用相同
+   source/environment；不执行真实迁移或声称真实 PostgreSQL 验收。
+2. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
 
@@ -75,12 +95,13 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 |---|---|---|
 | 数据源能力契约专项 | 6/6 PASS | 纯领域单元测试，覆盖基础合同、Olist、独立维度、跨 grain 保护、fail-closed 和深层不可变 |
 | R2-001 持久化专项 | 10/10 PASS | 纯 Python 状态机、环境值、只读 migration loader、Schema/FK/约束形状和敏感列名排除；未执行 SQL |
-| 后端全量 unittest | 481/481 PASS | Hermetic；包含 R2-001 专项；未访问真实模型或数据库 |
+| R2-002 repository 专项 | 9/9 PASS | Fake connection；参数化/事务边界/证据链/来源环境；未执行 SQL |
+| 后端全量 unittest | 490/490 PASS | Hermetic；包含 R2-001/R2-002；未访问真实模型或数据库 |
 | Olist 验证能力专项 | 5/5 PASS | Registry grain/dimensions、漏斗指标 unavailable、非法维度与错误来源身份；Fake connection 未执行 SQL |
 | FastAPI 专项 | 24/24 PASS | Live 分支使用 patch，只证明契约/wiring |
 | 前端 lint | PASS | 静态检查 |
 | TypeScript `--noEmit` | PASS | 不生成构建产物 |
-| Git 工作树（本切片验收） | R2-001 将随本次提交落库 | 未执行真实数据库迁移 |
+| Git 工作树（本切片验收） | R2-002 已由主线程验收并随本次提交落库 | 未执行真实数据库迁移 |
 
 ## 当前关键技术决策
 

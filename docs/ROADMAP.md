@@ -134,6 +134,25 @@
   领域状态机；未执行迁移，没有 repository、API、worker、重启恢复或真实
   PostgreSQL 持久化验收。
 
+### R2-002：应用状态 Repository
+
+**状态：已完成并由主线程验收**
+
+- 新增 `backend/app/persistence/repository.py`，只接受调用方已经建立的
+  DB-API connection；不读取或保存 `DATABASE_URL`，不自动 commit、rollback
+  或执行迁移。
+- repository 使用参数化 SQL 支持 data source upsert、queued investigation
+  run、条件状态迁移、Tool Call、Observation、Evidence、Diagnosis 及
+  `diagnosis_evidence` 链接，并提供 run 摘要读取。
+- 所有 JSON payload 在 SQL 前递归检查 JSON 可序列化性和敏感 key；来源环境、
+  数据版本和 query reference 随事实保存。`tests/test_persistence_repository.py`
+  使用 Fake connection 验证参数化、事务边界、状态条件、来源传递和证据链顺序。
+- 本切片仅为 Hermetic repository 合同测试；未执行实际 migration、未接线
+  FastAPI/Agent Runtime、未证明真实 PostgreSQL 持久化或重启恢复。
+- 当前 Schema 会验证每条事实所引用的来源与环境有效，但尚未在数据库层强制其
+  与所属 Investigation Run 的来源完全一致；这项跨记录 provenance 一致性约束
+  是 R2-003 的明确责任，不能将现有合同测试表述为完整的持久化保证。
+
 ### 验收标准
 
 - 调查从 queued/running 进入明确终态，重复请求不会产生不可控重复副作用。
