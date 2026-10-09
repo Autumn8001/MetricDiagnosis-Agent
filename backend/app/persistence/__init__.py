@@ -38,6 +38,18 @@ from app.persistence.transaction_coordinator import (
     RunHandle,
     TransactionCoordinator,
 )
+from app.persistence.task_execution_service import (
+    InvestigationTaskExecutionService,
+    InvestigationTaskRequest,
+    InvestigationTaskRunner,
+    InvestigationTransactionCoordinatorProtocol,
+    TaskExecutionFailure,
+    TaskExecutionService,
+    TaskExecutionValidationError,
+    TaskRequest,
+    TaskRunner,
+    TransactionCoordinatorProtocol,
+)
 
 __all__ = [
     "DEFAULT_MIGRATION_NAME",
@@ -71,4 +83,14 @@ __all__ = [
     "load_migration",
     "persist_evidence_driven_run",
     "TransactionCoordinator",
+    "InvestigationTaskExecutionService",
+    "InvestigationTaskRequest",
+    "InvestigationTaskRunner",
+    "InvestigationTransactionCoordinatorProtocol",
+    "TaskExecutionFailure",
+    "TaskExecutionService",
+    "TaskExecutionValidationError",
+    "TaskRequest",
+    "TaskRunner",
+    "TransactionCoordinatorProtocol",
 ]

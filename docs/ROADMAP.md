@@ -218,11 +218,24 @@
   cleanup 异常以及真实 Repository/Writer 的参数化组合。没有真实 connection factory、
   PostgreSQL、API 或 worker 运行证据。
 
-### 下一切片：R2-005 — 任务服务与 API 接线设计
+### R2-005a：单任务执行服务
+
+**状态：已完成并由主线程验收；未接线 HTTP/worker**
+
+- `InvestigationTaskExecutionService` 将每个任务编排为
+  `coordinator.start → injected runner → coordinator.complete/fail`；Runner 始终位于
+  两个短事务之间，服务自身不保存连接、不读环境变量、不创建线程或网络连接。
+- `InvestigationTaskRequest` 是 immutable 的来源绑定输入，并递归拒绝敏感 key 与
+  非 JSON 参数；普通 Runner 异常使用固定安全分类，显式 `TaskExecutionFailure` 只可
+  带受控 code，原始异常/stack trace 不会进入持久化事实。
+- start 失败不调用 Runner，complete 失败不覆盖为 failed。Fake/Spy 测试只证明服务
+  调度边界，不能证明真实 Agent、Worker、PostgreSQL 或 API 的任务执行。
+
+### 下一切片：R2-005b — 任务服务与 API/worker 接线
 
 **状态：待开展**
 
-- 将协调器接到一个明确的单 worker/任务服务，而不是直接把长模型调用塞入同步 HTTP
+- 将执行服务接到明确的单 worker/任务入口，而不是直接把长模型调用塞入同步 HTTP
   处理器；先定义任务创建、查询、失败和取消边界，再选择可恢复的最小进程模型。
 - 接线前必须明确迁移执行的受控环境与 connection factory 的配置归属。失败必须保留
   已发生的状态与安全的失败分类，但不得保存凭据、完整连接串或模型原始敏感输出。

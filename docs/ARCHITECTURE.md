@@ -481,8 +481,12 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   owner：它通过注入的 factory 对 start/complete/fail 分别创建短连接事务，并返回绑定
   来源身份的 immutable handle。它不读取 `DATABASE_URL`、不保留 connection，也不
   直接执行模型；API/worker 尚未注入这个协调器。
+- `backend/app/persistence/task_execution_service.py` 把一次已注入的 Agent runner
+  放在 `start` 与 `complete/fail` 两个 coordinator 调用之间。其输入和 failure code
+  都是深度校验、来源绑定和脱敏的；它不是后台 worker、HTTP endpoint 或模型实现，
+  因而没有真实调用、队列/取消或重启恢复证据。
 
-### Planned：应用状态与运行时接线（R2-005）
+### Planned：应用状态与运行时接线（R2-005b）
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、
