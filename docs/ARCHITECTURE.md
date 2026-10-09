@@ -111,6 +111,8 @@ date × asin × marketplace × traffic_source
 
 Olist 证据只说明部分真实公开订单数据可以映射到受控指标工具。它不能证明当前系统已经支持任意外部 PostgreSQL，也不能提供当前 Amazon Profile 缺失的 `sessions`、`traffic_source` 或 `asin` 语义。
 
+R1-003 新增的 `build_olist_validation_capabilities()`（`backend/app/data_sources/olist_validation.py`）把该 Profile 表达为 `OLIST + VALIDATION` 的纯内存能力合同：三个指标的 grain/dimensions 由 Olist Registry 适配而来，`sessions` 与 `conversion_rate` 被显式声明为 unavailable。`backend/scripts/verify_olist_tool_compatibility.py` 将这份合同传给 `AnalyticsTools`，因此支持指标的非法维度会在 SQL 前失败；这项能力只由本地 Hermetic 测试证明，不代表已完成 Olist 数据库连接、同步或持续外部接入。
+
 ### Current：指标语义层
 
 `configs/metrics.yaml` 是当前默认 Registry 的唯一配置来源：
@@ -151,9 +153,10 @@ Olist 证据只说明部分真实公开订单数据可以映射到受控指标�
 - `MetricCapability`：单指标能力声明（`metric_id`、`supported`、`grain`、`dimensions`、`unavailable_reason`），包含指标独立的 grain 与维度快照，支持 fail-closed 校验；
 - `DataSourceCapabilities`：数据源实例能力集合，支持查询能力校验 `validate_query()`、跨 grain 组合保护 `validate_metric_combination()` 与 `can_combine_metrics()`。
 - `build_capabilities_from_registry()`：只把当前 `MetricRegistry` 中已声明的指标映射为支持能力，保留各指标 dimensions/grain，不创建 Registry 外的指标；源码：`backend/app/data_sources/semantic_adapter.py`。
+- `build_olist_validation_capabilities()`：在共享 Registry 适配器基础上，创建固定为 `SourceProvider.OLIST + SourceEnvironment.VALIDATION` 的 Olist 验证合同，并对缺失的漏斗指标显式 fail-closed；源码：`backend/app/data_sources/olist_validation.py`，测试：`backend/tests/test_olist_validation_capabilities.py`。
 - `AnalyticsTools(..., capabilities=...)`：能力契约为可选参数。传入时，`query_metric()` 在实际 SQL 前执行 `validate_query()`，并将能力合同错误转换为 `MetricQueryError`；不传时保持历史查询路径。
 
-**当前边界明确：** 能力契约与语义 Registry/AnalyticsTools 已完成纯内存适配；仍未接入 API、数据库来源发现、外部连接器、同步水位或真实外部数据验证。适配器也不证明传入 descriptor 对应的物理来源已经连接或同步。
+**当前边界明确：** 能力契约与语义 Registry/AnalyticsTools 已完成纯内存适配；Olist 当前仅完成基于既有验证资产的合同表达和本地 Hermetic 验证，仍未接入 API、数据库来源发现、外部连接器、同步水位或持续真实外部数据验证。适配器也不证明传入 descriptor 对应的物理来源已经连接或同步。
 
 ### Planned：数据模型责任边界
 

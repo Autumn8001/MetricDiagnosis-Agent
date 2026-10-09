@@ -18,6 +18,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.analytics.tools import AnalyticsTools  # noqa: E402
+from app.data_sources import build_olist_validation_capabilities  # noqa: E402
 from app.metrics.registry import MetricRegistry  # noqa: E402
 
 
@@ -45,9 +46,14 @@ def verify(database_url: str, target_date: datetime.date) -> dict[str, object]:
         raise OlistToolCompatibilityError("Olist registry must use real order count as its sample-size field.")
     if registry.dimensions != ("customer_state",):
         raise OlistToolCompatibilityError("Olist registry must expose only order-safe customer_state slicing.")
+    capabilities = build_olist_validation_capabilities(registry)
 
     with psycopg.connect(database_url) as connection:
-        tools = AnalyticsTools(registry=registry, connection=connection)
+        tools = AnalyticsTools(
+            registry=registry,
+            connection=connection,
+            capabilities=capabilities,
+        )
         gmv = tools.query_metric("merchandise_gmv", target_date, target_date, "previous_7_days")
         aov = tools.query_metric("olist_aov", target_date, target_date, "previous_7_days")
         by_state = tools.query_metric("merchandise_gmv", target_date, target_date, "previous_7_days", group_by=["customer_state"])

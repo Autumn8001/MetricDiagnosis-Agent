@@ -65,7 +65,7 @@
 
 - **R1-001｜Data Source Capability Contract**：已完成并由主线程验收。实现了最小纯领域契约 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（对象级与嵌套容器级不可变，支持指标独立 grain/维度快照、跨 grain 组合保护和严格 fail-closed 校验；源码：`backend/app/data_sources/capabilities.py`，单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS；全量回归 461/461 PASS）。明确尚未接入真实外部 PostgreSQL 或 Shopify，尚未接入现有 Runtime/API/DB。
 - **R1-002｜电商核心指标 metric × dimension × grain 矩阵定义与适配**：已完成并由主线程验收。`configs/metrics.yaml` 的五个 Synthetic 核心指标显式声明 `date × asin × marketplace × traffic_source` atomic grain；`MetricRegistry` 严格校验显式 grain 并为旧配置提供明确 fallback；`backend/app/data_sources/semantic_adapter.py` 保留 Registry 中的 dimensions/grain；`AnalyticsTools` 可选接收能力契约并在 SQL 前 fail-closed 校验。主线程专项测试 51/51、全量回归 466/466 PASS；未接入真实数据库、Shopify 或 API。
-- **R1-003｜Olist 隔离资产能力契约验证与降级表达**：待开展。
+- **R1-003｜Olist 隔离资产能力契约验证与降级表达**：已完成并由主线程验收。`configs/olist_validation_metrics.yaml` 的三个指标显式声明 `date × customer_state` grain；`build_olist_validation_capabilities()` 复用 Registry 适配器，并将 `sessions`/`conversion_rate` 显式标为 unavailable；Olist 工具兼容性脚本绑定该合同。主线程确认绑定合同后，漏斗指标和非法维度均在 SQL 前 fail-closed；新增 5 个本地 Hermetic 测试。未验证 Olist 数据库连接、同步或持续外部接入。
 - **R1-004｜Shopify Development Store 只读 capability spike 与连接器选择门**：待开展。
 
 ### 目标

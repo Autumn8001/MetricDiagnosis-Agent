@@ -71,11 +71,6 @@ class AnalyticsTools:
         Returns:
             MetricQueryResult containing structured and typed query rows.
         """
-        if not self._registry.has_metric(metric):
-            raise MetricQueryError(f"Unknown metric: '{metric}'")
-
-        metric_def = self._registry.get(metric)
-
         if self._capabilities is not None:
             try:
                 self._capabilities.validate_query(
@@ -87,6 +82,11 @@ class AnalyticsTools:
                 raise MetricQueryError(
                     f"Data source capability validation failed: {exc}"
                 ) from exc
+
+        if not self._registry.has_metric(metric):
+            raise MetricQueryError(f"Unknown metric: '{metric}'")
+
+        metric_def = self._registry.get(metric)
 
         if start_date != end_date:
             raise MetricQueryError(

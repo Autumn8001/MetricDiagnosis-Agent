@@ -2,19 +2,20 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-09
-> Git 基线：`main`（R1-001 已提交；R1-002 已由主线程验收，随本次提交落库）
-> 最近完成：R0 认知与权威基线；R1-001 数据源能力契约；R1-002 指标 × 维度 × grain 矩阵与纯内存适配
+> Git 基线：`main`（R1-001/R1-002 已提交；R1-003 已由主线程验收，随本次提交落库）
+> 最近完成：R0 认知与权威基线；R1-001 数据源能力契约；R1-002 指标 × 维度 × grain 矩阵与纯内存适配；R1-003 Olist 能力降级表达
 > 当前阶段：R1 数据源契约与能力验证（进行中）
-> 当前任务：R1-002 已验收；准备推进 R1-003 Olist 能力降级验证
+> 当前任务：R1-003 已验收；R1-004 需等待 Shopify Development Store 或只读外部 PostgreSQL 接入资源
 
 ## 当前结论
 
-MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不是完整的真实数据产品。当前已完成最小数据源能力契约纯领域模型（R1-001），以及当前 Semantic Layer 到能力契约的纯内存适配和 AnalyticsTools 可选的 SQL 前能力校验（R1-002，已由主线程验收）。本项目明确**尚未接入**真实外部 PostgreSQL 或 Shopify（二者当前仅作为平台枚举定义，未实现连接器或网络调用）。下一阶段需验证 Olist 能力降级和首个持续真实数据源，再建设持久化、产品接线和部署闭环。
+MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不是完整的真实数据产品。当前已完成最小数据源能力契约纯领域模型（R1-001）、当前 Semantic Layer 到能力契约的纯内存适配和 AnalyticsTools 可选的 SQL 前能力校验（R1-002），以及基于既有 Olist 资产的纯内存能力降级表达（R1-003，均已由主线程验收）。本项目明确**尚未接入**真实外部 PostgreSQL 或 Shopify（二者当前仅作为平台枚举定义，未实现连接器或网络调用）；Olist 也未宣称持续同步或产品级接入。R1-004 需等待受控接入资源；期间可按 Roadmap 推进不依赖外部授权的 R2 持久化应用基础设计与实现。
 
 ## 已完成且本轮有源码/测试证据
 
 - 数据源能力契约（R1-001）：最小、领域无关、真正深层不可变契约模型，支持 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（frozen dataclass，嵌套内部容器使用 MappingProxyType，防范 Sequence 字符串混淆），具备指标独立 grain/维度、跨 grain 组合保护与 fail-closed 校验（`backend/app/data_sources/capabilities.py`；单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS）。
 - 指标能力矩阵与语义适配（R1-002）：当前 Synthetic Profile 的五个核心指标在 `configs/metrics.yaml` 显式声明 `date × asin × marketplace × traffic_source` atomic grain；`MetricRegistry` 严格校验显式 grain 并为旧配置提供明确 fallback；`build_capabilities_from_registry()` 保留 Registry 中的 metric dimensions/grain；`AnalyticsTools` 传入 capabilities 时在执行 SQL 前校验查询能力（主线程专项测试 51/51 PASS）。
+- Olist 能力降级表达（R1-003）：`configs/olist_validation_metrics.yaml` 的三个支持指标显式使用 `date × customer_state` grain；`build_olist_validation_capabilities()` 复用 Registry grain/dimensions，显式拒绝 `sessions`、`conversion_rate` 及 `marketplace`/`traffic_source`/`asin`；Olist 工具兼容性脚本已绑定该合同。已验证绑定合同后，漏斗指标与非法维度都在 SQL 前失败。证据限于本地 Hermetic 测试，不代表数据库连接、同步或持续真实数据接入。
 - PostgreSQL Synthetic Warehouse、10 个 Benchmark 场景和 Ground Truth 隔离。
 - YAML Metric Semantic Layer 与指标依赖/driver 元数据。
 - 受控 Analytics Tools、Observation、Evidence、Structured Diagnosis。
@@ -33,7 +34,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 ## 尚未实现
 
-- 能力契约与 API、Agent Runtime、数据库来源发现及外部连接器的产品级接入（当前仅完成 Registry/AnalyticsTools 的纯内存适配）。
+- 能力契约与 API、Agent Runtime、数据库来源发现及外部连接器的产品级接入（当前仅完成 Registry/AnalyticsTools 的纯内存适配，以及 Olist 验证合同表达）。
 - Shopify 或用户外部 PostgreSQL 的产品级接入、连接器实现、数据同步和水位（当前绝对未接入真实外部库或 Shopify API）。
 - 数据库持久化中的 `source_id`、数据环境隔离和多 grain 查询支持。
 - Investigation/Tool Call/Observation/Evidence/Diagnosis 持久化与历史恢复。
@@ -52,15 +53,16 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 继续推进 Roadmap R1：
 
-1. R1-003：用 Olist 现有资产验证缺失能力可显式降级。
-2. R1-004：在用户提供 Shopify Development Store 后执行只读 capability spike，并决定首个持续连接器。
+1. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
+2. 在等待 R1-004 资源期间，按 R2 开展不涉及外部凭据的应用状态持久化基础。
 
 ## 最新验证结果
 
 | 检查 | 结果 | 边界 |
 |---|---|---|
 | 数据源能力契约专项 | 6/6 PASS | 纯领域单元测试，覆盖基础合同、Olist、独立维度、跨 grain 保护、fail-closed 和深层不可变 |
-| 后端全量 unittest | 466/466 PASS | Hermetic；461 既有基线 + 5 个 R1-002 测试；未访问真实模型或数据库 |
+| 后端全量 unittest | 471/471 PASS | Hermetic；466 个既有测试 + 5 个 R1-003 测试；未访问真实模型或数据库 |
+| Olist 验证能力专项 | 5/5 PASS | Registry grain/dimensions、漏斗指标 unavailable、非法维度与错误来源身份；Fake connection 未执行 SQL |
 | FastAPI 专项 | 24/24 PASS | Live 分支使用 patch，只证明契约/wiring |
 | 前端 lint | PASS | 静态检查 |
 | TypeScript `--noEmit` | PASS | 不生成构建产物 |
@@ -75,6 +77,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - Olist 用作真实数据映射/契约验证，不宣称持续外部数据接入。
 - Live Investigation 必须与 Synthetic Scenario Injection 解耦。
 - 当前 R1-002 只为 Synthetic Semantic Layer 建立纯内存 metric × dimension × grain 适配，不把能力映射误认为真实来源连接或 Shopify 支持。
+- 当前 R1-003 只为既有 Olist validation registry 建立 `OLIST + VALIDATION` 能力合同和本地 Hermetic 降级验证，不把 Olist 验证资产误认为持续真实连接器。
 - 首版持久任务优先使用 PostgreSQL 状态机和简单 worker，不提前引入 Redis/Kafka/微服务。
 - Jev、Webhook 自动触发和可替换 Harness 延后到真实闭环稳定后。
 

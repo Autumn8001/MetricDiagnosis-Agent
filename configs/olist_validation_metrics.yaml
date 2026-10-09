@@ -17,6 +17,7 @@ metrics:
     formula: SUM(merchandise_gmv)
     source_fields: [merchandise_gmv]
     dimensions: [customer_state]
+    grain: [date, customer_state]
     dependencies: []
     driver_metrics: [orders, olist_aov]
     related_metrics: [orders, olist_aov]
@@ -28,6 +29,7 @@ metrics:
     formula: SUM(orders)
     source_fields: [orders]
     dimensions: [customer_state]
+    grain: [date, customer_state]
     dependencies: []
     driver_metrics: []
     related_metrics: [merchandise_gmv, olist_aov]
@@ -39,6 +41,7 @@ metrics:
     formula: SUM(merchandise_gmv) / NULLIF(SUM(orders), 0)
     source_fields: [merchandise_gmv, orders]
     dimensions: [customer_state]
+    grain: [date, customer_state]
     dependencies: [merchandise_gmv, orders]
     driver_metrics: []
     related_metrics: [merchandise_gmv, orders]

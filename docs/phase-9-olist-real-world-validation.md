@@ -34,6 +34,28 @@ field. Therefore `sessions`, `conversion_rate`, `marketplace`, `traffic_source`
 and Amazon `asin` must remain **unavailable** for this validation. The project
 must not synthesize them or reinterpret a proxy as a measured value.
 
+## R1-003 capability contract
+
+The existing registry is now expressed as a pure, isolated capability contract
+by `backend/app/data_sources/olist_validation.py`:
+
+- provider/environment are fixed to `OLIST + VALIDATION`;
+- `merchandise_gmv`, `orders`, and `olist_aov` are adapted from the registry
+  with `date × customer_state` grain and `customer_state` as their only
+  query-safe dimension;
+- `sessions` and `conversion_rate` are explicit `supported: false`
+  declarations with reasons tied to the missing Olist event/denominator data;
+- `marketplace`, `traffic_source`, and `asin` are not exposed as Olist
+  dimensions.
+
+`backend/scripts/verify_olist_tool_compatibility.py` passes this contract into
+the existing `AnalyticsTools`, and
+`backend/tests/test_olist_validation_capabilities.py` verifies the SQL-before-
+validation boundary with a connection sentinel. This is a local Hermetic
+contract check based on the existing Olist validation assets; it does not claim
+that the current environment has an Olist database connection, synchronization,
+continuous updates, or production ingestion.
+
 ## Run
 
 ```powershell
@@ -62,16 +84,21 @@ Re-loading an already populated validation schema is fail-closed. `--replace`
 must be supplied explicitly and truncates only `olist_validation.olist_orders`
 and `olist_validation.olist_order_items`.
 
-## Phase 9 exit criterion
+## Phase 9 validation boundary
 
-The isolated staging adapter now validates the raw joins, materializes the
-source in `olist_validation.*`, and has been queried through the existing
-`AnalyticsTools` using `configs/olist_validation_metrics.yaml`. The temporary
-registry exposes only `merchandise_gmv`, `orders`, `olist_aov` and the
-order-safe `customer_state` dimension. Its `sample_size_field: orders` is an
-explicit real-data semantic choice; the Amazon registry continues to default
-to `sessions`.
+The isolated staging adapter and compatibility command remain available for
+an explicitly authorized local database validation run. Existing JSON
+artifacts record an earlier validation of the raw joins and controlled tool
+queries, but they are not evidence that the current environment has an active
+Olist connection or continuous synchronization. The temporary registry
+exposes only `merchandise_gmv`, `orders`, `olist_aov` and the order-safe
+`customer_state` dimension. Its `sample_size_field: orders` is an explicit
+real-data semantic choice; the Amazon registry continues to default to
+`sessions`.
 
 No Agent Runtime, product API, Benchmark case, or Amazon Stage 1 metric config
 loads this temporary registry. Phase 9 therefore demonstrates controlled tool
-compatibility, not a production multi-domain implementation.
+compatibility and local capability degradation, not a production multi-domain
+implementation. R1-003 has passed main-thread review and Hermetic regression;
+this still does not replace a fresh, explicitly authorized Olist database
+validation run.
