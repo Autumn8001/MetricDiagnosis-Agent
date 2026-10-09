@@ -4,8 +4,8 @@
 > 快照日期：2026-10-09
 > Git 基线：`main`（R1-001/R1-002 已提交；R1-003 已由主线程验收，随本次提交落库）
 > 最近完成：R0 认知与权威基线；R1-001 数据源能力契约；R1-002 指标 × 维度 × grain 矩阵与纯内存适配；R1-003 Olist 能力降级表达
-> 当前阶段：R1 数据源契约与能力验证（进行中）
-> 当前任务：R1-003 已验收；R1-004 需等待 Shopify Development Store 或只读外部 PostgreSQL 接入资源
+> 当前阶段：R2 持久化应用基础（进行中）
+> 当前任务：R2-001 已由主线程验收；下一步实现 repository 与最小持久化接线；R1-004 仍需等待外部接入资源
 
 ## 当前结论
 
@@ -32,11 +32,24 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录，本轮无凭据和数据库，未复现逐 Run 结果。
 - 前端 production build：历史文档记录通过；本轮因文档任务不生成 `dist`，仅运行 lint 和无输出类型检查。
 
+## R2-001：已完成并由主线程验收
+
+- `backend/migrations/001_app_state.sql` 提供独立、幂等目标为 `app_state` 的
+  应用状态 Schema，覆盖数据源、同步 Run、调查 Run、Tool Call、Observation、
+  Evidence、Diagnosis 和多 Evidence 链接；未执行迁移。
+- `backend/app/persistence/models.py` 提供不可变 `RunState`/`RunStatus` 状态机和
+  `SourceReference`；非法创建、非法迁移和终态转换均 fail-closed。
+- `backend/app/persistence/migrations.py` 只读取 SQL 文本；`tests/test_persistence.py`
+  检查状态机、环境枚举、Schema/FK/约束形状和敏感列名排除。
+- 本切片尚未接入 repository、FastAPI、Agent Runtime、worker 或真实 PostgreSQL；
+  测试不代表迁移执行、重启恢复或真实持久化验收。
+
 ## 尚未实现
 
 - 能力契约与 API、Agent Runtime、数据库来源发现及外部连接器的产品级接入（当前仅完成 Registry/AnalyticsTools 的纯内存适配，以及 Olist 验证合同表达）。
 - Shopify 或用户外部 PostgreSQL 的产品级接入、连接器实现、数据同步和水位（当前绝对未接入真实外部库或 Shopify API）。
-- 数据库持久化中的 `source_id`、数据环境隔离和多 grain 查询支持。
+- 数据库迁移执行、repository/API 接线、Run 并发/重试/取消、重启恢复和持久化
+  后的多 grain 查询支持。
 - Investigation/Tool Call/Observation/Evidence/Diagnosis 持久化与历史恢复。
 - 数据接入、工作概览、独立指标页和实验室的真实 API。
 - 用户认证、生产安全、后台任务恢复和服务器部署资产。
@@ -61,12 +74,13 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | 检查 | 结果 | 边界 |
 |---|---|---|
 | 数据源能力契约专项 | 6/6 PASS | 纯领域单元测试，覆盖基础合同、Olist、独立维度、跨 grain 保护、fail-closed 和深层不可变 |
-| 后端全量 unittest | 471/471 PASS | Hermetic；466 个既有测试 + 5 个 R1-003 测试；未访问真实模型或数据库 |
+| R2-001 持久化专项 | 10/10 PASS | 纯 Python 状态机、环境值、只读 migration loader、Schema/FK/约束形状和敏感列名排除；未执行 SQL |
+| 后端全量 unittest | 481/481 PASS | Hermetic；包含 R2-001 专项；未访问真实模型或数据库 |
 | Olist 验证能力专项 | 5/5 PASS | Registry grain/dimensions、漏斗指标 unavailable、非法维度与错误来源身份；Fake connection 未执行 SQL |
 | FastAPI 专项 | 24/24 PASS | Live 分支使用 patch，只证明契约/wiring |
 | 前端 lint | PASS | 静态检查 |
 | TypeScript `--noEmit` | PASS | 不生成构建产物 |
-| Git 工作树（任务开始） | clean | 文档修改完成后的状态以本轮交接报告为准 |
+| Git 工作树（本切片验收） | R2-001 将随本次提交落库 | 未执行真实数据库迁移 |
 
 ## 当前关键技术决策
 

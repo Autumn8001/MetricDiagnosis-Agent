@@ -23,7 +23,7 @@
 |---|---|---|---|
 | R0 认知与权威基线 | 已完成 | 统一产品、架构、路线和动态状态文档 | 无 |
 | R1 数据源契约与能力验证 | 进行中 | 确定来源隔离、指标粒度和首个真实连接器 | R0、数据源验证资源 |
-| R2 持久化应用基础 | 待开展 | 保存数据源、同步、调查、证据和结果状态 | R1 契约 |
+| R2 持久化应用基础 | 进行中 | 保存数据源、同步、调查、证据和结果状态 | R1 契约 |
 | R3 首个持续真实数据闭环 | 待开展 | 从真实外部源持续更新可调查数据 | R1、R2 |
 | R4 产品 API 与冻结原型接线 | 待开展 | 五个产品页面由真实 API 和持久状态驱动 | 原型文件、R2、R3 |
 | R5 隔离实验室 | 待开展 | 在 Sandbox 中制造可控变化且不污染真实源 | R2、R3 |
@@ -99,7 +99,7 @@
 
 ## 5. R2 — 持久化应用基础
 
-**状态：待开展**
+**状态：进行中（R2-001 已由主线程验收）**
 
 ### 目标
 
@@ -118,6 +118,21 @@
 - 持久化最小生命周期：Data Source、Sync Run、Investigation Run、Tool Call、Observation、Evidence、Diagnosis。
 - 每次查询保存脱敏参数、来源/数据版本、query hash、耗时和结果引用；敏感凭据只保存安全引用，不进入业务表或日志。
 - 首版采用简单、可恢复的数据库状态机和单 worker 领取任务；并发扩展留到有实际负载证据之后。
+
+### R2-001：应用状态 Schema 与领域状态机
+
+**状态：已完成并由主线程验收**
+
+- 新增只读可定位的 `backend/migrations/001_app_state.sql`，以独立的
+  `app_state` Schema 保存 `data_sources`、`sync_runs`、`investigation_runs`、
+  `tool_calls`、`observations`、`evidence` 和 `diagnoses`，并用
+  `diagnosis_evidence` 表表达多 Evidence 引用。
+- 新增 `backend/app/persistence/` 纯 Python 状态合同：`RunStatus`、合法
+  生命周期迁移、终态封闭、`SourceReference` 和既有
+  `SourceEnvironment` 枚举复用。
+- 新增 Hermetic migration shape/unit tests。此切片只证明 SQL 文本结构和
+  领域状态机；未执行迁移，没有 repository、API、worker、重启恢复或真实
+  PostgreSQL 持久化验收。
 
 ### 验收标准
 

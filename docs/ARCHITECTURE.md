@@ -423,7 +423,7 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 
 ### Unknown：测试数量和部署级验收
 
-README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计数不同。R1-002 实现后本轮实际运行后端全量测试为 466/466 PASS，前端 lint 与 TypeScript `--noEmit` 的历史结果仍需单独复核；这些仍是离线/Hermetic 与静态验证，不是当前生产数据库、真实外部数据持续刷新、浏览器部署或重启恢复的验收证据。
+README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计数不同。当前工作区实际运行后端全量测试为 481/481 PASS（包含 R2-001 专项），前端 lint 与 TypeScript `--noEmit` 的历史结果仍需单独复核；这些仍是离线/Hermetic 与静态验证，不是当前生产数据库、真实外部数据持续刷新、浏览器部署或重启恢复的验收证据。
 
 ## 10. 规划架构的责任边界
 
@@ -443,7 +443,22 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 - Mapping/quality boundary 负责把已验证的数据转换成调查层可消费的 canonical 指标事实，并记录口径差异、缺失和不支持的维度。
 - Agent/Analytics boundary 只读取通过验证的数据能力，不直接修改真实来源，也不把前端数字当作业务事件。
 
-### Planned：应用状态和证据
+### Current：应用状态 Schema 与状态合同（R2-001，已由主线程验收）
+
+- `backend/migrations/001_app_state.sql` 只创建独立的 `app_state` Schema，
+  不修改 `warehouse` 或 `olist_validation`。当前包含数据源、同步 Run、调查
+  Run、Tool Call、Observation、Evidence、Diagnosis 及其多 Evidence 链接表。
+- Run→ToolCall→Observation→Evidence→Diagnosis 通过外键和复合唯一键保持同一
+  `investigation_run_id` 的可追溯关系；来源对象和各事实保存 `source_id`、
+  `environment`，并由复合外键防止来源环境交叉引用。
+- `backend/app/persistence/models.py` 提供不可变 `RunState`、`RunStatus`、
+  合法生命周期迁移和 `SourceReference`；`SourceEnvironment` 复用数据源能力
+  合同中的 `live`、`sandbox`、`benchmark`、`validation` 枚举。
+- `backend/app/persistence/migrations.py` 只读取版本化 SQL 文本，当前没有
+  数据库连接、迁移执行器、repository 或 API 接线。结构和状态机测试是
+  Hermetic 证据，不代表 PostgreSQL 迁移或重启恢复已经成功。
+
+### Planned：应用状态与运行时接线
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - Evidence boundary 负责把每条 Observation 绑定到工具调用、来源版本和可复算查询上下文。
