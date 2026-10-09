@@ -1,6 +1,7 @@
 # MetricSleuth Stage 1 MVP Demo & Acceptance Brief
 
-> Status: current implementation reference · Snapshot: 2026-09-22 · Code baseline: `main` at `3884600`
+> Status: historical Stage 1 demo reference · Snapshot: 2026-09-22 · Code baseline: `main` at `3884600`
+> Current product MVP authority: [`PRODUCT.md`](PRODUCT.md), [`ARCHITECTURE.md`](ARCHITECTURE.md), [`ROADMAP.md`](ROADMAP.md), [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
 ## 1. Purpose and scope
 

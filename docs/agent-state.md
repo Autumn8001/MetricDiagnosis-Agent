@@ -1,8 +1,10 @@
 # MetricSleuth Agent 实时运行状态 (Agent Operational State)
 
+> **已被替代（2026-10-09）：** 本文件保留 2026-09-22 的 Stage 1 运行快照，不再是当前动态状态源。最新状态见 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)，产品、架构和路线分别见 [`PRODUCT.md`](PRODUCT.md)、[`ARCHITECTURE.md`](ARCHITECTURE.md)、[`ROADMAP.md`](ROADMAP.md)。
+
 ## 0. 状态元数据
 
-- **Document Role**: Dynamic operational state
+- **Document Role**: Historical Stage 1 operational snapshot
 - **Snapshot Date**: 2026-09-22
 - **Current Phase**: Stage 1 MVP Stabilization / Acceptance
 - **Current Task**: Phase 11 manual Trigger discovery product alignment
@@ -61,14 +63,14 @@ Amazon 的 Sales、ASIN、Marketplace、Traffic Source 是 **Stage 1 的验证�
 
 ---
 
-## 1. 状态文档权威边界
+## 1. 历史状态文档权威边界
 
-- **`docs/agent-state.md`**：当前执行状态、任务进展、验证结果与阻塞项的**唯一动态权威来源**。
-- **`任务书.md`**：架构设计、产品目标与 Phase 演进边界的最高权威来源。
+- **`docs/agent-state.md`**：仅保存 2026-09-22 的 Stage 1 状态快照；当前动态状态见 `docs/PROJECT_STATUS.md`。
+- **`任务书.md`**：保存 Stage 1 架构与 Phase 演进历史；当前稳定产品目标见 `docs/PRODUCT.md`。
 - **实际代码与测试**：证明当前已经真实实现并验证的行为事实。
-- **`AGENTS.md`**：长期稳定的接管规则、仓库地图、不变量与维护协议。
+- **`AGENTS.md`**：当前长期稳定的接管规则、文档权威关系与仓库入口。
 - **`docs/project-learning-log.md`**：历史演进复盘、深度技术剖析与面试复习资料。
-- **冲突处理原则**：发生状态或设计冲突时，严禁静默修改，必须报告冲突并以代码、测试与 `任务书.md` 进行核对。
+- **冲突处理原则**：按 `AGENTS.md` 的当前权威顺序处理；本文件不能覆盖较新的产品、架构、路线或状态文档。
 
 ---
 

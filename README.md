@@ -2,9 +2,11 @@
 
 MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 Stage 1 Domain Profile 仅实现 Amazon / 电商运营；`Sales`、`Orders`、`Sessions`、`ASIN`、`Marketplace`、`Traffic Source` 是当前验证场景，不是永久产品定义。
 
+> **当前权威入口（2026-10-09）：** 产品目标见 [docs/PRODUCT.md](docs/PRODUCT.md)，实际/规划架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，长期计划与动态状态见 [docs/ROADMAP.md](docs/ROADMAP.md) 和 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)。旧任务书和 Stage 1 状态记录保留为历史证据。
+
 ## 当前状态
 
-* **当前阶段**：Stage 1 Portfolio MVP 已完成实现，处于 Stabilization / Acceptance 收尾。FastAPI 与 React Diagnosis Workspace 已落地；Hermetic 测试和构建已通过。Gemini Chat Completions Provider 已通过真实 PostgreSQL 三场景验收：Canonical=Conversion Rate、Traffic=Sessions、No-anomaly 正确停止，且均形成可追溯 Tool/Observation/Evidence/Diagnosis 链路。校准后的 10 Case 单次 Live Evaluation 达到 100% Completion / Driver / Scope / Exact Match。
+* **当前阶段**：Stage 1 Synthetic Benchmark 调查内核和 Diagnosis Workspace 已完成；面向真实外部数据、持久化、五页面体验和服务器部署的产品 MVP 尚未完成，下一阶段为 Data Source Contract 与真实数据能力验证。历史 Gemini/真实 PostgreSQL 验收属于受控 Synthetic Profile 的本地运行记录，不等同于当前可复验的真实业务产品闭环。
 * **当前范围**：
   - 基础 Python 3.12+ 脚手架与元数据（当前验证解释器：Python 3.13.5）；
   - Phase 0 人工调查契约规格（[docs/phase-0-manual-investigation.md](docs/phase-0-manual-investigation.md)）；
@@ -29,13 +31,13 @@ MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 S
   - Phase 9 隔离 Olist staging loader / verifier（`backend/scripts/load_olist_validation.py`, `backend/scripts/verify_olist_validation.py`，仅操作 `olist_validation` schema）；
   - Phase 9 已通过既有 `AnalyticsTools` 的 Olist 临时语义映射验证（`configs/olist_validation_metrics.yaml`, `backend/scripts/verify_olist_tool_compatibility.py`；不被产品 Runtime/API 加载）；
   - Phase 11 最小 Manual Daily Scan（`backend/scripts/run_daily_scan.py`：只生成候选 Trigger，不自动启动 Agent 或选择调查路径）；
-  - Agent 运行状态与接管指南（[docs/agent-state.md](docs/agent-state.md), [AGENTS.md](AGENTS.md)）。
-* **当前权威验证（2026-09-22）**：后端 453 项单元测试通过；前端 `npm run lint` 与 `npm run build` 通过；10 Case `--hermetic` 评测通过。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
+  - 当前项目状态与接管指南（[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), [AGENTS.md](AGENTS.md)）；旧阶段快照保留在 [docs/agent-state.md](docs/agent-state.md)。
+* **当前验证快照（2026-10-09）**：后端 455 项单元测试通过；前端 `npm run lint` 与 TypeScript `--noEmit` 通过；历史 production build 和 Live 运行未在本轮复验。Hermetic 结果是 Ground-Truth-backed 离线模拟，不证明真实模型 Agent 能力。
 * **演示口径**：Fixture Preview 是与所选场景和 Ground Truth 标签无关的通用 UI 样例，只展示数据契约，绝不是 Agent Run 或场景诊断；Live 模式才用于真实 Provider 调查。
 * **当前 Live 稳定性事实**：此前未校准的替代 Case 在全局 Sales 上仅下降 -1.75% 至 -4.39%，与 `<5%` 正常阈值冲突；现已通过调整 Synthetic 数据权重和注入强度校准为约 -10% 的全局影响，未降低生产阈值、未更换模型、未把 Benchmark 路径硬编码到 Runtime。校准后的 10 Case 单次 Live 结果为 100%。随后 10 Case × 3 次、显式 `gemini-3.8-flash-high` 的真实评测完整结束：28/30 成功，Completion / Macro Driver / Scope / Exact 均为 93.33%；两次 `DiagnosisValidationError` 被如实保留。Runner 每 Run 原子写入脱敏 checkpoint，保留已完成审计结果而不保存 Tool 值、Provider 原文或凭据。API 服务层直接消费 SDK Runner 产出的可信 `InvestigationRunSummary.tool_trace`。
 * **明确延后**：复杂多租户/用户系统、Go Gateway、大规模云端多 Agent 编排。
 * **开发约束与文档**：
-  - 后续所有开发工作必须严格遵守 [任务书.md](任务书.md)；
+  - 后续开发按 [AGENTS.md](AGENTS.md) 的权威顺序读取 [docs/PRODUCT.md](docs/PRODUCT.md)、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/ROADMAP.md](docs/ROADMAP.md) 和 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)；[任务书.md](任务书.md) 仅作为 Stage 1 历史基线；
   - 面向展示的当前能力与边界参见 [docs/mvp-demo-brief.md](docs/mvp-demo-brief.md)，真实模型评测的脱敏验收摘要参见 [docs/evaluation-artifacts/live-evaluation-2026-09-22.md](docs/evaluation-artifacts/live-evaluation-2026-09-22.md)；
   - `warehouse/ground_truth.json` 与 `warehouse/benchmark_cases.json` 仅供 Evaluation 使用，**严禁**被 API、Agent Runtime、Prompt 或查询工具读取；产品场景选择仅使用不含答案的 `warehouse/scenario_catalog.json`；
   - 本地第三方原始数据位于 git-ignored 的 `data/raw/`；只提交可复现的 Profiling 脚本、映射契约与脱敏聚合结果，不提交下载文件；
