@@ -177,7 +177,21 @@
 - 失败保存已经发生的 Tool Call 与 Observation，不伪造成功结果。
 - Synthetic/Sandbox/真实来源不能交叉引用。
 
-### 下一切片：R2-004 — 任务执行与事务策略
+### R2-004a：数据库层 provenance 约束
+
+**状态：已完成并由主线程验收；迁移未执行**
+
+- `backend/migrations/002_enforce_investigation_provenance.sql` 为
+  `investigation_runs` 与 `tool_calls` 增加可引用的复合唯一键，并让 Tool Call、
+  Observation、Evidence、Diagnosis 的 `(investigation_run_id, source_id, environment)`
+  分别外键指向同一个 Investigation Run。
+- 每个 `ADD CONSTRAINT` 都通过 `pg_constraint` catalog 检查保护；迁移只触及
+  `app_state`，不删除数据、不改 warehouse/Olist、也不包含凭据列。
+- 测试验证 SQL 文本、约束命名、目标三元键和可发现性。未实际执行 PostgreSQL
+  migration；SQL 解析器对 `DO $$` 只作为通用 Command 接受，不能替代真实数据库
+  语法/约束验收。
+
+### 下一切片：R2-004b — 任务执行与事务策略
 
 **状态：待开展**
 

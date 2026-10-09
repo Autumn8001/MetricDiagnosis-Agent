@@ -468,8 +468,13 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   映射到 Repository，避免每条事实从独立调用参数取得来源身份。写入顺序和所有
   交叉引用先由 Hermetic Spy 测试验证；该 Writer 尚未连接 FastAPI/worker，不能
   当作运行中任务进度、实际事务提交或重启恢复的证据。
+- `backend/migrations/002_enforce_investigation_provenance.sql` 是尚未执行的后续
+  migration：它把 Tool Call、Observation、Evidence、Diagnosis 的三元来源身份
+  外键绑定到 Investigation Run，而不是只验证其单独指向一个存在的 Data Source。
+  `pg_constraint` guards 让同一 schema 重复运行时避免重复加约束。文本测试和有限
+  SQL parser 读取不能证明 PostgreSQL 已执行此 migration 或其中约束已经生效。
 
-### Planned：应用状态与运行时接线（R2-004）
+### Planned：应用状态与运行时接线（R2-004b）
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、

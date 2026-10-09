@@ -1,7 +1,8 @@
-"""Hermetic tests for R2-001 persistence contracts and migration shape."""
+"""Hermetic tests for R2 persistence contracts and migration shape."""
 
 from __future__ import annotations
 
+import re
 import unittest
 
 from app.data_sources.capabilities import SourceEnvironment
@@ -140,6 +141,92 @@ class MigrationContractTests(unittest.TestCase):
         for forbidden in ("password", "token", "secret", "connection_url", "database_url"):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, sql)
+
+    def test_provenance_migration_is_discoverable_and_scoped(self) -> None:
+        migration_name = "002_enforce_investigation_provenance.sql"
+        self.assertIn(migration_name, available_migrations())
+        sql = load_migration(migration_name).lower()
+
+        self.assertIn("begin;", sql)
+        self.assertIn("commit;", sql)
+        self.assertNotIn("warehouse.", sql)
+        self.assertNotIn("olist_validation", sql)
+        for forbidden in (
+            "password",
+            "token",
+            "secret",
+            "connection_url",
+            "database_url",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, sql)
+
+        # The migration is deliberately constrained to app_state tables and
+        # catalog inspection; it must not create or mutate unrelated objects.
+        self.assertNotIn("create table", sql)
+        self.assertNotIn("drop ", sql)
+        self.assertNotIn("truncate ", sql)
+        # ``ON DELETE RESTRICT`` is part of the intended FK definitions; only
+        # reject executable DELETE statements here.
+        self.assertNotIn("delete from", sql)
+        self.assertIn("pg_constraint", sql)
+        self.assertEqual(
+            set(re.findall(r"\balter\s+table\s+([a-z_][a-z0-9_.]*)", sql)),
+            {
+                "app_state.investigation_runs",
+                "app_state.tool_calls",
+                "app_state.observations",
+                "app_state.evidence",
+                "app_state.diagnoses",
+            },
+        )
+
+    def test_provenance_migration_adds_supporting_keys_and_triple_foreign_keys(self) -> None:
+        sql = " ".join(load_migration("002_enforce_investigation_provenance.sql").lower().split())
+
+        self.assertIn(
+            "add constraint investigation_runs_provenance_unique unique "
+            "(investigation_run_id, source_id, environment)",
+            sql,
+        )
+        self.assertIn(
+            "add constraint tool_calls_provenance_unique unique "
+            "(tool_call_id, investigation_run_id, source_id, environment)",
+            sql,
+        )
+
+        expected_triple_fks = {
+            (
+                "tool_calls_investigation_provenance_fk",
+                "app_state.tool_calls",
+            ),
+            (
+                "observations_investigation_provenance_fk",
+                "app_state.observations",
+            ),
+            (
+                "evidence_investigation_provenance_fk",
+                "app_state.evidence",
+            ),
+            (
+                "diagnoses_investigation_provenance_fk",
+                "app_state.diagnoses",
+            ),
+        }
+        triple = (
+            "foreign key (investigation_run_id, source_id, environment) "
+            "references app_state.investigation_runs "
+            "(investigation_run_id, source_id, environment)"
+        )
+        self.assertEqual(sql.count(triple), len(expected_triple_fks))
+        for constraint_name, table_name in expected_triple_fks:
+            with self.subTest(constraint=constraint_name):
+                self.assertIn(f"{table_name} add constraint {constraint_name}", sql)
+
+        # Every ADD is guarded by pg_constraint lookup, making the migration
+        # safely repeatable for the same schema.
+        self.assertGreaterEqual(sql.count("if not exists"), 6)
+        self.assertNotIn("drop constraint", sql)
 
     def test_loader_rejects_path_traversal_and_non_sql_names(self) -> None:
         with self.assertRaises(Exception):
