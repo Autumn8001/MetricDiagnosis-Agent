@@ -3,16 +3,17 @@
 > 状态：动态接管摘要
 > 快照日期：2026-10-09
 > Git 基线：`main` / `a0a912a29addaddf02c14486f85c0a7392f32aa4`
-> 最近完成：R0 认知与权威基线
-> 下一阶段：R1 数据源契约与能力验证
-> 当前任务：R0 已获产品方认可，等待下一轮开始 R1 实施
+> 最近完成：R0 认知与权威基线；R1-001 数据源能力契约（纯领域模型完成深层不可变与 fail-closed 修复并通过回归）
+> 当前阶段：R1 数据源契约与能力验证（进行中）
+> 当前任务：R1-001 已由主线程验收并提交；准备推进 R1-002 指标能力矩阵与现有语义层适配
 
 ## 当前结论
 
-MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不是完整的真实数据产品。下一阶段不重写 Agent，而是先确定数据源契约和首个持续真实数据源，再建设持久化、产品接线和部署闭环。
+MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不是完整的真实数据产品。当前已完成最小数据源能力契约纯领域模型（R1-001），并在主线程复验反馈下完成了对象级/嵌套容器级深层不可变与 fail-closed 强化。本项目明确**尚未接入**真实外部 PostgreSQL 或 Shopify（二者当前仅作为平台枚举定义，未实现连接器或网络调用）。下一阶段需推进核心指标能力矩阵与契约适配，在确认首个持续真实数据源后，再建设持久化、产品接线和部署闭环。
 
 ## 已完成且本轮有源码/测试证据
 
+- 数据源能力契约（R1-001）：最小、领域无关、真正深层不可变契约模型，支持 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（frozen dataclass，嵌套内部容器使用 MappingProxyType，防范 Sequence 字符串混淆），具备指标独立 grain/维度、跨 grain 组合保护与 fail-closed 校验（`backend/app/data_sources/capabilities.py`；单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS）。
 - PostgreSQL Synthetic Warehouse、10 个 Benchmark 场景和 Ground Truth 隔离。
 - YAML Metric Semantic Layer 与指标依赖/driver 元数据。
 - 受控 Analytics Tools、Observation、Evidence、Structured Diagnosis。
@@ -31,8 +32,9 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 ## 尚未实现
 
-- Shopify 或用户外部 PostgreSQL 的产品级接入、同步和水位。
-- `source_id`、真实/Sandbox/Synthetic 环境隔离和多 grain 指标能力契约。
+- 能力契约与 `MetricRegistry`、`AnalyticsTools`、API 及 Agent Runtime 的运行时接入集成（当前契约仅为纯领域模型）。
+- Shopify 或用户外部 PostgreSQL 的产品级接入、连接器实现、数据同步和水位（当前绝对未接入真实外部库或 Shopify API）。
+- 数据库持久化中的 `source_id`、数据环境隔离和多 grain 查询支持。
 - Investigation/Tool Call/Observation/Evidence/Diagnosis 持久化与历史恢复。
 - 数据接入、工作概览、独立指标页和实验室的真实 API。
 - 用户认证、生产安全、后台任务恢复和服务器部署资产。
@@ -47,18 +49,18 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 ## 下一步具体工作
 
-进入 Roadmap R1：
+继续推进 Roadmap R1：
 
-1. 定义最小 Data Source Capability Contract 和来源/环境隔离规则。
-2. 建立电商核心指标的 metric × dimension × grain 矩阵。
-3. 用 Olist 现有资产验证缺失能力可显式降级。
-4. 在用户提供 Shopify Development Store 后执行只读 capability spike，并决定首个持续连接器。
+1. R1-002：建立电商核心指标的 metric × dimension × grain 矩阵并与现有语义层/校验适配。
+2. R1-003：用 Olist 现有资产验证缺失能力可显式降级。
+3. R1-004：在用户提供 Shopify Development Store 后执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
 
 | 检查 | 结果 | 边界 |
 |---|---|---|
-| 后端全量 unittest | 455/455 PASS | Hermetic；未访问真实模型或数据库 |
+| 数据源能力契约专项 | 6/6 PASS | 纯领域单元测试，覆盖基础合同、Olist、独立维度、跨 grain 保护、fail-closed 和深层不可变 |
+| 后端全量 unittest | 461/461 PASS | Hermetic；455 既有基线 + 6 新增专项测试；未访问真实模型或数据库 |
 | FastAPI 专项 | 24/24 PASS | Live 分支使用 patch，只证明契约/wiring |
 | 前端 lint | PASS | 静态检查 |
 | TypeScript `--noEmit` | PASS | 不生成构建产物 |

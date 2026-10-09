@@ -22,7 +22,7 @@
 | 阶段 | 状态 | 目标 | 依赖 |
 |---|---|---|---|
 | R0 认知与权威基线 | 已完成 | 统一产品、架构、路线和动态状态文档 | 无 |
-| R1 数据源契约与能力验证 | 待开展／下一阶段 | 确定来源隔离、指标粒度和首个真实连接器 | R0、数据源验证资源 |
+| R1 数据源契约与能力验证 | 进行中 | 确定来源隔离、指标粒度和首个真实连接器 | R0、数据源验证资源 |
 | R2 持久化应用基础 | 待开展 | 保存数据源、同步、调查、证据和结果状态 | R1 契约 |
 | R3 首个持续真实数据闭环 | 待开展 | 从真实外部源持续更新可调查数据 | R1、R2 |
 | R4 产品 API 与冻结原型接线 | 待开展 | 五个产品页面由真实 API 和持久状态驱动 | 原型文件、R2、R3 |
@@ -59,7 +59,14 @@
 
 ## 4. R1 — 数据源契约与能力验证
 
-**状态：待开展；下一阶段**
+**状态：进行中**
+
+### 子任务进展
+
+- **R1-001｜Data Source Capability Contract**：已完成并由主线程验收。实现了最小纯领域契约 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（对象级与嵌套容器级不可变，支持指标独立 grain/维度快照、跨 grain 组合保护和严格 fail-closed 校验；源码：`backend/app/data_sources/capabilities.py`，单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS；全量回归 461/461 PASS）。明确尚未接入真实外部 PostgreSQL 或 Shopify，尚未接入现有 Runtime/API/DB。
+- **R1-002｜电商核心指标 metric × dimension × grain 矩阵定义与适配**：待开展。
+- **R1-003｜Olist 隔离资产能力契约验证与降级表达**：待开展。
+- **R1-004｜Shopify Development Store 只读 capability spike 与连接器选择门**：待开展。
 
 ### 目标
 

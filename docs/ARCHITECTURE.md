@@ -58,6 +58,7 @@ FastAPI JSON → React Diagnosis Workspace
 | 区域 | 当前职责 | 主要证据 |
 |---|---|---|
 | 指标语义 | 读取并校验 YAML，建立只读内存 `MetricRegistry` | `configs/metrics.yaml`；`backend/app/metrics/registry.py:60-153` |
+| 数据源能力契约 | 纯领域不可变来源身份、环境与指标 grain/维度能力模型（尚未接入 Registry/Tools/API） | `backend/app/data_sources/capabilities.py`；`backend/tests/test_data_source_capabilities.py` |
 | Warehouse | Synthetic 数据 Schema、Seed 和异常注入 | `warehouse/schema.sql`；`warehouse/seed.py`；`warehouse/anomaly_injector.py` |
 | 分析工具 | 根据 Registry 校验参数并执行 PostgreSQL 聚合 | `backend/app/analytics/tools.py:20-178` |
 | SQL 安全 | 独立的 `sqlglot` AST 校验器和 LIMIT/allowlist 规则 | `backend/app/sql_safety/guard.py:49-251` |
@@ -140,14 +141,26 @@ Olist 证据只说明部分真实公开订单数据可以映射到受控指标�
 - Ratio 指标使用聚合分子 / 聚合分母；分母为零时返回不可用语义；
 - filters 和 group_by 必须来自该指标声明的 dimensions。
 
+### Current：数据源能力契约（纯领域模型）
+
+在 `backend/app/data_sources/capabilities.py`（单测：`backend/tests/test_data_source_capabilities.py`）中已实现最小、领域无关、不可变的能力合同：
+
+- `SourceProvider`：来源平台枚举（`postgresql`、`shopify`、`olist`、`synthetic`）；
+- `SourceEnvironment`：环境枚举（`live`、`sandbox`、`benchmark`、`validation`）；
+- `DataSourceDescriptor`：不可变来源身份描述符（`source_id`、`display_name`、`provider`、`environment`）；
+- `MetricCapability`：单指标能力声明（`metric_id`、`supported`、`grain`、`dimensions`、`unavailable_reason`），包含指标独立的 grain 与维度快照，支持 fail-closed 校验；
+- `DataSourceCapabilities`：数据源实例能力集合，支持查询能力校验 `validate_query()`、跨 grain 组合保护 `validate_metric_combination()` 与 `can_combine_metrics()`。
+
+**当前边界明确：** 该契约目前为纯领域模型，**尚未接入** `MetricRegistry`、`AnalyticsTools`、API 或数据库。
+
 ### Planned：数据模型责任边界
 
 未来数据接入需要由数据源层负责**源身份、权限、刷新状态和能力声明**；由数据处理层负责**原始/中间数据与 canonical 指标数据的隔离、映射和质量校验**；由调查层只消费通过契约的数据能力。具体表名、列名和迁移方式待真实数据验证后确定。
 
 ### Unknown：当前模型不能表达的内容
 
-- 不同指标拥有不同 grain 或维度能力时，当前单一 Registry/source table 不能表达完整能力矩阵。
-- 当前没有 `source_id`、来源类型、环境、快照、水位或同步版本字段。
+- 当前单一 Registry/source table 尚未与新 capability contract 集成，因此运行时查询仍受限于旧版单表假设。
+- 当前数据库和 API 仍未持久化 `source_id`、快照、水位或同步版本字段。
 - 当前没有应用层 Analysis Session、Run、Observation、Evidence、Diagnosis 的数据库 Schema 或迁移。
 
 ## 4. 当前数据流
@@ -411,6 +424,8 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 ### Planned：数据源身份与能力
 
 - Source boundary 负责标识数据来源类型、连接/授权状态、可用时间范围、粒度、维度和指标能力。
+- 纯领域能力契约已在 `backend/app/data_sources/capabilities.py`（单测：`backend/tests/test_data_source_capabilities.py`）中实现（Current），支持来源身份、环境隔离、独立指标 grain/维度及跨 grain 组合保护。
+- 运行时能力接入（与 `MetricRegistry`、`AnalyticsTools`、API 和实际数据库/连接器集成）仍为待开展目标（Planned）。
 - Synthetic、Sandbox 和真实外部来源必须可区分，调查 Run 必须引用明确的来源身份。
 - 外部 PostgreSQL、Shopify 或其他来源只有在真实接口、权限和粒度验证后才可声明为支持；未验证的指标维度必须保持不可用。
 
