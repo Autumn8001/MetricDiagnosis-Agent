@@ -72,6 +72,9 @@ class MetricDefinition:
     dependencies: tuple[str, ...]
     related_metrics: tuple[str, ...]
     driver_metrics: tuple[str, ...] = ()
+    # Appended after the legacy defaulted field to preserve positional
+    # construction compatibility for existing callers and test fixtures.
+    grain: tuple[str, ...] = ()
 
 
 class MetricRegistry:
@@ -282,6 +285,26 @@ class MetricRegistry:
                 allow_self=False,
             )
 
+            # Missing grain receives an explicit legacy fallback. A present
+            # value is always validated strictly; invalid explicit values do
+            # not fall back silently.
+            if "grain" in m_conf:
+                grain = _validate_string_list(
+                    m_conf.get("grain"),
+                    "grain",
+                    m_id,
+                    allow_empty=False,
+                    valid_universe=allowed_dims_seen | {time_dimension.strip()},
+                    allow_self=True,
+                )
+                if time_dimension.strip() not in grain:
+                    raise MetricConfigError(
+                        f"Metric '{m_id}' grain must include source.time_dimension "
+                        f"'{time_dimension.strip()}'"
+                    )
+            else:
+                grain = (time_dimension.strip(),) + tuple(dims)
+
             definitions[m_id] = MetricDefinition(
                 metric_id=m_id,
                 display_name=display_name.strip(),
@@ -294,6 +317,7 @@ class MetricRegistry:
                 dependencies=deps,
                 related_metrics=related,
                 driver_metrics=driver_metrics,
+                grain=grain,
             )
 
         return cls(

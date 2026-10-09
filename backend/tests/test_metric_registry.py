@@ -90,6 +90,11 @@ class TestMetricRegistry(unittest.TestCase):
         self.assertEqual(registry.sample_size_field, "sessions")
         self.assertEqual(registry.dimensions, ("marketplace", "asin", "traffic_source"))
 
+        expected_grain = ("date", "asin", "marketplace", "traffic_source")
+        for metric in registry.list_metrics():
+            self.assertIn("grain", self.valid_raw["metrics"][metric.metric_id])
+            self.assertEqual(metric.grain, expected_grain)
+
         metrics = registry.list_metrics()
         metric_ids = [m.metric_id for m in metrics]
         self.assertEqual(metric_ids, ["sales", "orders", "sessions", "conversion_rate", "aov"])
@@ -136,6 +141,7 @@ class TestMetricRegistry(unittest.TestCase):
         self.assertEqual(sales.formula, "SUM(sales)")
         self.assertEqual(sales.source_fields, ("sales",))
         self.assertEqual(sales.dimensions, ("marketplace", "asin", "traffic_source"))
+        self.assertEqual(sales.grain, ("date", "asin", "marketplace", "traffic_source"))
         self.assertEqual(sales.dependencies, ())
         self.assertEqual(sales.driver_metrics, ("orders", "aov"))
         self.assertEqual(
@@ -163,6 +169,7 @@ class TestMetricRegistry(unittest.TestCase):
         beta = registry.get("metric_beta")
         alpha = registry.get("metric_alpha")
         self.assertEqual(beta.unit, "events_per_account")
+        self.assertEqual(beta.grain, ("event_date", "segment"))
         self.assertEqual(beta.dependencies, ("metric_alpha",))
         self.assertEqual(beta.driver_metrics, ("metric_alpha",))
         self.assertEqual(
@@ -204,6 +211,34 @@ class TestMetricRegistry(unittest.TestCase):
             bad["metrics"]["metric_beta"][field] = value
             with self.subTest(field=field, value=value):
                 self._assert_config_error(bad)
+
+    def test_explicit_grain_is_strict_and_missing_grain_uses_legacy_fallback(self):
+        base = self._domain_neutral_config()
+        fallback_registry = self._load_config(base)
+        self.assertEqual(
+            fallback_registry.get("metric_alpha").grain,
+            ("event_date", "segment"),
+        )
+
+        for bad_grain in (
+            [],
+            ["segment"],
+            ["event_date", "event_date"],
+            ["event_date", "unknown_dimension"],
+            ["event_date", ""],
+            ["event_date", 1],
+        ):
+            bad = deepcopy(base)
+            bad["metrics"]["metric_alpha"]["grain"] = bad_grain
+            with self.subTest(grain=bad_grain):
+                self._assert_config_error(bad)
+
+        valid = deepcopy(base)
+        valid["metrics"]["metric_alpha"]["grain"] = ["event_date", "segment"]
+        self.assertEqual(
+            self._load_config(valid).get("metric_alpha").grain,
+            ("event_date", "segment"),
+        )
 
     def test_conversion_rate_definition(self):
         """Verify Conversion Rate formula, ratio unit, and dependency resolution."""
@@ -270,6 +305,7 @@ class TestMetricRegistry(unittest.TestCase):
         self.assertIsInstance(sales.dependencies, tuple)
         self.assertIsInstance(sales.driver_metrics, tuple)
         self.assertIsInstance(sales.related_metrics, tuple)
+        self.assertIsInstance(sales.grain, tuple)
 
     def test_validation_rejects_missing_fields(self):
         """Verify that YAML missing required fields is rejected with MetricConfigError."""

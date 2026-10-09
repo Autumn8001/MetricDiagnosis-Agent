@@ -2,7 +2,7 @@
 
 > **Status：Current + Planned boundary**
 > 审计日期：2026-10-09
-> 审计代码版本：`main` / `a0a912a`（`docs: add MVP progress quickstart`）
+> 审计代码版本：`main`（R1-001 已提交；R1-002 已由主线程验收，随本次提交落库）
 > 证据范围：仓库源码、测试、Schema、配置和版本化脱敏 artifact。本文没有连接生产数据库，也没有检查已部署服务。
 
 本文是给后续开发者和接管 Agent 使用的**现状架构参考**。`Current` 只描述源码能够支持的行为；`Planned` 只描述已经确认的责任边界，不代表已经存在的表、接口或部署；`Unknown` 表示现有证据不足。历史任务书中的目标不能覆盖当前实现事实。
@@ -58,9 +58,9 @@ FastAPI JSON → React Diagnosis Workspace
 | 区域 | 当前职责 | 主要证据 |
 |---|---|---|
 | 指标语义 | 读取并校验 YAML，建立只读内存 `MetricRegistry` | `configs/metrics.yaml`；`backend/app/metrics/registry.py:60-153` |
-| 数据源能力契约 | 纯领域不可变来源身份、环境与指标 grain/维度能力模型（尚未接入 Registry/Tools/API） | `backend/app/data_sources/capabilities.py`；`backend/tests/test_data_source_capabilities.py` |
+| 数据源能力契约 | 纯领域不可变来源身份、环境与指标 grain/维度能力模型；可由 Registry 适配，并由 AnalyticsTools 可选校验（尚未接入 API/DB） | `backend/app/data_sources/capabilities.py`；`backend/app/data_sources/semantic_adapter.py`；`backend/tests/test_semantic_adapter.py` |
 | Warehouse | Synthetic 数据 Schema、Seed 和异常注入 | `warehouse/schema.sql`；`warehouse/seed.py`；`warehouse/anomaly_injector.py` |
-| 分析工具 | 根据 Registry 校验参数并执行 PostgreSQL 聚合 | `backend/app/analytics/tools.py:20-178` |
+| 分析工具 | 根据 Registry 校验参数并执行 PostgreSQL 聚合；传入能力契约时在 SQL 前做来源能力校验 | `backend/app/analytics/tools.py:20-178` |
 | SQL 安全 | 独立的 `sqlglot` AST 校验器和 LIMIT/allowlist 规则 | `backend/app/sql_safety/guard.py:49-251` |
 | 可信中间事实 | `MetricQueryResult` 转不可变 `Observation` | `backend/app/analytics/models.py:18-71`；`backend/app/observations/mapper.py:45-187` |
 | 证据和诊断 | Observation 显式提升为 Evidence，再组合为 Diagnosis | `backend/app/evidence/promoter.py:13-57`；`backend/app/diagnosis/composition.py:80-106` |
@@ -119,9 +119,9 @@ Olist 证据只说明部分真实公开订单数据可以映射到受控指标�
 - time dimension：`date`；
 - dimensions：`marketplace`、`asin`、`traffic_source`；
 - metrics：`sales`、`orders`、`sessions`、`conversion_rate`、`aov`；
-- 每个 MetricDefinition 同时包含 `metric_type`、`unit`、`formula`、`source_fields`、`dimensions`、`dependencies`、`driver_metrics`、`related_metrics`。
+- 每个 MetricDefinition 同时包含 `metric_type`、`unit`、`formula`、`source_fields`、`dimensions`、`grain`、`dependencies`、`driver_metrics`、`related_metrics`。
 
-`MetricRegistry.from_yaml()` 会严格校验引用和配置结构（`backend/app/metrics/registry.py:140-153`）。当前 `formula` 是语义元数据；`AnalyticsTools._execute_metric_query()` 根据 `metric_type` 和 `source_fields` 生成计算 SQL，而不是执行任意 YAML 字符串。
+`MetricRegistry.from_yaml()` 会严格校验引用、配置结构和显式 grain（`backend/app/metrics/registry.py`）。显式 grain 必须非空、包含 `source.time_dimension`，且只能使用 source 声明的时间维度或业务维度；缺少 grain 的旧配置使用明确的兼容回退 `time_dimension + metric dimensions`。当前 `formula` 是语义元数据；`AnalyticsTools._execute_metric_query()` 根据 `metric_type` 和 `source_fields` 生成计算 SQL，而不是执行任意 YAML 字符串。
 
 需要区分三类关系：
 
@@ -141,7 +141,7 @@ Olist 证据只说明部分真实公开订单数据可以映射到受控指标�
 - Ratio 指标使用聚合分子 / 聚合分母；分母为零时返回不可用语义；
 - filters 和 group_by 必须来自该指标声明的 dimensions。
 
-### Current：数据源能力契约（纯领域模型）
+### Current：数据源能力契约与语义适配
 
 在 `backend/app/data_sources/capabilities.py`（单测：`backend/tests/test_data_source_capabilities.py`）中已实现最小、领域无关、不可变的能力合同：
 
@@ -150,8 +150,10 @@ Olist 证据只说明部分真实公开订单数据可以映射到受控指标�
 - `DataSourceDescriptor`：不可变来源身份描述符（`source_id`、`display_name`、`provider`、`environment`）；
 - `MetricCapability`：单指标能力声明（`metric_id`、`supported`、`grain`、`dimensions`、`unavailable_reason`），包含指标独立的 grain 与维度快照，支持 fail-closed 校验；
 - `DataSourceCapabilities`：数据源实例能力集合，支持查询能力校验 `validate_query()`、跨 grain 组合保护 `validate_metric_combination()` 与 `can_combine_metrics()`。
+- `build_capabilities_from_registry()`：只把当前 `MetricRegistry` 中已声明的指标映射为支持能力，保留各指标 dimensions/grain，不创建 Registry 外的指标；源码：`backend/app/data_sources/semantic_adapter.py`。
+- `AnalyticsTools(..., capabilities=...)`：能力契约为可选参数。传入时，`query_metric()` 在实际 SQL 前执行 `validate_query()`，并将能力合同错误转换为 `MetricQueryError`；不传时保持历史查询路径。
 
-**当前边界明确：** 该契约目前为纯领域模型，**尚未接入** `MetricRegistry`、`AnalyticsTools`、API 或数据库。
+**当前边界明确：** 能力契约与语义 Registry/AnalyticsTools 已完成纯内存适配；仍未接入 API、数据库来源发现、外部连接器、同步水位或真实外部数据验证。适配器也不证明传入 descriptor 对应的物理来源已经连接或同步。
 
 ### Planned：数据模型责任边界
 
@@ -159,7 +161,7 @@ Olist 证据只说明部分真实公开订单数据可以映射到受控指标�
 
 ### Unknown：当前模型不能表达的内容
 
-- 当前单一 Registry/source table 尚未与新 capability contract 集成，因此运行时查询仍受限于旧版单表假设。
+- 当前 Registry/source table 已可通过纯内存适配器生成 capability contract，但默认 API 尚未注入 source descriptor/capabilities，运行时查询仍受限于旧版单表假设。
 - 当前数据库和 API 仍未持久化 `source_id`、快照、水位或同步版本字段。
 - 当前没有应用层 Analysis Session、Run、Observation、Evidence、Diagnosis 的数据库 Schema 或迁移。
 
@@ -177,9 +179,12 @@ PostgreSQL warehouse.fact_daily_performance
               ▼
 MetricRegistry.from_yaml(configs/metrics.yaml)
               │
+              ├─ build_capabilities_from_registry (可选纯内存适配)
+              │
               ▼
-AnalyticsTools(registry, psycopg connection)
+AnalyticsTools(registry, psycopg connection[, capabilities])
               │  query_metric / query_related_metrics
+              │  capabilities.validate_query（传入时，SQL 前）
               ▼
 MetricQueryResult / RelatedMetricQueryResult
               │
@@ -226,7 +231,7 @@ Live 调查目前还有一个重要的历史耦合：`_run_live_investigation()`
 
 ### Current：Analytics Tools 与 SQL 安全
 
-`AnalyticsTools` 只接受一个已建立的连接对象和一个 `MetricRegistry`（`backend/app/analytics/tools.py:20-27`）。它使用 `psycopg.sql.Identifier` 与参数占位符生成 SQL（`backend/app/analytics/tools.py:169-337`），因此 SQL 不是模型直接提供的自由文本。模型只能通过 SDK 暴露的三个工具操作：
+`AnalyticsTools` 接受一个已建立的连接对象、一个 `MetricRegistry`，以及可选的 `DataSourceCapabilities`（`backend/app/analytics/tools.py`）。传入能力契约时，`query_metric()` 在进入 `_execute_metric_query()` 前校验指标、filters 和 group_by；能力错误统一转换为 `MetricQueryError`。它使用 `psycopg.sql.Identifier` 与参数占位符生成 SQL，因此 SQL 不是模型直接提供的自由文本。模型只能通过 SDK 暴露的三个工具操作：
 
 1. `get_metric_definition`：获取语义定义；
 2. `query_metric`：查询单个指标；
@@ -415,7 +420,7 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 
 ### Unknown：测试数量和部署级验收
 
-README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计数不同。2026-10-09 审计实际运行后端全量测试为 455/455 PASS，前端 lint 与 TypeScript `--noEmit` PASS；这些仍是离线/Hermetic 与静态验证，不是当前生产数据库、真实外部数据持续刷新、浏览器部署或重启恢复的验收证据。
+README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计数不同。R1-002 实现后本轮实际运行后端全量测试为 466/466 PASS，前端 lint 与 TypeScript `--noEmit` 的历史结果仍需单独复核；这些仍是离线/Hermetic 与静态验证，不是当前生产数据库、真实外部数据持续刷新、浏览器部署或重启恢复的验收证据。
 
 ## 10. 规划架构的责任边界
 
@@ -425,7 +430,7 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 
 - Source boundary 负责标识数据来源类型、连接/授权状态、可用时间范围、粒度、维度和指标能力。
 - 纯领域能力契约已在 `backend/app/data_sources/capabilities.py`（单测：`backend/tests/test_data_source_capabilities.py`）中实现（Current），支持来源身份、环境隔离、独立指标 grain/维度及跨 grain 组合保护。
-- 运行时能力接入（与 `MetricRegistry`、`AnalyticsTools`、API 和实际数据库/连接器集成）仍为待开展目标（Planned）。
+- Registry → capability 的纯内存适配和 AnalyticsTools 可选前置校验已实现（`backend/app/data_sources/semantic_adapter.py`、`backend/app/analytics/tools.py`；单测：`backend/tests/test_semantic_adapter.py`、`backend/tests/test_analytics_tools.py`）。API、实际数据库来源发现和连接器集成仍为 Planned。
 - Synthetic、Sandbox 和真实外部来源必须可区分，调查 Run 必须引用明确的来源身份。
 - 外部 PostgreSQL、Shopify 或其他来源只有在真实接口、权限和粒度验证后才可声明为支持；未验证的指标维度必须保持不可用。
 
@@ -457,6 +462,7 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 ### Current：可以直接复用
 
 - `MetricRegistry` 的严格配置校验和指标依赖/驱动关系模型；
+- `build_capabilities_from_registry()` 的指标 dimensions/grain 能力映射及 AnalyticsTools 可选契约校验；
 - `AnalyticsTools` 的参数化查询、单日/七日基线和聚合比率语义；
 - SDK Runtime 的 Tool Budget、Trace 验证、Observation catalog 和 Structured Output；
 - Evidence promotion、Diagnosis builder/composition 的 fail-closed 规则；
@@ -476,7 +482,7 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 
 ### Current
 
-1. 默认 Registry 仍绑定一个宽表和一套 Amazon 维度；不同数据源/粒度尚无统一 capability contract。
+1. 默认 Registry 仍绑定一个宽表和一套 Synthetic/Amazon 维度；虽已有可选 capability contract 适配，不同真实数据源/粒度仍未完成来源验证和连接器接入。
 2. Live API 会先注入 Synthetic 场景，真实外部数据闭环尚不存在。
 3. 应用 Run 只在请求生命周期内存在，服务重启后没有历史恢复能力。
 4. SQL 安全组件与 Analytics 主链脱节，数据库只读角色也没有由 API 自动保证。

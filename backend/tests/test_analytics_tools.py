@@ -12,6 +12,13 @@ from app.analytics.models import (
     RelatedMetricQueryResult,
 )
 from app.analytics.tools import AnalyticsTools
+from app.data_sources import (
+    DataSourceCapabilities,
+    DataSourceDescriptor,
+    MetricCapability,
+    SourceEnvironment,
+    SourceProvider,
+)
 from app.metrics.registry import MetricRegistry
 
 
@@ -128,6 +135,68 @@ class TestAnalyticsTools(unittest.TestCase):
                 group_by=["unknown_group"],
             )
         self.assertIn("Invalid group_by dimension", str(ctx.exception))
+
+    def test_query_metric_capability_contract_blocks_before_sql(self) -> None:
+        capabilities = DataSourceCapabilities(
+            descriptor=DataSourceDescriptor(
+                source_id="synthetic_benchmark",
+                display_name="Synthetic Benchmark",
+                provider=SourceProvider.SYNTHETIC,
+                environment=SourceEnvironment.BENCHMARK,
+            ),
+            metrics=[
+                MetricCapability(
+                    metric_id="sales",
+                    supported=True,
+                    grain=("date", "marketplace"),
+                    dimensions=("marketplace",),
+                )
+            ],
+        )
+        connection = FakeConnection()
+        tools = AnalyticsTools(self.registry, connection, capabilities=capabilities)
+
+        with self.assertRaises(MetricQueryError) as ctx:
+            tools.query_metric(
+                metric="sales",
+                start_date=self.test_date,
+                end_date=self.test_date,
+                compare_to="previous_7_days",
+                group_by=["asin"],
+            )
+
+        self.assertIn("capability validation failed", str(ctx.exception))
+        self.assertIsNone(connection.cursor_obj.executed_query)
+
+    def test_query_metric_capability_contract_blocks_unsupported_metric(self) -> None:
+        capabilities = DataSourceCapabilities(
+            descriptor=DataSourceDescriptor(
+                source_id="synthetic_benchmark",
+                display_name="Synthetic Benchmark",
+                provider=SourceProvider.SYNTHETIC,
+                environment=SourceEnvironment.BENCHMARK,
+            ),
+            metrics=[
+                MetricCapability(
+                    metric_id="sales",
+                    supported=False,
+                    unavailable_reason="not available in this source",
+                )
+            ],
+        )
+        connection = FakeConnection()
+        tools = AnalyticsTools(self.registry, connection, capabilities=capabilities)
+
+        with self.assertRaises(MetricQueryError) as ctx:
+            tools.query_metric(
+                metric="sales",
+                start_date=self.test_date,
+                end_date=self.test_date,
+                compare_to="previous_7_days",
+            )
+
+        self.assertIn("not available in this source", str(ctx.exception))
+        self.assertIsNone(connection.cursor_obj.executed_query)
 
     def test_query_metric_duplicate_group_by_raises(self) -> None:
         """Verify duplicate dimensions in group_by raise MetricQueryError."""

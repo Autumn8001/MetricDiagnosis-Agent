@@ -12,6 +12,10 @@ from app.data_sources.capabilities import (
     UnknownMetricError,
     UnsupportedDimensionError,
 )
+from app.data_sources.semantic_adapter import (
+    SemanticAdapterError,
+    build_capabilities_from_registry,
+)
 
 __all__ = [
     "CapabilityContractError",
@@ -24,4 +28,6 @@ __all__ = [
     "SourceProvider",
     "UnknownMetricError",
     "UnsupportedDimensionError",
+    "SemanticAdapterError",
+    "build_capabilities_from_registry",
 ]

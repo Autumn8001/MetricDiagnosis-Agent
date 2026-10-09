@@ -14,16 +14,33 @@ from app.analytics.models import (
     MetricQueryResult,
     RelatedMetricQueryResult,
 )
+from app.data_sources.capabilities import CapabilityContractError, DataSourceCapabilities
 from app.metrics.registry import MetricDefinition, MetricRegistry
 
 
 class AnalyticsTools:
     """Provides controlled database query capabilities driven by MetricRegistry."""
 
-    def __init__(self, registry: MetricRegistry, connection: Any) -> None:
-        """Initialize with a MetricRegistry instance and active psycopg Connection."""
+    def __init__(
+        self,
+        registry: MetricRegistry,
+        connection: Any,
+        capabilities: DataSourceCapabilities | None = None,
+    ) -> None:
+        """Initialize with a registry, connection, and optional source contract.
+
+        ``capabilities`` is intentionally optional to preserve existing callers
+        and hermetic tests. When supplied, it is checked before any SQL is
+        executed; capability-domain failures are translated to
+        ``MetricQueryError`` at the analytics boundary.
+        """
         self._registry = registry
         self._connection = connection
+        if capabilities is not None and not isinstance(capabilities, DataSourceCapabilities):
+            raise TypeError(
+                "capabilities must be a DataSourceCapabilities instance or None"
+            )
+        self._capabilities = capabilities
 
     def get_metric_definition(self, metric: str) -> MetricDefinition:
         """Retrieve the immutable MetricDefinition for a given metric identifier."""
@@ -58,6 +75,18 @@ class AnalyticsTools:
             raise MetricQueryError(f"Unknown metric: '{metric}'")
 
         metric_def = self._registry.get(metric)
+
+        if self._capabilities is not None:
+            try:
+                self._capabilities.validate_query(
+                    metric_id=metric,
+                    group_by=group_by,
+                    filters=filters,
+                )
+            except CapabilityContractError as exc:
+                raise MetricQueryError(
+                    f"Data source capability validation failed: {exc}"
+                ) from exc
 
         if start_date != end_date:
             raise MetricQueryError(

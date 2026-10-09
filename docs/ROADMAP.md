@@ -64,7 +64,7 @@
 ### 子任务进展
 
 - **R1-001｜Data Source Capability Contract**：已完成并由主线程验收。实现了最小纯领域契约 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（对象级与嵌套容器级不可变，支持指标独立 grain/维度快照、跨 grain 组合保护和严格 fail-closed 校验；源码：`backend/app/data_sources/capabilities.py`，单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS；全量回归 461/461 PASS）。明确尚未接入真实外部 PostgreSQL 或 Shopify，尚未接入现有 Runtime/API/DB。
-- **R1-002｜电商核心指标 metric × dimension × grain 矩阵定义与适配**：待开展。
+- **R1-002｜电商核心指标 metric × dimension × grain 矩阵定义与适配**：已完成并由主线程验收。`configs/metrics.yaml` 的五个 Synthetic 核心指标显式声明 `date × asin × marketplace × traffic_source` atomic grain；`MetricRegistry` 严格校验显式 grain 并为旧配置提供明确 fallback；`backend/app/data_sources/semantic_adapter.py` 保留 Registry 中的 dimensions/grain；`AnalyticsTools` 可选接收能力契约并在 SQL 前 fail-closed 校验。主线程专项测试 51/51、全量回归 466/466 PASS；未接入真实数据库、Shopify 或 API。
 - **R1-003｜Olist 隔离资产能力契约验证与降级表达**：待开展。
 - **R1-004｜Shopify Development Store 只读 capability spike 与连接器选择门**：待开展。
 
@@ -74,14 +74,14 @@
 
 ### 当前阻碍
 
-- 当前 Registry 假设单表和统一维度；Shopify 的订单、销售和会话数据可能具有不同 grain。
+- 当前默认 Registry 仍绑定单一 Synthetic 宽表；R1-002 已为该表显式表达 atomic grain，但 Shopify 的订单、销售和会话数据可能具有不同 grain，尚未据此声明支持。
 - 当前产品没有 `source_id`、来源类型、环境或数据版本边界。
 - Shopify 原型店、权限和访问凭据尚未提供；外部 PostgreSQL 目标也未确认。
 
 ### 技术方案
 
 1. 定义来源能力契约：来源身份、环境、时间范围、刷新方式、指标、维度、grain、延迟、币种和时区。
-2. 为 Sales、Orders、AOV、Sessions、Conversion Rate、Country、Product、Traffic Source 建立 metric × dimension × grain 矩阵。
+2. 为当前 Synthetic Profile 的 Sales、Orders、AOV、Sessions、Conversion Rate 建立 metric × dimension × grain 矩阵；Country、Product、Traffic Source 等外部来源能力仍待真实接口验证。
 3. 用现有 Olist 资产验证契约可以表达“支持、缺失、不可推导”。
 4. 在获得 Shopify Development Store 后执行只读 capability spike；不能获取可靠维度时显式降级。
 5. 做连接器选择门：默认优先 Shopify；若权限/数据能力不满足，则以用户提供的只读 PostgreSQL 为首个持续源。
