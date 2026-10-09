@@ -2,10 +2,10 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-09
-> Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-004b 已提交）
-> 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语
+> Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-004c 已提交）
+> 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器
 > 当前阶段：R2 持久化应用基础（进行中）
-> 当前任务：R2-004c 任务执行与事务策略设计；R1-004 仍需等待外部接入资源
+> 当前任务：R2-005 任务服务与 API 接线设计；R1-004 仍需等待外部接入资源
 
 ## 当前结论
 
@@ -102,6 +102,17 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - 没有 API/worker、connection factory、commit/rollback owner、重试、领取或真实数据库
   验收；这些接口是下一步短事务服务的基础，不能当作已部署任务队列。
 
+## R2-004c：已完成并由主线程验收，未接线 API/worker
+
+- `InvestigationTransactionCoordinator` 对 start、complete、fail 分别从注入的
+  factory 获取一个连接，成功才 commit，执行/commit 失败则 best-effort rollback，最后
+  close；它不会跨模型调用持有连接，也不会读取环境变量、保存 URL 或创建网络连接。
+- `InvestigationRunHandle` 是不可变的 run/source/data-version 绑定，complete/fail
+  只能从 handle 获取来源身份。commit 已成功后的 cleanup 错误被隔离，避免调用方把
+  已落库操作当作可安全重试的失败。
+- 专项 11/11 PASS，后端全量 Hermetic unittest 517/517 PASS。仍未接 FastAPI、worker、
+  实际 connection factory、PostgreSQL 或 migration；没有真实任务状态持久化证据。
+
 ## 尚未实现
 
 - 能力契约与 API、Agent Runtime、数据库来源发现及外部连接器的产品级接入（当前仅完成 Registry/AnalyticsTools 的纯内存适配，以及 Olist 验证合同表达）。
@@ -124,9 +135,9 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 继续推进 Roadmap R2：
 
-1. R2-004c：为 queued/running/failed/succeeded 确立短事务与单 worker 领取策略；在
-   受控数据库 migration 计划明确后，接线 Writer，同时避免在模型调用期间持有长
-   数据库事务。未获授权前不执行 migration 或连接生产数据库。
+1. R2-005：设计并实现最小单 worker/任务服务与 API 接线；先明确任务创建、查询、
+   失败、取消以及重启边界，保持模型调用在短事务之外。未获授权前不执行 migration
+   或连接生产数据库。
 2. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
@@ -139,12 +150,13 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | R2-003 Runtime/Writer 专项 | 29/29 PASS | Fake/Spy repository；完整 catalog、来源派生、写入顺序、失败闭合；未执行 SQL |
 | R2-004a provenance 专项 | 12/12 PASS | SQL 文本/合同；未执行 migration，`DO $$` 未获完整 parser 验证 |
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
-| 后端全量 unittest | 506/506 PASS | Hermetic；包含 R2-001 至 R2-004b；未访问真实模型或数据库 |
+| R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
+| 后端全量 unittest | 517/517 PASS | Hermetic；包含 R2-001 至 R2-004c；未访问真实模型或数据库 |
 | Olist 验证能力专项 | 5/5 PASS | Registry grain/dimensions、漏斗指标 unavailable、非法维度与错误来源身份；Fake connection 未执行 SQL |
 | FastAPI 专项 | 24/24 PASS | Live 分支使用 patch，只证明契约/wiring |
 | 前端 lint | PASS | 静态检查 |
 | TypeScript `--noEmit` | PASS | 不生成构建产物 |
-| Git 工作树（本切片验收） | R2-004b 已由主线程验收并随本次提交落库 | 未执行真实数据库迁移 |
+| Git 工作树（本切片验收） | R2-004c 已由主线程验收并随本次提交落库 | 未执行真实数据库迁移 |
 
 ## 当前关键技术决策
 

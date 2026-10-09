@@ -204,16 +204,29 @@
 - 这为未来短事务调用提供原语，但每次调用如何建立、commit/rollback、重试和领取
   工作仍未实现；所有证据仍是 Fake/Spy repository 合同测试。
 
-### 下一切片：R2-004c — 任务执行与事务策略
+### R2-004c：显式短事务协调器
+
+**状态：已完成并由主线程验收；未接线 API/worker**
+
+- `InvestigationTransactionCoordinator` 仅持有一个可注入 connection factory；每次
+  `start`、`complete`、`fail` 都新建 Repository/Writer、成功后 commit 一次、异常时
+  best-effort rollback，并在 finally 释放连接。连接不会跨模型调用或跨公开方法保存。
+- 不可变 `InvestigationRunHandle` 把 run ID、DataSourceDescriptor、data version
+  绑定在一起；complete/fail 没有独立 source/environment 参数。commit 后的 close
+  清理异常不会被误报为可安全重试的持久化失败。
+- 测试全部使用 Fake Connection；验证连接独立性、commit/rollback/close、commit 与
+  cleanup 异常以及真实 Repository/Writer 的参数化组合。没有真实 connection factory、
+  PostgreSQL、API 或 worker 运行证据。
+
+### 下一切片：R2-005 — 任务服务与 API 接线设计
 
 **状态：待开展**
 
-- 在真实 app_state migration 的受控环境准备好后，决定 queued/running/failed/succeeded
-  分别由何时、何种短事务提交；不能在一次长模型调用期间持有无界数据库事务。
-- 将 Writer 接到明确的单 worker/任务服务，而不是直接把它塞入现有同步 HTTP 处理器；
-  失败必须保留已发生的状态与安全的失败分类，但不得保存凭据、完整连接串或模型原始
-  敏感输出。
-- 该切片需要实际数据库连接和 migration 验收计划，当前不自动执行。
+- 将协调器接到一个明确的单 worker/任务服务，而不是直接把长模型调用塞入同步 HTTP
+  处理器；先定义任务创建、查询、失败和取消边界，再选择可恢复的最小进程模型。
+- 接线前必须明确迁移执行的受控环境与 connection factory 的配置归属。失败必须保留
+  已发生的状态与安全的失败分类，但不得保存凭据、完整连接串或模型原始敏感输出。
+- 当前不自动执行 migration、启动 worker 或连接部署数据库。
 
 ## 6. R3 — 首个持续真实数据闭环
 

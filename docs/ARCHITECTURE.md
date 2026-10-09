@@ -477,8 +477,12 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   `failure_details`；Writer 的 `start()`、`complete()` 和 `fail()` 可分别由未来的
   短事务调用。它们不拥有 connection/commit/rollback，也未被 FastAPI 或 worker
   调用，因此当前没有任务领取、重试、运行中进度或真实事务边界。
+- `backend/app/persistence/transaction_coordinator.py` 是当前唯一的 transaction
+  owner：它通过注入的 factory 对 start/complete/fail 分别创建短连接事务，并返回绑定
+  来源身份的 immutable handle。它不读取 `DATABASE_URL`、不保留 connection，也不
+  直接执行模型；API/worker 尚未注入这个协调器。
 
-### Planned：应用状态与运行时接线（R2-004c）
+### Planned：应用状态与运行时接线（R2-005）
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、
