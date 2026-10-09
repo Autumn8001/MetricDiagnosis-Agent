@@ -153,12 +153,40 @@
   与所属 Investigation Run 的来源完全一致；这项跨记录 provenance 一致性约束
   是 R2-003 的明确责任，不能将现有合同测试表述为完整的持久化保证。
 
+### R2-003：审计结果持久化编排边界
+
+**状态：已完成并由主线程验收**
+
+- `EvidenceDrivenRunSummary` 现在保留完整、不可变的 `observation_catalog`；它会
+  在 Runtime 边界验证 catalog 的 ID 顺序、每条 Observation 的 Tool Call/Tool Name
+  与已验证 Trace 完全对应，避免在后续持久化时只剩 Evidence 或 Diagnosis。
+- `backend/app/persistence/investigation_writer.py` 新增
+  `EvidenceDrivenRunPersistenceWriter`。它只接收一个 `DataSourceDescriptor`，从该
+  单一上下文派生所有事实的 source/environment；写入顺序为 source、queued run、
+  running、Tool Call/Observation、Evidence、Diagnosis、succeeded。
+- Writer 在首次 repository 写入前重新验证 Trace、Observation、Evidence、Diagnosis
+  的交叉引用；repository 抛错会原样上抛且不会标记 succeeded。它不连接数据库、
+  不执行 migration、不会 commit/rollback，事务仍由未来 API/worker 调用方拥有。
+- 单元测试为 Fake/Spy repository 合同测试。它证明来源派生、调用顺序与 fail-closed
+  边界，不代表运行中进度保存、失败持久化、真实 PostgreSQL 或 API 产品接线。
+
 ### 验收标准
 
 - 调查从 queued/running 进入明确终态，重复请求不会产生不可控重复副作用。
 - 服务重启后可查询任务、历史和结果。
 - 失败保存已经发生的 Tool Call 与 Observation，不伪造成功结果。
 - Synthetic/Sandbox/真实来源不能交叉引用。
+
+### 下一切片：R2-004 — 任务执行与事务策略
+
+**状态：待开展**
+
+- 在真实 app_state migration 的受控环境准备好后，决定 queued/running/failed/succeeded
+  分别由何时、何种短事务提交；不能在一次长模型调用期间持有无界数据库事务。
+- 将 Writer 接到明确的单 worker/任务服务，而不是直接把它塞入现有同步 HTTP 处理器；
+  失败必须保留已发生的状态与安全的失败分类，但不得保存凭据、完整连接串或模型原始
+  敏感输出。
+- 该切片需要实际数据库连接和 migration 验收计划，当前不自动执行。
 
 ## 6. R3 — 首个持续真实数据闭环
 

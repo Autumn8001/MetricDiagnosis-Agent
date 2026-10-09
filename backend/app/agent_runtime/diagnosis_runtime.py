@@ -55,6 +55,7 @@ class EvidenceDrivenRunSummary:
 
     investigation: InvestigationRunSummary
     composition: DiagnosisComposition
+    observation_catalog: tuple[Observation, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.investigation, InvestigationRunSummary):
@@ -65,6 +66,56 @@ class EvidenceDrivenRunSummary:
             raise RuntimeTraceError(
                 "Field 'composition' must be a DiagnosisComposition."
             )
+
+        catalog = self.observation_catalog
+        if isinstance(catalog, (str, bytes)) or not isinstance(catalog, tuple | list):
+            raise RuntimeTraceError(
+                "Field 'observation_catalog' must be a sequence of Observation values."
+            )
+        catalog = tuple(catalog)
+        if any(not isinstance(item, Observation) for item in catalog):
+            raise RuntimeTraceError(
+                "Field 'observation_catalog' must contain Observation values."
+            )
+
+        observation_ids = tuple(item.observation_id for item in catalog)
+        if len(observation_ids) != len(set(observation_ids)):
+            raise RuntimeTraceError(
+                "Field 'observation_catalog' must not contain duplicate observation_id values."
+            )
+        if observation_ids != self.investigation.observation_ids:
+            raise RuntimeTraceError(
+                "Observation catalog IDs must exactly match the validated investigation trace."
+            )
+
+        trace_by_call_id = {
+            entry.tool_call_id: entry for entry in self.investigation.tool_trace
+        }
+        for observation in catalog:
+            trace_entry = trace_by_call_id.get(observation.tool_call_id)
+            if trace_entry is None:
+                raise RuntimeTraceError(
+                    "Observation catalog contains an observation whose tool_call_id "
+                    f"'{observation.tool_call_id}' is absent from the verified trace."
+                )
+            if observation.tool_name != trace_entry.tool_name:
+                raise RuntimeTraceError(
+                    "Observation catalog tool_name does not match the verified trace "
+                    f"for tool_call_id '{observation.tool_call_id}'."
+                )
+            if observation.observation_id not in trace_entry.observation_ids:
+                raise RuntimeTraceError(
+                    "Observation catalog observation_id is not owned by the verified "
+                    f"trace tool call '{observation.tool_call_id}'."
+                )
+
+        object.__setattr__(self, "observation_catalog", catalog)
+
+    @property
+    def observations(self) -> tuple[Observation, ...]:
+        """Compatibility alias for callers that use the shorter catalog name."""
+
+        return self.observation_catalog
 
 
 def create_evidence_driven_agent(
@@ -322,6 +373,7 @@ def run_evidence_driven_diagnosis(
     return EvidenceDrivenRunSummary(
         investigation=investigation,
         composition=composition,
+        observation_catalog=observation_catalog,
     )
 
 

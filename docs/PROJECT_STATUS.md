@@ -2,10 +2,10 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-09
-> Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-002 已提交）
-> 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化应用状态 Repository
+> Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-003 已提交）
+> 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排边界
 > 当前阶段：R2 持久化应用基础（进行中）
-> 当前任务：R2-003 最小运行时接线与 provenance 一致性边界；R1-004 仍需等待外部接入资源
+> 当前任务：R2-004 任务执行与事务策略设计；R1-004 仍需等待外部接入资源
 
 ## 当前结论
 
@@ -62,6 +62,22 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
   等同于所属 Investigation Run 的来源/环境。R2-003 必须在应用接线与最终迁移
   设计中落实这项 provenance 一致性，当前不得宣称完整持久化隔离。
 
+## R2-003：已完成并由主线程验收
+
+- `EvidenceDrivenRunSummary` 新增完整、不可变 `observation_catalog`，并将每个
+  Observation 的顺序、ID、Tool Call ID 和 Tool Name 与已验证 Trace 重新核对。
+  这让持久化边界拥有完整事实目录，而非仅有最终 Evidence/Diagnosis。
+- `backend/app/persistence/investigation_writer.py` 的
+  `EvidenceDrivenRunPersistenceWriter` 只接受一个 `DataSourceDescriptor`；所有
+  Tool Call、Observation、Evidence、Diagnosis 的 source/environment 均从此派生。
+  它在任何写入前检查 Trace、catalog、Evidence 和 Diagnosis 的引用关系，按
+  source → queued → running → facts → diagnosis → succeeded 顺序调用 Repository。
+- Writer 不建立连接、不执行 migration、不 commit/rollback，Repository 异常原样
+  传播且不会错误标记 succeeded。专项 29/29 PASS，后端全量 Hermetic unittest
+  496/496 PASS。
+- 未接线 FastAPI/worker；没有真实 PostgreSQL、运行中进度、失败持久化或重启恢复
+  验收，不能把该合同测试表述为产品持久化已完成。
+
 ## 尚未实现
 
 - 能力契约与 API、Agent Runtime、数据库来源发现及外部连接器的产品级接入（当前仅完成 Registry/AnalyticsTools 的纯内存适配，以及 Olist 验证合同表达）。
@@ -84,9 +100,9 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 继续推进 Roadmap R2：
 
-1. R2-003：实现最小运行时持久化接线，明确连接/transaction owner，并在写入边界
-   强制 Tool Call、Observation、Evidence、Diagnosis 与其 Investigation Run 使用相同
-   source/environment；不执行真实迁移或声称真实 PostgreSQL 验收。
+1. R2-004：为 queued/running/failed/succeeded 确立短事务与单 worker 领取策略；在
+   受控数据库 migration 计划明确后，接线 Writer，同时避免在模型调用期间持有长
+   数据库事务。未获授权前不执行 migration 或连接生产数据库。
 2. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
@@ -96,12 +112,13 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | 数据源能力契约专项 | 6/6 PASS | 纯领域单元测试，覆盖基础合同、Olist、独立维度、跨 grain 保护、fail-closed 和深层不可变 |
 | R2-001 持久化专项 | 10/10 PASS | 纯 Python 状态机、环境值、只读 migration loader、Schema/FK/约束形状和敏感列名排除；未执行 SQL |
 | R2-002 repository 专项 | 9/9 PASS | Fake connection；参数化/事务边界/证据链/来源环境；未执行 SQL |
-| 后端全量 unittest | 490/490 PASS | Hermetic；包含 R2-001/R2-002；未访问真实模型或数据库 |
+| R2-003 Runtime/Writer 专项 | 29/29 PASS | Fake/Spy repository；完整 catalog、来源派生、写入顺序、失败闭合；未执行 SQL |
+| 后端全量 unittest | 496/496 PASS | Hermetic；包含 R2-001 至 R2-003；未访问真实模型或数据库 |
 | Olist 验证能力专项 | 5/5 PASS | Registry grain/dimensions、漏斗指标 unavailable、非法维度与错误来源身份；Fake connection 未执行 SQL |
 | FastAPI 专项 | 24/24 PASS | Live 分支使用 patch，只证明契约/wiring |
 | 前端 lint | PASS | 静态检查 |
 | TypeScript `--noEmit` | PASS | 不生成构建产物 |
-| Git 工作树（本切片验收） | R2-002 已由主线程验收并随本次提交落库 | 未执行真实数据库迁移 |
+| Git 工作树（本切片验收） | R2-003 已由主线程验收并随本次提交落库 | 未执行真实数据库迁移 |
 
 ## 当前关键技术决策
 

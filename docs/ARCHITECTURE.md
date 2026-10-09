@@ -462,13 +462,21 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   Repository 不建立连接、不保存 `DATABASE_URL`、不自动提交事务，也不执行
   migration。`tests/test_persistence_repository.py` 的 Fake connection 只证明
   repository 合同，不代表 PostgreSQL 迁移、真实写入或重启恢复已成功。
+- `EvidenceDrivenRunSummary` 在 Runtime 结果上保留经过验证的完整
+  `observation_catalog`。`backend/app/persistence/investigation_writer.py` 以单一
+  `DataSourceDescriptor` 把该 Runtime Trace、Observation、Evidence 和 Diagnosis
+  映射到 Repository，避免每条事实从独立调用参数取得来源身份。写入顺序和所有
+  交叉引用先由 Hermetic Spy 测试验证；该 Writer 尚未连接 FastAPI/worker，不能
+  当作运行中任务进度、实际事务提交或重启恢复的证据。
 
-### Planned：应用状态与运行时接线（R2-003）
+### Planned：应用状态与运行时接线（R2-004）
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、
   Evidence 与 Diagnosis 的 `source_id/environment`，不得相信调用者重复提交的
   独立来源字段。
+- 运行中状态需要明确的短事务与 worker 领取策略；不得为一次可能耗时的模型调用
+  持有数据库事务，也不得以成功响应代替数据库确认。
 - Evidence boundary 负责把每条 Observation 绑定到工具调用、来源版本和可复算查询上下文。
 - Diagnosis boundary 继续保留当前 fail-closed 的 Driver、Scope、Negative Control 和因果边界；持久化不能绕过这些校验。
 

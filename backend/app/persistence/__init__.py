@@ -22,6 +22,13 @@ from app.persistence.models import (
     SourceReference,
 )
 from app.persistence.repository import ApplicationStateRepository, InvestigationRunSummary
+from app.persistence.investigation_writer import (
+    ApplicationStateRepositoryProtocol,
+    EvidenceDrivenRunPersistenceWriter,
+    InvestigationPersistenceValidationError,
+    InvestigationWriterValidationError,
+    persist_evidence_driven_run,
+)
 
 __all__ = [
     "DEFAULT_MIGRATION_NAME",
@@ -30,7 +37,11 @@ __all__ = [
     "DataSourceState",
     "DataSourceStatus",
     "ApplicationStateRepository",
+    "ApplicationStateRepositoryProtocol",
+    "EvidenceDrivenRunPersistenceWriter",
     "InvestigationRunSummary",
+    "InvestigationPersistenceValidationError",
+    "InvestigationWriterValidationError",
     "InvalidRunTransitionError",
     "InvalidStateTransitionError",
     "PersistenceError",
@@ -43,4 +54,5 @@ __all__ = [
     "available_migrations",
     "load_app_state_migration",
     "load_migration",
+    "persist_evidence_driven_run",
 ]

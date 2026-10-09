@@ -62,6 +62,29 @@ def make_investigation(
     )
 
 
+def make_observation(index: int) -> Observation:
+    return Observation(
+        observation_id=f"observation-{index}",
+        tool_name="query_metric",
+        tool_call_id=f"call-{index}",
+        metric="sales",
+        current_period=CURRENT,
+        baseline_period=BASELINE,
+        filters={},
+        group_by=(),
+        dimensions={},
+        current_value=Decimal("80"),
+        baseline_value=Decimal("100"),
+        relative_change=Decimal("-0.20"),
+        unit="usd",
+        sample_size=Decimal("500"),
+        source_status="ok",
+        status=ObservationStatus.ANOMALOUS,
+        query_or_result_reference=f"ref:observation-{index}",
+        created_at=NOW,
+    )
+
+
 def make_composition(status: DiagnosisStatus) -> DiagnosisComposition:
     if status != DiagnosisStatus.DIAGNOSED:
         diagnosis = Diagnosis(
@@ -79,9 +102,9 @@ def make_composition(status: DiagnosisStatus) -> DiagnosisComposition:
         return DiagnosisComposition(evidence=(), diagnosis=diagnosis)
 
     observation = Observation(
-        observation_id="target-observation",
+        observation_id="observation-0",
         tool_name="query_metric",
-        tool_call_id="target-call",
+        tool_call_id="call-0",
         metric="sales",
         current_period=CURRENT,
         baseline_period=BASELINE,
@@ -95,7 +118,7 @@ def make_composition(status: DiagnosisStatus) -> DiagnosisComposition:
         sample_size=Decimal("500"),
         source_status="ok",
         status=ObservationStatus.ANOMALOUS,
-        query_or_result_reference="ref:target-observation",
+        query_or_result_reference="ref:observation-0",
         created_at=NOW,
     )
     evidence = promote_observation_to_evidence(observation, role=EvidenceRole.SUPPORTING)
@@ -125,6 +148,7 @@ class TestEvaluationRunOutcome(unittest.TestCase):
         summary = EvidenceDrivenRunSummary(
             investigation=make_investigation(),
             composition=make_composition(DiagnosisStatus.DIAGNOSED),
+            observation_catalog=(make_observation(0), make_observation(1)),
         )
 
         outcome = completed_run_outcome("  canonical  ", summary)
@@ -145,6 +169,7 @@ class TestEvaluationRunOutcome(unittest.TestCase):
         summary = EvidenceDrivenRunSummary(
             investigation=make_investigation(),
             composition=make_composition(DiagnosisStatus.BUDGET_EXHAUSTED),
+            observation_catalog=(make_observation(0), make_observation(1)),
         )
 
         outcome = completed_run_outcome("budget-case", summary)
@@ -156,6 +181,7 @@ class TestEvaluationRunOutcome(unittest.TestCase):
         summary = EvidenceDrivenRunSummary(
             investigation=make_investigation(tool_calls_count=1),
             composition=make_composition(DiagnosisStatus.TOOL_FAILURE),
+            observation_catalog=(make_observation(0),),
         )
 
         outcome = completed_run_outcome("tool-case", summary)
