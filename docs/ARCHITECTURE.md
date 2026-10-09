@@ -473,8 +473,12 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   外键绑定到 Investigation Run，而不是只验证其单独指向一个存在的 Data Source。
   `pg_constraint` guards 让同一 schema 重复运行时避免重复加约束。文本测试和有限
   SQL parser 读取不能证明 PostgreSQL 已执行此 migration 或其中约束已经生效。
+- Repository 还提供条件化 `fail_investigation_run()`，只将受控 failure code 写入
+  `failure_details`；Writer 的 `start()`、`complete()` 和 `fail()` 可分别由未来的
+  短事务调用。它们不拥有 connection/commit/rollback，也未被 FastAPI 或 worker
+  调用，因此当前没有任务领取、重试、运行中进度或真实事务边界。
 
-### Planned：应用状态与运行时接线（R2-004b）
+### Planned：应用状态与运行时接线（R2-004c）
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、

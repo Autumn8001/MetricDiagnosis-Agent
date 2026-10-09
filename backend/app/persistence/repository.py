@@ -51,6 +51,11 @@ _SENSITIVE_KEY_PARTS = frozenset(
     }
 )
 _SENSITIVE_KEY_SEPARATOR_RE = re.compile(r"[^a-z0-9]+")
+# Failure codes are an intentionally small machine-facing vocabulary.  They
+# are not an exception message field: callers must classify a failure before
+# crossing the persistence boundary, and the database receives only this
+# bounded identifier.
+_FAILURE_CODE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 def _identifier(value: object, field_name: str) -> str:
@@ -109,6 +114,16 @@ def _read_enum(value: object, enum_type: type[Enum], field_name: str) -> Enum:
 
 def _optional_text(value: object, field_name: str) -> str | None:
     return _optional_identifier(value, field_name)
+
+
+def _failure_code(value: object) -> str:
+    """Validate a safe, bounded failure classification before opening SQL."""
+
+    if not isinstance(value, str) or not _FAILURE_CODE_RE.fullmatch(value):
+        raise PersistenceValidationError(
+            "failure_code must be 1-64 lowercase ASCII letters, digits, '_' or '-'."
+        )
+    return value
 
 
 def _sensitive_key(key: str) -> bool:
@@ -529,6 +544,59 @@ class ApplicationStateRepository:
 
     # Short alias for callers that use the generic run vocabulary.
     transition_run = transition_investigation_run
+
+    def fail_investigation_run(
+        self,
+        investigation_run_id: str | None = None,
+        *,
+        run_id: str | None = None,
+        failure_code: str,
+    ) -> RunStatus:
+        """Atomically archive a controlled failure for a queued/running run.
+
+        Only a bounded machine classification is accepted.  The conditional
+        update is deliberately restricted to non-terminal predecessors so a
+        late worker cannot overwrite a succeeded, failed, or cancelled run.
+        This method executes no transaction boundary; the caller owns commit
+        and rollback decisions.
+        """
+
+        resolved_run_id = _run_id(investigation_run_id, run_id)
+        clean_failure_code = _failure_code(failure_code)
+        failure_details = _json_object({"code": clean_failure_code}, "failure_details")
+
+        sql = """
+            UPDATE app_state.investigation_runs
+            SET status = %s,
+                failure_details = CAST(%s AS jsonb),
+                finished_at = now()
+            WHERE investigation_run_id = %s
+              AND status IN (%s, %s)
+        """
+        cursor = self._connection.cursor()  # type: ignore[attr-defined]
+        try:
+            cursor.execute(  # type: ignore[attr-defined]
+                sql,
+                (
+                    RunStatus.FAILED.value,
+                    failure_details,
+                    resolved_run_id,
+                    RunStatus.QUEUED.value,
+                    RunStatus.RUNNING.value,
+                ),
+            )
+            rowcount = getattr(cursor, "rowcount", None)
+        finally:
+            self._close_cursor(cursor)
+        if rowcount == 0:
+            raise PersistenceRepositoryError(
+                f"Investigation run '{resolved_run_id}' was not queued/running, "
+                "or it does not exist."
+            )
+        return RunStatus.FAILED
+
+    # Explicit alias for callers that prefer state-oriented terminology.
+    mark_investigation_run_failed = fail_investigation_run
 
     def record_tool_call(
         self,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
+import json
 import unittest
 
 from app.analytics.models import DateRange
@@ -221,6 +222,59 @@ class ApplicationStateRepositoryTests(unittest.TestCase):
         connection.next_rowcount = 0
         with self.assertRaises(PersistenceRepositoryError):
             repository.transition_investigation_run("run-1", RunStatus.SUCCEEDED)
+
+    def test_failure_update_is_parameterized_and_stores_only_controlled_code(self) -> None:
+        repository, connection = _repository()
+
+        result = repository.fail_investigation_run(
+            run_id="run-failure",
+            failure_code="tool_timeout",
+        )
+
+        self.assertEqual(result, RunStatus.FAILED)
+        sql, params = connection.calls[-1]
+        self.assertIn("UPDATE app_state.investigation_runs", sql)
+        self.assertIn("status IN", sql)
+        self.assertIn("finished_at = now()", sql)
+        self.assertNotIn("run-failure", sql)
+        self.assertNotIn("tool_timeout", sql)
+        self.assertEqual(params[0], RunStatus.FAILED.value)
+        self.assertEqual(json.loads(params[1]), {"code": "tool_timeout"})
+        self.assertEqual(params[2:], ("run-failure", "queued", "running"))
+        self.assertEqual(connection.commit_calls, 0)
+
+    def test_failure_update_fails_closed_on_zero_rows(self) -> None:
+        repository, connection = _repository()
+        connection.next_rowcount = 0
+
+        with self.assertRaises(PersistenceRepositoryError):
+            repository.fail_investigation_run(
+                run_id="run-terminal",
+                failure_code="runtime_error",
+            )
+
+        self.assertEqual(connection.commit_calls, 0)
+
+    def test_invalid_failure_code_is_rejected_before_sql(self) -> None:
+        repository, connection = _repository()
+
+        for invalid_code in (
+            "",
+            "RuntimeError",
+            "runtime error",
+            "runtime.error",
+            "runtime/error",
+            "a" * 65,
+            "异常",
+        ):
+            with self.subTest(invalid_code=invalid_code):
+                with self.assertRaises(PersistenceValidationError):
+                    repository.fail_investigation_run(
+                        run_id="run-invalid",
+                        failure_code=invalid_code,
+                    )
+
+        self.assertEqual(connection.calls, [])
 
     def test_tool_call_carries_source_environment_and_rejects_non_enum_status(self) -> None:
         repository, connection = _repository()

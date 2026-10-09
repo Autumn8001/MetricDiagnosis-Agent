@@ -191,7 +191,20 @@
   migration；SQL 解析器对 `DO $$` 只作为通用 Command 接受，不能替代真实数据库
   语法/约束验收。
 
-### 下一切片：R2-004b — 任务执行与事务策略
+### R2-004b：运行生命周期原语
+
+**状态：已完成并由主线程验收；未接线事务 owner**
+
+- `ApplicationStateRepository.fail_investigation_run()` 使用参数化、条件化 SQL，仅
+  允许 queued/running → failed，并只写入受控 `failure_code` 的
+  `{"code": "..."}` JSON；自由异常信息、stack trace、连接串和凭据没有 API。
+- `EvidenceDrivenRunPersistenceWriter` 拆为 `start()`、`complete()`、`fail()`：前者
+  只写 source→queued→running，后者只写完整 facts→succeeded，失败则只委托受控
+  分类。`write()` 保持兼容，并在已有完整 Summary 时先验证再开始 Run。
+- 这为未来短事务调用提供原语，但每次调用如何建立、commit/rollback、重试和领取
+  工作仍未实现；所有证据仍是 Fake/Spy repository 合同测试。
+
+### 下一切片：R2-004c — 任务执行与事务策略
 
 **状态：待开展**
 

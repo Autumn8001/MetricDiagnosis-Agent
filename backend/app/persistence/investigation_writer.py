@@ -15,6 +15,7 @@ from decimal import Decimal
 from enum import Enum
 import json
 import math
+import re
 from typing import Protocol
 
 from app.agent_runtime.diagnosis_runtime import EvidenceDrivenRunSummary
@@ -67,6 +68,14 @@ class ApplicationStateRepositoryProtocol(Protocol):
         run_id: str,
         target_status: RunStatus,
     ) -> object:
+        ...
+
+    def fail_investigation_run(
+        self,
+        *,
+        run_id: str,
+        failure_code: str,
+    ) -> RunStatus:
         ...
 
     def record_tool_call(
@@ -129,6 +138,7 @@ _SENSITIVE_KEY_PARTS = frozenset(
         "databaseurl",
     }
 )
+_FAILURE_CODE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 def _clean_required(value: object, field_name: str) -> str:
@@ -143,6 +153,16 @@ def _clean_optional(value: object, field_name: str) -> str | None:
     if value is None:
         return None
     return _clean_required(value, field_name)
+
+
+def _clean_failure_code(value: object) -> str:
+    """Keep the writer's failure boundary safe for every repository protocol impl."""
+
+    if not isinstance(value, str) or not _FAILURE_CODE_RE.fullmatch(value):
+        raise InvestigationPersistenceValidationError(
+            "failure_code must be 1-64 lowercase ASCII letters, digits, '_' or '-'."
+        )
+    return value
 
 
 def _sensitive_key(key: str) -> bool:
@@ -318,62 +338,82 @@ class EvidenceDrivenRunPersistenceWriter:
             )
         object.__setattr__(self, "data_version", _clean_optional(self.data_version, "data_version"))
 
-    def write(
+    def start(
         self,
-        summary: EvidenceDrivenRunSummary,
         *,
         run_id: str,
         requested_metric: str,
         parameters: Mapping[str, object] | None = None,
         query_reference: str | None = None,
     ) -> str:
-        """Write a verified run and return its application-state run ID.
+        """Create and start a run before any model or fact-producing work.
 
-        All validation runs before ``upsert_data_source``.  If the repository
-        raises during the sequence, that exception is intentionally propagated
-        unchanged and the final ``succeeded`` transition is never attempted.
-        Transaction ownership remains with the caller.
+        This is intentionally a short lifecycle operation.  It validates only
+        the run request, then persists ``source -> queued -> running`` using
+        the writer's one immutable descriptor.  No transaction is opened or
+        retained here; the caller owns that boundary.
         """
 
-        run_id = _clean_required(run_id, "run_id")
-        requested_metric = _clean_required(requested_metric, "requested_metric")
-        query_reference = _clean_optional(query_reference, "query_reference")
+        clean_run_id = _clean_required(run_id, "run_id")
+        clean_metric = _clean_required(requested_metric, "requested_metric")
+        clean_query_reference = _clean_optional(query_reference, "query_reference")
         _validate_parameters(parameters)
-        summary = _validate_summary(summary)
 
         source_id = self.descriptor.source_id
         environment = self.descriptor.environment
         repository = self.repository
-
-        # Lifecycle setup must be deterministic: source, queued run, running.
         repository.upsert_data_source(
             self.descriptor,
             data_version=self.data_version,
         )
         repository.create_investigation_run(
-            run_id=run_id,
+            run_id=clean_run_id,
             source_id=source_id,
             environment=environment,
-            requested_metric=requested_metric,
+            requested_metric=clean_metric,
             data_version=self.data_version,
-            query_reference=query_reference,
+            query_reference=clean_query_reference,
             parameters=parameters,
         )
         repository.transition_investigation_run(
-            run_id=run_id,
+            run_id=clean_run_id,
             target_status=RunStatus.RUNNING,
         )
+        return clean_run_id
+
+    def complete(
+        self,
+        summary: EvidenceDrivenRunSummary,
+        *,
+        run_id: str,
+        query_reference: str | None = None,
+    ) -> str:
+        """Persist facts and diagnosis, then mark an already-running run done.
+
+        The complete summary and every trace/evidence cross-reference are
+        checked before the first fact write.  This method never re-creates the
+        source or run and never silently turns a repository error into a
+        successful run.
+        """
+
+        clean_run_id = _clean_required(run_id, "run_id")
+        clean_query_reference = _clean_optional(query_reference, "query_reference")
+        verified_summary = _validate_summary(summary)
+
+        source_id = self.descriptor.source_id
+        environment = self.descriptor.environment
+        repository = self.repository
 
         catalog_by_call_id: dict[str, list[Observation]] = {}
-        for observation in summary.observation_catalog:
+        for observation in verified_summary.observation_catalog:
             catalog_by_call_id.setdefault(observation.tool_call_id, []).append(observation)
 
         # Persist the audited trace in call order.  Each call's observations
         # immediately follow it; no evidence can precede the full catalog.
-        for trace_entry in summary.investigation.tool_trace:
+        for trace_entry in verified_summary.investigation.tool_trace:
             repository.record_tool_call(
                 trace_entry.tool_call_id,
-                run_id,
+                clean_run_id,
                 source_id,
                 environment,
                 trace_entry.tool_name,
@@ -384,34 +424,72 @@ class EvidenceDrivenRunPersistenceWriter:
             for observation in catalog_by_call_id.get(trace_entry.tool_call_id, ()):
                 repository.record_observation(
                     observation,
-                    run_id,
+                    clean_run_id,
                     source_id,
                     environment,
                     data_version=self.data_version,
                 )
 
-        for evidence in summary.composition.evidence:
+        for evidence in verified_summary.composition.evidence:
             repository.record_evidence(
                 evidence,
-                run_id,
+                clean_run_id,
                 source_id,
                 environment,
                 data_version=self.data_version,
             )
 
         repository.record_diagnosis(
-            summary.composition.diagnosis,
-            run_id,
+            verified_summary.composition.diagnosis,
+            clean_run_id,
             source_id,
             environment,
             data_version=self.data_version,
-            query_reference=query_reference,
+            query_reference=clean_query_reference,
         )
         repository.transition_investigation_run(
-            run_id=run_id,
+            run_id=clean_run_id,
             target_status=RunStatus.SUCCEEDED,
         )
-        return run_id
+        return clean_run_id
+
+    def fail(self, *, run_id: str, failure_code: str) -> RunStatus:
+        """Mark a queued/running run failed using only a controlled code."""
+
+        clean_run_id = _clean_required(run_id, "run_id")
+        clean_failure_code = _clean_failure_code(failure_code)
+        return self.repository.fail_investigation_run(
+            run_id=clean_run_id,
+            failure_code=clean_failure_code,
+        )
+
+    def write(
+        self,
+        summary: EvidenceDrivenRunSummary,
+        *,
+        run_id: str,
+        requested_metric: str,
+        parameters: Mapping[str, object] | None = None,
+        query_reference: str | None = None,
+    ) -> str:
+        """Backward-compatible one-shot composition of ``start`` + ``complete``."""
+
+        # Unlike ``start`` (which intentionally precedes a model call), a
+        # one-shot caller already has every fact. Validate it before creating
+        # a run so malformed historical data cannot leave a stranded running
+        # record merely because it entered through the compatibility helper.
+        _validate_summary(summary)
+        clean_run_id = self.start(
+            run_id=run_id,
+            requested_metric=requested_metric,
+            parameters=parameters,
+            query_reference=query_reference,
+        )
+        return self.complete(
+            summary,
+            run_id=clean_run_id,
+            query_reference=query_reference,
+        )
 
 
 def persist_evidence_driven_run(

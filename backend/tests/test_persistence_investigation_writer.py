@@ -175,6 +175,10 @@ class SpyRepository:
     def transition_investigation_run(self, **kwargs):
         self._record("transition_investigation_run", **kwargs)
 
+    def fail_investigation_run(self, **kwargs):
+        self._record("fail_investigation_run", **kwargs)
+        return RunStatus.FAILED
+
     def record_tool_call(self, tool_call_id, investigation_run_id, source_id, environment, tool_name, **kwargs):
         self._record(
             "record_tool_call",
@@ -218,6 +222,91 @@ class SpyRepository:
 
 
 class TestEvidenceDrivenRunPersistenceWriter(unittest.TestCase):
+    def test_start_persists_source_queue_and_running_before_facts(self) -> None:
+        repository = SpyRepository()
+
+        returned_run_id = EvidenceDrivenRunPersistenceWriter(
+            repository,
+            DESCRIPTOR,
+            data_version="benchmark-v1",
+        ).start(
+            run_id="run:start",
+            requested_metric="sales",
+            parameters={"target_date": "2026-08-28"},
+            query_reference="query:start",
+        )
+
+        self.assertEqual(returned_run_id, "run:start")
+        self.assertEqual(
+            [name for name, _ in repository.events],
+            [
+                "upsert_data_source",
+                "create_investigation_run",
+                "transition_investigation_run",
+            ],
+        )
+        self.assertEqual(repository.events[-1][1]["target_status"], RunStatus.RUNNING)
+
+    def test_complete_does_not_repeat_source_or_run_creation(self) -> None:
+        repository = SpyRepository()
+        writer = EvidenceDrivenRunPersistenceWriter(repository, DESCRIPTOR)
+
+        writer.start(run_id="run:split", requested_metric="sales")
+        writer.complete(make_summary(), run_id="run:split", query_reference="query:complete")
+
+        names = [name for name, _ in repository.events]
+        self.assertEqual(names.count("upsert_data_source"), 1)
+        self.assertEqual(names.count("create_investigation_run"), 1)
+        self.assertEqual(names[-1], "transition_investigation_run")
+        self.assertEqual(repository.events[-1][1]["target_status"], RunStatus.SUCCEEDED)
+
+    def test_fail_delegates_only_a_controlled_code(self) -> None:
+        repository = SpyRepository()
+        writer = EvidenceDrivenRunPersistenceWriter(repository, DESCRIPTOR)
+
+        writer.start(run_id="run:fail", requested_metric="sales")
+        self.assertEqual(
+            writer.fail(run_id="run:fail", failure_code="tool_timeout"),
+            RunStatus.FAILED,
+        )
+        self.assertEqual(
+            repository.events[-1],
+            (
+                "fail_investigation_run",
+                {"run_id": "run:fail", "failure_code": "tool_timeout"},
+            ),
+        )
+        self.assertNotIn("message", repository.events[-1][1])
+        self.assertNotIn("exception", repository.events[-1][1])
+
+    def test_fail_rejects_uncontrolled_code_before_repository_call(self) -> None:
+        repository = SpyRepository()
+        writer = EvidenceDrivenRunPersistenceWriter(repository, DESCRIPTOR)
+
+        with self.assertRaises(InvestigationPersistenceValidationError):
+            writer.fail(run_id="run:fail", failure_code="RuntimeError: credential")
+
+        self.assertEqual(repository.events, [])
+
+    def test_complete_validation_happens_before_first_fact_write(self) -> None:
+        repository = SpyRepository()
+        writer = EvidenceDrivenRunPersistenceWriter(repository, DESCRIPTOR)
+        writer.start(run_id="run:invalid-complete", requested_metric="sales")
+        summary = make_summary()
+        object.__setattr__(summary, "observation_catalog", (summary.observation_catalog[0],))
+
+        with self.assertRaises(InvestigationPersistenceValidationError):
+            writer.complete(summary, run_id="run:invalid-complete")
+
+        self.assertNotIn(
+            "record_tool_call",
+            [name for name, _ in repository.events],
+        )
+        self.assertNotIn(
+            "record_observation",
+            [name for name, _ in repository.events],
+        )
+
     def test_success_writes_in_dependency_order_and_binds_one_descriptor(self) -> None:
         repository = SpyRepository()
         summary = make_summary()
@@ -268,7 +357,7 @@ class TestEvidenceDrivenRunPersistenceWriter(unittest.TestCase):
         self.assertEqual(repository.events[2][1]["target_status"], RunStatus.RUNNING)
         self.assertEqual(repository.events[-1][1]["target_status"], RunStatus.SUCCEEDED)
 
-    def test_invalid_summary_fails_before_any_repository_write(self) -> None:
+    def test_invalid_summary_fails_before_any_fact_write(self) -> None:
         repository = SpyRepository()
         summary = make_summary()
         object.__setattr__(summary, "observation_catalog", (summary.observation_catalog[0],))
