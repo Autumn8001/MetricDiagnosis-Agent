@@ -254,11 +254,12 @@
 
 ### R2-005b2 — 产品任务/历史 API 与应用 Runner 接线
 
-**状态：进行中；R2-005b2a 已验收，R2-005b2b 待开展**
+**状态：进行中；R2-005b2a 已验收；R2-005b2b 已实现并受控数据库验收，真实模型待验收**
 
 - **R2-005b2a（已完成）**：POST `/api/investigations` 排队，GET 列表/详情读取状态、已保存步骤和结果；服务器绑定 source/provider/environment/capabilities/version，客户端不提供连接配置。FastAPI `create_app()` 显式注入服务；默认返回 503，不启动 Worker、不执行迁移、不注入 Scenario。
 - 主线程真实 PostgreSQL 验收：API 专项 4/4、含既有 Worker/持久化回归 19/19 PASS；新应用实例读取历史、失败步骤留存、跨来源 404、安全错误和非法能力拒绝均通过。Runner 为受控 SELECT，非真实模型。记录见 [`task-api-acceptance-2026-10-10.md`](evaluation-artifacts/task-api-acceptance-2026-10-10.md)。
-- **R2-005b2b（下一步）**：建立最小、显式、非生产的应用 Runner/进程启动配置，将现有 AnalyticsTools 与 SDK 回调接到已验收 Worker。先用受控执行验收配置与 SQL 来源边界，再在明确模型凭据和预算下做一次真实模型调查。不得复用旧 Scenario Injection，也不新增调度平台。
+- **R2-005b2b（已实现，受控验收通过）**：`task_application.py` 提供仅本机的显式配置与 API/Worker 启动入口；`source_runner.py` 复用 AnalyticsTools、SDK Runtime 和进度回调，不注入场景、不新增调度框架。日期/固定 filters 硬约束与单查询只读短事务；任务专用 API 排除旧注入端点。真实数据库新专项 4/4 PASS，实际聚合 SQL/Observation、写入拒绝、元数据保留和独立 API 进程均验证。记录见 [`task-application-acceptance-2026-10-10.md`](evaluation-artifacts/task-application-acceptance-2026-10-10.md)。
+- **下一验收**：明确非生产模型凭据/模型/调用预算和稳定数据版本后，经真实 SDK 完成一次 API 排队→Worker→SQL→步骤→Diagnosis→历史读取；保存脱敏逐 Run 证据。未通过前不标记 R2 全部完成。并检查真实来源的快照/只读角色与单源队列边界，避免继续增加无运行证据的基础模块。
 - 服务 allowlist 不是用户授权；公开部署前仍需认证、收紧 CORS、隔离旧开发端点、日志/响应脱敏。用户取消与显式重试按真实展示需求确定，不先扩展通用任务框架。
 
 - 将执行服务接到明确的单 worker/任务入口，而不是直接把长模型调用塞入同步 HTTP

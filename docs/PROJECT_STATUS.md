@@ -5,8 +5,8 @@
 > Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-005a 已提交）
 > 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器；R2-005a 单任务执行服务
 > 当前阶段：R2 持久化应用基础（进行中）
-> 最近新增验收：R2-PG（`71e284f`）；R2-005b1 Worker/checkpoint（`1b2b334`）；R2-005b2a 持久任务/历史 API（本次提交）
-> 当前任务：R2-005b2b 应用 Runner 与最小进程配置接线；R1-004 仍需等待外部接入资源
+> 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b 显式应用/SQL 接线（本次提交，受控验收）
+> 当前任务：真实 SDK/模型的持久调查验收；R1-004 仍需等待明确外部接入资源
 
 ## 当前结论
 
@@ -29,7 +29,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 ## 已实现但当前未真实复验
 
-- Analytics Tools 的真实 PostgreSQL 执行路径：本轮自动测试使用 Fake/Mock connection。
+- 旧同步 Live API 的完整模型执行路径尚未复验；新应用 Runner 的 AnalyticsTools 聚合 SQL 已由 R2-005b2b 在真实 PostgreSQL 验证，不是外部数据同步。
 - 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录；当前没有模型凭据，未复现逐 Run 结果。
 - 前端 production build：历史文档记录通过；R0 运行过 lint 和无输出类型检查，本次后端验收未重新运行前端检查。
 
@@ -57,6 +57,15 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 以下 R2-001 至 R2-005a 条目保留各切片当时的历史验证边界；其中“未执行迁移/未验证数据库”已由上述 R2-PG 验收更新，不代表当前仍未执行。
 
+## R2-005b2b：显式应用接线已受控验收，模型待验证
+
+- `task_application.py` 提供可单独启动的 loopback 任务 API/Worker；仅 Synthetic Sandbox / Olist 静态 Validation，必填显式配置，无自动迁移/.env/Scenario Injection。任务专用入口不含旧注入接口，默认旧 app 仍保持兼容。
+- Source Runner 复用 SDK Runtime 和 callback；每次查询为独立只读短事务并限时10秒。日期和固定filters由工具强制校验；不隐式补过滤而造成Trace/Observation范围错误。
+- capabilities 省略不会抹掉已有元数据；真实 SQL 已验证参数顺序、保留/显式清除语义。
+- 新 PostgreSQL 专项4/4 PASS，含实际Analytics聚合与Observation mapper、UPDATE只读拒绝、元数据保留、独立API子进程HTTP读取。最终合并回归见下表。Runner为受控，真实模型未调用。
+- `data_version`仍为标签，不是数据库snapshot；单源配置不提供混合来源队列路由。下一步先真实模型验收与真实源capability gate，不继续扩展编排。
+- 证据/安全启动说明：[`task-application-acceptance-2026-10-10.md`](evaluation-artifacts/task-application-acceptance-2026-10-10.md)。
+
 ## R2-005b2a：任务 API 与持久历史已验收
 
 - 新 POST `/api/investigations` 排队；GET 列表/详情可读运行状态、步骤、证据和结果。服务显式注入，默认应用未配置时 503；没有 HTTP 长模型调用、自动迁移或场景注入。
@@ -64,7 +73,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - 新任务响应不暴露原始错误文本、failure_details、Evidence payload 或误传凭据；旧开发端点/CORS 不变，尚不能安全公开。
 - 主线程真实 PostgreSQL API 专项 4/4 PASS；含既有持久化/Worker 回归 19/19 PASS。覆盖运行中读步骤、成功/失败、全新应用实例读取历史、来源隔离和安全错误。Runner 是受控 SQL，未调用真实模型。
 - API/reader/旧 API 专项 40/40 PASS（Hermetic）。最新全量结果见下表。复现记录：[`task-api-acceptance-2026-10-10.md`](evaluation-artifacts/task-api-acceptance-2026-10-10.md)。
-- 真实应用 Runner、后台启动入口与前端仍未配置；本切片不是完整 R2 或可部署 MVP 验收。
+- R2-005b2a 当时没有应用Runner/启动入口，现已由 R2-005b2b 补齐实现；前端和真实模型仍未验收，不是完整 R2 或可部署 MVP。
 
 ## R2-001：已完成并由主线程验收
 
@@ -164,7 +173,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - Shopify 或用户外部 PostgreSQL 的产品级接入、连接器实现、数据同步和水位（当前绝对未接入真实外部库或 Shopify API）。
 - 默认应用配置、用户取消/显式重试、生产进程恢复和持久化
   后的多 grain 查询支持。
-- 应用配置的真实 Runner、前端调查历史/步骤接线（API、步骤保存和最小 Worker 中断恢复已验收）。
+- 应用 Runner 的真实模型验收、前端调查历史/步骤接线（Runner/启动入口已有实现；API、步骤保存和最小 Worker 中断恢复已验收）。
 - 数据接入、工作概览、独立指标页和实验室的真实 API。
 - 用户认证、生产安全、后台进程生命周期与服务器部署资产。
 - 独立 Holdout、真实外部数据评测、Next Action/Stop Condition 评分。
@@ -172,7 +181,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 ## 当前阻碍与待提供资源
 
 1. 认可的 HTML 交互原型文件不在仓库中，已记录为待补产品资产；需要用户提供后才能按冻结设计接线，但不阻塞 R1 数据契约与数据层开发。
-2. 已有可复用隔离本机 PostgreSQL 验收环境；产品数据源与模型凭据仍未配置，不能做真实 Agent/业务端到端复验。
+2. 已有可复用隔离本机 PostgreSQL 验收环境；本轮仅检查变量是否存在（未读取输出值），OPENAI_API_KEY、TASK_MODEL、STATE/ANALYTICS_DATABASE_URL 均未设置。真实模型需用户在本机安全配置并明确模型与调用预算，不能在聊天或仓库中提供密钥。
 3. Shopify Development Store/应用权限尚未提供；外部 PostgreSQL 目标库也未确定。
 4. 首个真实源最终选择需经过 R1 capability gate，不能仅按候选名称决定。
 
@@ -180,7 +189,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 继续推进 Roadmap R2：
 
-1. R2-005b2b：复用已验收任务 API/Worker，建立显式的非生产应用 Runner 与最小启动入口；绑定 AnalyticsTools 的来源/只读 SQL 边界，接 SDK progress callback，不使用旧 Scenario Injection。先受控验收再做明确凭据/预算下的真实模型调查，不增加调度框架。配置阶段应检查 submit 对既有 data_sources.capabilities 元数据的覆盖行为；能力权威当前是服务器注册，不是 DB 元数据。
+1. 使用现有任务应用，在明确非生产模型配置、凭据与预算后进行一次真实SDK调查持久化验收，保留脱敏逐Run证据。确认稳定数据版本和分析只读角色；data_version标签不等于快照，单源配置不可假设混合队列路由。不再新增编排框架。
 2. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
@@ -195,7 +204,8 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
 | R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
 | R2-005a task-service 专项 | 11/11 PASS | Fake/Spy coordinator；事务外 Runner、失败分类与输入隔离；未执行 SQL |
-| 后端全量 unittest（2026-10-10） | Ran 568 tests / OK (skipped=2) | 未配置专用 DB 变量；两个数据库测试类跳过；无真实模型调用 |
+| 后端全量 unittest（2026-10-10） | Ran 585 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；无真实模型调用 |
+| R2-005b2b PostgreSQL 应用接线 | 4/4 PASS；含全部持久化/Worker/API 回归23/23 PASS | 实际Analytics SQL/Observation、只读拒写、元数据保留、独立本地API进程；受控Runner |
 | R2-005b2a PostgreSQL API | 4/4 PASS；含持久化/Worker 回归 19/19 PASS | 真实 PostgreSQL 17.11 + TestClient + 受控 SQL Runner；无模型/外部业务数据 |
 | 新 API/reader + 旧 API | 40/40 PASS | Hermetic；主线程执行，含安全输入错误响应 |
 | R2-005b1 数据库/Worker 专项 | 15/15 PASS | PostgreSQL 17.11；全新库、升级库、事实重放、失败留存、实际子进程退出与安全终结 |

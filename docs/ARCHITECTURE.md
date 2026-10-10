@@ -38,7 +38,7 @@ FastAPI JSON → React Diagnosis Workspace
                                   └────────────┴→ app_state → GET 历史/详情
 ```
 
-这条路径以受控 Runner 在真实数据库验收；默认应用尚未配置真实 SDK Runner，不是多数据源、认证或生产部署平台。
+这条路径以受控 Runner 在真实数据库验收。另有显式本地任务应用入口可配置现有 SDK Runner，但真实模型待验收；默认旧 app 不自动启用服务，不是多数据源、认证或生产部署平台。
 
 当前最重要的复用点是 `MetricRegistry`、`AnalyticsTools`、Agents SDK Runtime、Observation/Evidence/Diagnosis、Evaluation，以及已验收的持久化/Worker/API；主要缺口是实际来源与 Runner 配置、完整查询快照 provenance、持续外部接入、前端和部署边界。
 
@@ -445,7 +445,7 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 
 - Source boundary 负责标识数据来源类型、连接/授权状态、可用时间范围、粒度、维度和指标能力。
 - 纯领域能力契约已在 `backend/app/data_sources/capabilities.py`（单测：`backend/tests/test_data_source_capabilities.py`）中实现（Current），支持来源身份、环境隔离、独立指标 grain/维度及跨 grain 组合保护。
-- Registry → capability 的纯内存适配和 AnalyticsTools 可选前置校验已实现（`backend/app/data_sources/semantic_adapter.py`、`backend/app/analytics/tools.py`；单测：`backend/tests/test_semantic_adapter.py`、`backend/tests/test_analytics_tools.py`）。API、实际数据库来源发现和连接器集成仍为 Planned。
+- Registry → capability 的适配和 AnalyticsTools 可选前置校验已实现（`backend/app/data_sources/semantic_adapter.py`、`backend/app/analytics/tools.py`）。新任务 API/Source Runner 已绑定能力合同；实际数据库来源发现和外部连接器仍为 Planned。
 - Synthetic、Sandbox 和真实外部来源必须可区分，调查 Run 必须引用明确的来源身份。
 - 外部 PostgreSQL、Shopify 或其他来源只有在真实接口、权限和粒度验证后才可声明为支持；未验证的指标维度必须保持不可用。
 
@@ -524,7 +524,17 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 - task 路径输入验证和服务错误只返回固定 code，不回显误传凭据或连接异常。旧端点的错误响应与 wildcard CORS 未在本切片改变，公开部署前必须收紧。
 - 真实 PostgreSQL API 专项 4/4、含持久化/Worker 回归 19/19 PASS；HTTP 使用 TestClient，Runner 为受控 SQL，无真实模型/外部源/浏览器/生产部署。证据：[`task-api-acceptance-2026-10-10.md`](evaluation-artifacts/task-api-acceptance-2026-10-10.md)。
 
-### Planned：应用 Runner 与进程配置接线（R2-005b2b）
+### Current：显式应用 Runner/本地启动配置（R2-005b2b，模型待验收）
+
+- `task_application.py` 提供显式环境配置和 `api/worker [--once]` 本地入口；不读 `.env`/旧 DATABASE_URL，不迁移、不准备业务数据。仅允许 loopback 库和 Synthetic Sandbox/Olist静态Validation，不宣称外部PG/Shopify产品接入。
+- `source_runner.py:SourceInvestigationRunner` 校验 descriptor/version/metric/date/filters，调用既有诊断 SDK Runtime，传入 model、8次以内工具预算、10轮以内预算和 checkpoint callback。继承原SDK环境bootstrap；每次 RunConfig 禁止tracing导出，不等于业务数据不发送给模型。
+- Analytics connection facade 每查询打开独立 READ ONLY 短事务，10秒SQL超时，查询后关闭；不跨模型调用持分析事务。固定filter必须出现在原始工具参数中，不隐式加过滤造成Observation范围失真。
+- 本地任务专用API不包含旧注入/同步端点，无wildcard CORS，监听127.0.0.1。默认旧app兼容行为不变，认证/生产部署未完成。
+- 数据源upsert省略capabilities保留已有值，显式{}可清空；真实数据库验证。当前能力权威仍是服务器绑定，而不是元数据自动发现。
+- 新专项4/4、数据库全回归23/23 PASS：实际Analytics聚合→Observation→checkpoint→受控Diagnosis→API读取，以及只读拒写和独立API进程。模型与外部同步未运行；证据/启动合同：[`task-application-acceptance-2026-10-10.md`](evaluation-artifacts/task-application-acceptance-2026-10-10.md)。
+- 版本标签不是数据库snapshot，不同短事务可能看见并发更新；单源Runner不自动路由混合来源队列。真实数据接入前必须落实这两项边界。
+
+### Planned：真实 SDK/模型与数据版本验收
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、
@@ -573,7 +583,7 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 
 1. 默认 Registry 仍绑定一个宽表和一套 Synthetic/Amazon 维度；虽已有可选 capability contract 适配，不同真实数据源/粒度仍未完成来源验证和连接器接入。
 2. Live API 会先注入 Synthetic 场景，真实外部数据闭环尚不存在。
-3. 新任务服务能重连读取持久历史，但默认应用与前端仍使用旧内存路径，真实 SDK Runner/进程启动配置未完成。
+3. 新任务服务能重连读取历史，显式本地Runner/启动入口已实现；默认旧app和前端仍使用内存路径，真实模型尚未验收。
 4. SQL 安全组件与 Analytics 主链脱节，数据库只读角色也没有由 API 自动保证。
 5. CORS、认证、错误暴露和生产部署配置仍是开发环境状态。
 6. 前端是单页调查工作台，不是已接线的五页面完整产品。

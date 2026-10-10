@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
+import unicodedata
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -46,7 +47,7 @@ class InvestigationTaskCreate(BaseModel):
         for key, item in value.items():
             if not key or len(key) > 64:
                 raise ValueError("filter names must contain 1 to 64 characters")
-            if len(item) > 256:
+            if len(item) > 256 or any(unicodedata.category(character) == "Cc" for character in item):
                 raise ValueError("filter values must contain at most 256 characters")
         return value
 

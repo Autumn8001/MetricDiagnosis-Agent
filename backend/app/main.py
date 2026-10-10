@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 def create_app(
     *, investigation_tasks_service: InvestigationTasksService | None = None,
+    include_legacy_routes: bool = True,
 ) -> FastAPI:
     """Build the API without opening connections, starting workers or migrating.
 
@@ -47,14 +48,18 @@ def create_app(
             "http://localhost:5173",
             "http://127.0.0.1:5173",
             "http://localhost:3000",
-            "*",
-        ],
-        allow_credentials=True,
+        ] + (["*"] if include_legacy_routes else []),
+        allow_credentials=include_legacy_routes,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    application.include_router(api_router)
+    if include_legacy_routes:
+        application.include_router(api_router)
+    else:
+        @application.get("/health")
+        def local_task_health():
+            return {"status": "ok", "mode": "local_tasks"}
     application.include_router(task_router)
     return application
 

@@ -82,6 +82,8 @@ R2 PostgreSQL 专项：在 `backend` 中配置专用 `METRICSLEUTH_TEST_DATABASE
 
 R2 任务 API 数据库专项：在相同专用环境运行 `python -B -m unittest tests.test_postgres_persistence_integration tests.test_postgres_task_api_integration -v`。HTTP 使用 TestClient、Runner 为受控 SQL，不是模型验收；详见 `docs/evaluation-artifacts/task-api-acceptance-2026-10-10.md`。默认 FastAPI app 未配置任务服务时返回 503。
 
+显式本地应用入口为 `python -B -m app.task_application api` / `worker --once`（backend cwd），必须先按 `docs/evaluation-artifacts/task-application-acceptance-2026-10-10.md` 配置；不会自动迁移或注入数据。新增真实 SQL/进程专项 `tests.test_postgres_task_application`；真实模型验收仍需明确凭据与预算。
+
 - 开始任务前检查 `git status --short --branch`，保护用户现有修改。
 - 先读取当前阶段代码和测试，再确定最小改动。
 - 一般低风险实现可按 Roadmap 自主推进；重大产品方向、不可逆数据操作、生产部署、密钥和权限变更必须先获得用户确认。

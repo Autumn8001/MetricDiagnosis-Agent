@@ -469,6 +469,7 @@ class ApplicationStateRepository:
         state_value = _enum_value(state, DataSourceState, "state")
         data_version_value = _optional_text(data_version, "data_version")
         capabilities_json = _capabilities_payload(capabilities, descriptor)
+        capabilities_supplied = capabilities is not None
 
         sql = """
             INSERT INTO app_state.data_sources (
@@ -478,7 +479,8 @@ class ApplicationStateRepository:
             ON CONFLICT (source_id) DO UPDATE SET
                 display_name = EXCLUDED.display_name,
                 state = EXCLUDED.state,
-                capabilities = EXCLUDED.capabilities,
+                capabilities = CASE WHEN %s THEN EXCLUDED.capabilities
+                                    ELSE app_state.data_sources.capabilities END,
                 data_version = EXCLUDED.data_version,
                 updated_at = now()
             WHERE app_state.data_sources.provider = EXCLUDED.provider
@@ -496,6 +498,7 @@ class ApplicationStateRepository:
                     state_value,
                     capabilities_json,
                     data_version_value,
+                    capabilities_supplied,
                 ),
             )
             rowcount = getattr(cursor, "rowcount", None)

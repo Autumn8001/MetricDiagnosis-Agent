@@ -183,7 +183,64 @@ class ApplicationStateRepositoryTests(unittest.TestCase):
         self.assertIn("%s", sql)
         self.assertIn("sandbox", params)
         self.assertIn("snapshot-1", params)
+        self.assertEqual(params[6], "snapshot-1")
+        self.assertEqual(params[7], True)
         self.assertNotIn("shopify-dev", sql)
+
+    def test_upsert_distinguishes_omitted_and_explicit_empty_capabilities(self) -> None:
+        descriptor = DataSourceDescriptor(
+            source_id="shopify-dev",
+            display_name="Shopify Dev Store",
+            provider=SourceProvider.SHOPIFY,
+            environment=SourceEnvironment.SANDBOX,
+        )
+
+        for supplied, expected_flag in ((None, False), ({}, True)):
+            with self.subTest(capabilities=supplied):
+                repository, connection = _repository()
+                repository.upsert_data_source(descriptor, capabilities=supplied)
+
+                sql, params = connection.calls[-1]
+                self.assertIn(
+                    "capabilities = CASE WHEN %s THEN EXCLUDED.capabilities", sql
+                )
+                self.assertIn(
+                    "ELSE app_state.data_sources.capabilities END", sql
+                )
+                self.assertEqual(json.loads(params[5]), {})
+                self.assertIsNone(params[6])
+                self.assertIs(params[7], expected_flag)
+                self.assertLess(
+                    sql.index("CAST(%s AS jsonb), %s)"),
+                    sql.index("capabilities = CASE WHEN %s"),
+                )
+
+    def test_upsert_identity_conflict_guard_remains_parameterized(self) -> None:
+        repository, connection = _repository()
+        connection.next_rowcount = 0
+        descriptor = DataSourceDescriptor(
+            source_id="shopify-dev",
+            display_name="Shopify Dev Store",
+            provider=SourceProvider.SHOPIFY,
+            environment=SourceEnvironment.SANDBOX,
+        )
+
+        with self.assertRaisesRegex(
+            PersistenceRepositoryError,
+            "Data source identity conflicts with the existing record",
+        ):
+            repository.upsert_data_source(descriptor)
+
+        sql, params = connection.calls[-1]
+        self.assertIn(
+            "WHERE app_state.data_sources.provider = EXCLUDED.provider", sql
+        )
+        self.assertIn(
+            "AND app_state.data_sources.environment = EXCLUDED.environment", sql
+        )
+        self.assertIsNone(params[6])
+        self.assertIs(params[7], False)
+        self.assertEqual(connection.commit_calls, 0)
 
     def test_upsert_rejects_source_identity_conflict(self) -> None:
         repository, connection = _repository()
