@@ -46,7 +46,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 | 数据实验室 | Confirmed | 提供隔离的 Sandbox 数据和可控变化；实验数据与真实外部数据、Synthetic Benchmark 分环境/来源存储。 |
 | 异常发现 | Confirmed | 支持指标刷新后的异常检测，并能由用户启动调查；自动 Webhook 触发不是 MVP 必需条件。 |
 | 动态 Agent 调查 | Confirmed / Current | Agent 必须根据 Observation 选择下一工具动作并可停止；当前 Agents SDK Runtime 和工具链已存在，但真实外部数据上的端到端验证尚未完成。 |
-| 证据与可追溯性 | Confirmed / Current | 结论只能引用本次工具调用产生的 Observation，并能回到工具参数、数据来源和查询快照；当前 Observation/Evidence/Diagnosis 校验已存在，持久化 provenance 尚不完整。 |
+| 证据与可追溯性 | Confirmed / Current | 结论只能引用本次工具调用产生的 Observation，并能回到工具参数、数据来源和查询快照；当前 Observation/Evidence/Diagnosis 校验与持久化来源外键已通过受控数据库验收，数据版本仍是标签，可靠查询快照尚未实现。 |
 | 任务与历史 | Confirmed / Current | Run、状态、失败、工具轨迹、证据和诊断结果必须持久保存，服务重启后可查看；持久化、Worker、步骤、任务 API 和显式本地启动入口已在真实 PostgreSQL 受控验收。默认旧 app 尚未配置服务，前端未接线；新 Runner 已实现，真实模型待验收。 |
 | 评测 | Confirmed / Current | 保留 Synthetic Benchmark 和真实模型评测，区分 Hermetic、Mock、真实模型和真实数据；需要可重复保存每次 Run 的结果与停止条件。 |
 | 部署 | Confirmed | 可在个人服务器上长期运行，包含最小安全配置、数据备份/恢复和健康检查；当前没有完整生产部署闭环。 |

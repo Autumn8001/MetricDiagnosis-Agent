@@ -104,13 +104,22 @@ class InvestigationWorker:
         runner: WorkerRunner,
         *,
         coordinator: InvestigationTransactionCoordinator | None = None,
+        expected_source: DataSourceDescriptor | None = None,
     ) -> None:
         if not callable(connection_factory):
             raise WorkerError("connection_factory must be callable.")
         if not callable(runner):
             raise WorkerError("runner must be callable.")
+        if (
+            expected_source is not None
+            and type(expected_source) is not DataSourceDescriptor
+        ):
+            raise WorkerError(
+                "expected_source must be a DataSourceDescriptor or None."
+            )
         self._factory = connection_factory
         self._runner = runner
+        self._expected_source = expected_source
         self._coordinator = coordinator or InvestigationTransactionCoordinator(
             connection_factory
         )
@@ -131,6 +140,10 @@ class InvestigationWorker:
         if not isinstance(request, InvestigationTaskRequest):
             raise WorkerError("request must be an InvestigationTaskRequest.")
         request.__post_init__()
+        if self._expected_source is not None and not self._same_source_identity(
+            request.descriptor, self._expected_source
+        ):
+            raise WorkerError("Request source does not match this worker's configured source.")
         connection = self._open_transaction(self._factory)
         try:
             repository = ApplicationStateRepository(connection)
@@ -262,20 +275,29 @@ class InvestigationWorker:
         except Exception as exc:
             raise _WorkerLockLost("Worker lock session is no longer healthy.") from exc
 
-    @staticmethod
-    def _recover_interrupted(connection: _Connection) -> None:
+    def _recover_interrupted(self, connection: _Connection) -> None:
         repository = ApplicationStateRepository(connection)
         cursor = connection.cursor()
         try:
-            cursor.execute(
-                """
+            query = """
                 SELECT investigation_run_id
                 FROM app_state.investigation_runs
                 WHERE status = %s AND execution_mode = 'worker'
-                FOR UPDATE
-                """,
-                (RunStatus.RUNNING.value,),
-            )
+            """
+            params: tuple[object, ...] = (RunStatus.RUNNING.value,)
+            if self._expected_source is not None:
+                query += (
+                    " AND source_id = %s AND environment = %s"
+                    " AND EXISTS (SELECT 1 FROM app_state.data_sources AS s"
+                    " WHERE s.source_id = app_state.investigation_runs.source_id AND s.provider = %s)"
+                )
+                params += (
+                    self._expected_source.source_id,
+                    self._expected_source.environment.value,
+                    self._expected_source.provider.value,
+                )
+            query += " FOR UPDATE"
+            cursor.execute(query, params)
             rows = cursor.fetchall()
         finally:
             cursor.close()
@@ -308,20 +330,27 @@ class InvestigationWorker:
         connection.rollback()
         cursor = connection.cursor()
         try:
-            cursor.execute(
-                """
+            query = """
                 SELECT r.investigation_run_id, r.source_id, r.environment,
                        r.requested_metric, r.data_version, r.query_reference,
                        r.parameters, s.provider, s.display_name
                 FROM app_state.investigation_runs AS r
                 JOIN app_state.data_sources AS s ON s.source_id = r.source_id
                 WHERE r.status = %s AND r.execution_mode = 'worker'
-                ORDER BY r.requested_at, r.investigation_run_id
-                FOR UPDATE OF r SKIP LOCKED
-                LIMIT 1
-                """,
-                (RunStatus.QUEUED.value,),
+            """
+            params: tuple[object, ...] = (RunStatus.QUEUED.value,)
+            if self._expected_source is not None:
+                query += " AND r.source_id = %s AND r.environment = %s AND s.provider = %s"
+                params += (
+                    self._expected_source.source_id,
+                    self._expected_source.environment.value,
+                    self._expected_source.provider.value,
+                )
+            query += (
+                " ORDER BY r.requested_at, r.investigation_run_id"
+                " FOR UPDATE OF r SKIP LOCKED LIMIT 1"
             )
+            cursor.execute(query, params)
             raw_row = cursor.fetchone()
             if raw_row is None:
                 connection.commit()
@@ -368,6 +397,16 @@ class InvestigationWorker:
             raise
         finally:
             cursor.close()
+
+    @staticmethod
+    def _same_source_identity(
+        actual: DataSourceDescriptor, expected: DataSourceDescriptor
+    ) -> bool:
+        return (
+            actual.source_id == expected.source_id
+            and actual.provider is expected.provider
+            and actual.environment is expected.environment
+        )
 
 
 __all__ = ["InvestigationWorker", "ProgressCallback", "WorkerError", "WorkerRunner"]

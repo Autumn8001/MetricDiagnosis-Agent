@@ -179,8 +179,8 @@ R1-003 新增的 `build_olist_validation_capabilities()`（`backend/app/data_sou
 ### Unknown：当前模型不能表达的内容
 
 - 当前 Registry/source table 已可通过纯内存适配器生成 capability contract，但默认 API 尚未注入 source descriptor/capabilities，运行时查询仍受限于旧版单表假设。
-- 当前数据库和 API 仍未持久化 `source_id`、快照、水位或同步版本字段。
-- 当前没有应用层 Analysis Session、Run、Observation、Evidence、Diagnosis 的数据库 Schema 或迁移。
+- 当前 `app_state` 与新任务 API 已持久化 source_id/environment、Run与事实、data_version标签及query reference，真实数据库验收见第8节；尚无可靠数据快照和持续同步水位。
+- 应用 Run/Observation/Evidence/Diagnosis 的 Schema 和 migrations 001–004 已实现并在隔离 PostgreSQL 执行；尚无产品级 Analysis Session 或持续连接器。
 
 ## 4. 当前数据流
 
@@ -536,7 +536,7 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 - 本地任务专用API不包含旧注入/同步端点，无wildcard CORS，监听127.0.0.1。默认旧app兼容行为不变，认证/生产部署未完成。
 - 数据源upsert省略capabilities保留已有值，显式{}可清空；真实数据库验证。当前能力权威仍是服务器绑定，而不是元数据自动发现。
 - 新专项4/4、数据库全回归23/23 PASS：实际Analytics聚合→Observation→checkpoint→受控Diagnosis→API读取，以及只读拒写和独立API进程。模型与外部同步未运行；证据/启动合同：[`task-application-acceptance-2026-10-10.md`](evaluation-artifacts/task-application-acceptance-2026-10-10.md)。
-- 版本标签不是数据库snapshot，不同短事务可能看见并发更新；单源Runner不自动路由混合来源队列。真实数据接入前必须落实这两项边界。
+- 版本标签不是数据库snapshot，不同短事务可能看见并发更新。应用Worker现绑定Runner的来源身份，仅领取/恢复自己的任务；不自动路由混合来源，也不提供用户授权或共用宽表的物理分析隔离。队列隔离实际PG验收见 [`worker-source-isolation-acceptance-2026-10-10.md`](evaluation-artifacts/worker-source-isolation-acceptance-2026-10-10.md)。快照和分析只读角色仍待落实。
 
 ### Planned：真实 SDK/模型与数据版本验收
 

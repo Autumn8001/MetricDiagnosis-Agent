@@ -262,13 +262,14 @@
 - **R2-005b2b（已实现，受控验收通过）**：`task_application.py` 提供仅本机的显式配置与 API/Worker 启动入口；`source_runner.py` 复用 AnalyticsTools、SDK Runtime 和进度回调，不注入场景、不新增调度框架。日期/固定 filters 硬约束与单查询只读短事务；任务专用 API 排除旧注入端点。真实数据库新专项 4/4 PASS，实际聚合 SQL/Observation、写入拒绝、元数据保留和独立 API 进程均验证。记录见 [`task-application-acceptance-2026-10-10.md`](evaluation-artifacts/task-application-acceptance-2026-10-10.md)。
 - **下一验收**：明确非生产模型凭据/模型/调用预算和稳定数据版本后，经真实 SDK 完成一次 API 排队→Worker→SQL→步骤→Diagnosis→历史读取；保存脱敏逐 Run 证据。未通过前不标记 R2 全部完成。并检查真实来源的快照/只读角色与单源队列边界，避免继续增加无运行证据的基础模块。
 - **2026-10-10 首次真实SDK尝试：未通过**。用户一次性授权后沿用现有模型/端点，SDK 返回 `InternalServerError`；无完成工具、Observation、Evidence 或 Diagnosis，失败任务和新应用重连读取正常。此次授权已使用，不自动重试；先确认端点可用性再经新授权复验。记录见 [`live-task-persistence-attempt-2026-10-10.md`](evaluation-artifacts/live-task-persistence-attempt-2026-10-10.md)。不因此改写 Runtime 或引入新的调度模块。
+- **单源队列边界补验（2026-10-10，已通过）**：应用Worker绑定Runner来源，只领取/恢复自己的任务；共享状态库的Synthetic/Olist交叉排队、running恢复及错误provider绑定在实际PG验证。保持原全局锁和短事务，无新调度机制。数据库回归26/26、离线605 tests / OK (skipped=3)；见 [`worker-source-isolation-acceptance-2026-10-10.md`](evaluation-artifacts/worker-source-isolation-acceptance-2026-10-10.md)。不是多租户授权、分析快照或模型成功。
 - 服务 allowlist 不是用户授权；公开部署前仍需认证、收紧 CORS、隔离旧开发端点、日志/响应脱敏。用户取消与显式重试按真实展示需求确定，不先扩展通用任务框架。
 
 - 将执行服务接到明确的单 worker/任务入口，而不是直接把长模型调用塞入同步 HTTP
   处理器；先定义任务创建、查询、失败和取消边界，再选择可恢复的最小进程模型。
 - 接线前必须明确迁移执行的受控环境与 connection factory 的配置归属。失败必须保留
   已发生的状态与安全的失败分类，但不得保存凭据、完整连接串或模型原始敏感输出。
-- 当前没有后台进程启动入口，不连接部署数据库；迁移只在明确的隔离测试环境执行。
+- 显式本地API/Worker入口已由R2-005b2b实现；尚无生产进程托管或默认应用/前端配置。不连接部署数据库，迁移仍只在明确的隔离测试环境执行。
 - 依赖：R2-PG 已通过；后续开发继续使用隔离数据库，不扩展通用调度平台。
 - 复用已验收的领取/恢复/checkpoint；先提供提交、状态、历史与事实详情接口，明确 source/metric/time-range 的授权和能力校验。
 - API 的真实数据库验收必须包含排队、成功/失败、已保存步骤读取与服务重新连接；Mock 测试不替代这些场景。

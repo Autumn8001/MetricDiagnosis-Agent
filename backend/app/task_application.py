@@ -106,7 +106,7 @@ def build_task_application(config: TaskApplicationConfig, *, diagnosis_runner=No
         model=config.model, max_tool_calls=config.max_tool_calls,
         max_turns=config.max_turns, **kwargs,
     )
-    worker = InvestigationWorker(state_factory, runner)
+    worker = InvestigationWorker(state_factory, runner, expected_source=descriptor)
     service = InvestigationTasksService(state_factory, worker, (binding,))
     return service, worker
 

@@ -17,10 +17,12 @@ from fastapi.testclient import TestClient
 
 from app.agent_runtime import EvidenceDrivenRunSummary
 from app.diagnosis import DiagnosisComposition
+from app.data_sources.capabilities import SourceProvider
 from app.evidence import EvidenceRole, promote_observation_to_evidence
 from app.main import create_app
 from app.observations.mapper import observations_from_metric_query
 from app.persistence.repository import ApplicationStateRepository
+from app.persistence.worker import InvestigationWorker
 from app.task_application import TaskApplicationConfig, build_task_application
 from tests import test_postgres_persistence_integration as pg
 
@@ -148,6 +150,143 @@ class PostgresTaskApplicationTests(unittest.TestCase):
             connection.commit()
         finally:
             connection.close()
+
+    def test_source_bound_application_leaves_other_queued_tasks_untouched(self):
+        calls = []
+        sql_values = []
+
+        def controlled_runner(prompt, **kwargs):
+            calls.append("synthetic")
+            result = kwargs["analytics_tools"].query_metric(
+                "sales", datetime.date(2026, 10, 10), datetime.date(2026, 10, 10),
+                "previous_7_days", {"asin": self.asin}, [])
+            sql_values.append(result.rows[0].current_value)
+            raise RuntimeError("controlled_stop")
+
+        def other_runner(*args, **kwargs):
+            calls.append("olist")
+            raise RuntimeError("controlled_stop")
+
+        other_config = replace(self.config, profile="olist_validation", source_id=f"other-{uuid4()}")
+        other_service, other_worker = build_task_application(other_config, diagnosis_runner=other_runner)
+        service, worker = build_task_application(self.config, diagnosis_runner=controlled_runner)
+        with TestClient(create_app(investigation_tasks_service=other_service, include_legacy_routes=False)) as other_client, \
+                TestClient(create_app(investigation_tasks_service=service, include_legacy_routes=False)) as client:
+            # The foreign task is older. An unscoped worker would claim it first.
+            response = other_client.post("/api/investigations", json={
+                "source_id": other_config.source_id, "target_metric": "merchandise_gmv",
+                "target_date": "2017-03-20", "filters": {}, "group_by": []})
+            self.assertEqual(response.status_code, 202)
+            other_run_id = response.json()["investigation_run_id"]
+            run_id = self._submit(client)
+            try:
+                self.assertEqual(worker.run_once(), run_id)
+                self.assertIsNone(worker.run_once())
+                self.assertEqual(calls, ["synthetic"])
+                self.assertEqual(sql_values, [Decimal("80")])
+                other_detail = other_client.get(f"/api/investigations/{other_run_id}",
+                                               params={"source_id": other_config.source_id}).json()
+                self.assertEqual(other_detail["run"]["status"], "queued")
+                self.assertIsNone(other_detail["run"]["started_at"])
+                self.assertEqual(other_detail["run"]["tool_call_count"], 0)
+                self.assertEqual(other_worker.run_once(), other_run_id)
+                self.assertEqual(calls, ["synthetic", "olist"])
+            finally:
+                # Terminalize only this test's generated records, without deletes.
+                connection = self.fixture._transaction_connection()
+                try:
+                    repository = ApplicationStateRepository(connection)
+                    for identifier in (run_id, other_run_id):
+                        if repository.get_investigation_run(identifier).status.value in {"queued", "running"}:
+                            repository.fail_investigation_run(run_id=identifier, failure_code="acceptance_cleanup")
+                    connection.commit()
+                finally:
+                    connection.close()
+
+    def test_source_bound_recovery_does_not_fail_another_sources_running_task(self):
+        runner_calls = []
+
+        def forbidden_runner(*args, **kwargs):
+            runner_calls.append(True)
+            self.fail("Recovery must not replay any Runner")
+
+        other_config = replace(self.config, profile="olist_validation", source_id=f"other-{uuid4()}")
+        other_service, other_worker = build_task_application(other_config, diagnosis_runner=forbidden_runner)
+        service, worker = build_task_application(self.config, diagnosis_runner=forbidden_runner)
+        with TestClient(create_app(investigation_tasks_service=other_service, include_legacy_routes=False)) as other_client, \
+                TestClient(create_app(investigation_tasks_service=service, include_legacy_routes=False)) as client:
+            response = other_client.post("/api/investigations", json={
+                "source_id": other_config.source_id, "target_metric": "merchandise_gmv",
+                "target_date": "2017-03-20", "filters": {}, "group_by": []})
+            self.assertEqual(response.status_code, 202)
+            other_run_id = response.json()["investigation_run_id"]
+            run_id = self._submit(client)
+            connection = self.fixture._transaction_connection()
+            try:
+                # Simulate two persisted interrupted runs; no model execution.
+                connection.execute("UPDATE app_state.investigation_runs SET status='running', started_at=now() "
+                                   "WHERE investigation_run_id IN (%s,%s) AND status='queued'",
+                                   (run_id, other_run_id))
+                connection.commit()
+            finally:
+                connection.close()
+            try:
+                self.assertIsNone(worker.run_once())
+                own = client.get(f"/api/investigations/{run_id}", params={"source_id": self.config.source_id}).json()
+                other = other_client.get(f"/api/investigations/{other_run_id}",
+                                         params={"source_id": other_config.source_id}).json()
+                self.assertEqual(own["run"]["status"], "failed")
+                self.assertEqual(own["run"]["failure_code"], "worker_interrupted")
+                self.assertEqual(other["run"]["status"], "running")
+                self.assertIsNone(other["run"]["failure_code"])
+                self.assertIsNone(other_worker.run_once())
+                other = other_client.get(f"/api/investigations/{other_run_id}",
+                                         params={"source_id": other_config.source_id}).json()
+                self.assertEqual(other["run"]["failure_code"], "worker_interrupted")
+                self.assertEqual(other["diagnoses"], [])
+                self.assertEqual(runner_calls, [])
+            finally:
+                connection = self.fixture._transaction_connection()
+                try:
+                    repository = ApplicationStateRepository(connection)
+                    for identifier in (run_id, other_run_id):
+                        if repository.get_investigation_run(identifier).status.value in {"queued", "running"}:
+                            repository.fail_investigation_run(run_id=identifier, failure_code="acceptance_cleanup")
+                    connection.commit()
+                finally:
+                    connection.close()
+
+    def test_incorrect_provider_binding_neither_claims_nor_recovers_source_tasks(self):
+        service, owner = build_task_application(self.config,
+            diagnosis_runner=lambda *args, **kwargs: self.fail("Recovery must not execute Runner"))
+        wrong_descriptor = replace(service._sources[self.config.source_id].descriptor,
+                                   provider=SourceProvider.POSTGRESQL)
+        invoked = []
+        wrong_worker = InvestigationWorker(self.fixture._transaction_connection,
+            lambda *args: invoked.append(True), expected_source=wrong_descriptor)
+        with TestClient(create_app(investigation_tasks_service=service, include_legacy_routes=False)) as client:
+            run_id = self._submit(client)
+            try:
+                self.assertIsNone(wrong_worker.run_once())
+                detail = client.get(f"/api/investigations/{run_id}",
+                                    params={"source_id": self.config.source_id}).json()
+                self.assertEqual(detail["run"]["status"], "queued")
+                connection = self.fixture._transaction_connection()
+                try:
+                    connection.execute("UPDATE app_state.investigation_runs SET status='running',started_at=now() "
+                                       "WHERE investigation_run_id=%s AND status='queued'", (run_id,))
+                    connection.commit()
+                finally:
+                    connection.close()
+                self.assertIsNone(wrong_worker.run_once())
+                detail = client.get(f"/api/investigations/{run_id}",
+                                    params={"source_id": self.config.source_id}).json()
+                self.assertEqual(detail["run"]["status"], "running")
+                self.assertIsNone(detail["run"]["failure_code"])
+                self.assertEqual(invoked, [])
+            finally:
+                # The correctly bound owner may terminalize only its own interrupted task.
+                self.assertIsNone(owner.run_once())
 
     def test_local_api_entrypoint_starts_as_separate_process(self):
         with socket.socket() as sock:

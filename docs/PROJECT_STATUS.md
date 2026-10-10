@@ -5,7 +5,7 @@
 > Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-005a 已提交）
 > 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器；R2-005a 单任务执行服务
 > 当前阶段：R2 持久化应用基础（进行中）
-> 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b（`c8ea746`，受控验收）；Olist真实SQL/持久步骤（`15f2bae`）
+> 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b（`c8ea746`，受控验收）；Olist真实SQL/持久步骤（`15f2bae`）；模型失败尝试（`58d7c70`）；本次单源Worker领取/恢复隔离补验
 > 当前任务：真实 SDK 持久调查首次授权尝试失败；需确认现有端点/模型可用性再安排授权复验；R1-004 仍需明确外部接入资源
 
 ## 当前结论
@@ -64,8 +64,15 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - Source Runner 复用 SDK Runtime 和 callback；每次查询为独立只读短事务并限时10秒。日期和固定filters由工具强制校验；不隐式补过滤而造成Trace/Observation范围错误。
 - capabilities 省略不会抹掉已有元数据；真实 SQL 已验证参数顺序、保留/显式清除语义。
 - 新 PostgreSQL 专项4/4 PASS，含实际Analytics聚合与Observation mapper、UPDATE只读拒绝、元数据保留、独立API子进程HTTP读取。最终合并回归见下表。Runner为受控，真实模型未调用。
-- `data_version`仍为标签，不是数据库snapshot；单源配置不提供混合来源队列路由。下一步先真实模型验收与真实源capability gate，不继续扩展编排。
+- `data_version`仍为标签，不是数据库snapshot；单源配置不提供混合来源自动路由。后续已补上Worker只领取/恢复绑定来源的边界，见下节；下一步先真实模型验收与真实源capability gate，不继续扩展编排。
 - 证据/安全启动说明：[`task-application-acceptance-2026-10-10.md`](evaluation-artifacts/task-application-acceptance-2026-10-10.md)。
+
+## 单源 Worker：领取与恢复来源隔离已验收
+
+- 修复单源Runner配合全局Worker时误领/终结其他来源任务的边界：`InvestigationWorker(expected_source=...)` 在连接前拒绝异源提交，并以参数化SQL限定领取和恢复来源；显式应用始终传入同一descriptor。
+- 保留原全局advisory lock/短事务，无新表、迁移或调度机制。低层未绑定Worker保留受控兼容用法，产品入口不使用全局领取。
+- 主线程实际PG验证：先排队Olist再排队Synthetic，Synthetic仅执行自己且读到sales80；Olist保持queued直到自己的Worker执行。两个来源running恢复互不终结，无Runner重放、无伪造Diagnosis。
+- 主审另补相同source_id/environment但错误provider的启动配置：既不领取queued，也不终结running。应用PG专项7/7，全持久化/Worker/API/应用回归26/26；离线605 tests / OK (skipped=3)。记录：[`worker-source-isolation-acceptance-2026-10-10.md`](evaluation-artifacts/worker-source-isolation-acceptance-2026-10-10.md)。不是多租户授权或分析宽表物理隔离。
 
 ## Olist 静态公开数据：真实 SQL 与失败步骤持久化已验收
 
@@ -205,7 +212,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 继续推进 Roadmap R2：
 
-1. 现有端点的首次授权真实SDK尝试失败，先确认可用性，再经新授权完成模型成功与Diagnosis持久化 gate。期间只推进可离线/隔离数据库验证的数据版本、只读角色和单源队列边界；data_version标签不等于快照，不再新增编排框架。
+1. 现有端点的首次授权真实SDK尝试失败，先确认可用性，再经新授权完成模型成功与Diagnosis持久化 gate。本次已补验单源队列隔离；data_version标签不等于快照，分析最小权限/稳定版本仍未验收，不再新增编排框架。已向用户请求端点确认/新调用授权，未收到答复前不调用。
 2. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
@@ -220,7 +227,8 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
 | R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
 | R2-005a task-service 专项 | 11/11 PASS | Fake/Spy coordinator；事务外 Runner、失败分类与输入隔离；未执行 SQL |
-| 后端全量 unittest（2026-10-10，最终回归） | Ran 598 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；该命令无真实模型调用 |
+| 后端全量 unittest（2026-10-10，最新回归） | Ran 605 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；该命令无真实模型调用 |
+| 单源Worker领取/恢复实际PG补验 | 应用7/7；完整PG回归26/26 PASS | 两来源交叉队列/中断恢复/错误provider隔离；受控Runner，无模型调用 |
 | Olist/真实调用验收脚本守卫 | 13/13 PASS | 主线程离线终验；不是模型或数据库调查运行 |
 | Olist SQL/持久步骤专项（2026-10-10） | PASS | 实际公开 CSV / PostgreSQL / Analytics；受控4步27Observation，预期失败留存与新应用读回；不调用模型 |
 | 真实SDK持久调查尝试（2026-10-10） | FAIL / InternalServerError | 仅一次授权；0工具/0Observation/0Diagnosis；失败状态和新应用读取通过，模型调查未验收 |

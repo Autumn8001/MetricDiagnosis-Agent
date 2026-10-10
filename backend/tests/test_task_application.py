@@ -36,6 +36,13 @@ class TaskApplicationTests(unittest.TestCase):
                 self.assertEqual(binding.descriptor.provider.value, provider)
                 self.assertEqual(binding.descriptor.environment.value, environment)
 
+    def test_application_binds_worker_to_the_same_source_as_runner(self):
+        with patch("app.task_application.InvestigationWorker") as worker_class:
+            service, worker = build_task_application(self.config(), diagnosis_runner=unittest.mock.Mock())
+        self.assertIs(worker, worker_class.return_value)
+        self.assertEqual(worker_class.call_args.kwargs["expected_source"],
+                         service._sources["test-sandbox"].descriptor)
+
     def test_local_profiles_and_budgets_fail_closed(self):
         for changes in ({"profile": "shopify"}, {"profile": "live"},
                         {"state_database_url": "postgresql://prod.example/live"},
