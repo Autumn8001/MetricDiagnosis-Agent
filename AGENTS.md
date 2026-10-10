@@ -88,6 +88,8 @@ R2 任务 API 数据库专项：在相同专用环境运行 `python -B -m unitte
 
 Olist 静态公开数据的实际 SQL/步骤留存证据见 `docs/evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md`。一次授权的真实SDK调查返回 `InternalServerError`，成功 gate 尚未通过；见 `docs/evaluation-artifacts/live-task-persistence-attempt-2026-10-10.md`。`verify_live_task_persistence.py` 是显式计费验收脚本，不是自动回归；本次一次性授权已使用，不得未经新的授权重跑。
 
+随后一次新授权的SDK尝试返回`AuthenticationError / 401`，仍无工具结果，见 `docs/evaluation-artifacts/live-task-authentication-attempt-2026-10-10.md`。两次授权均已使用；下一次调用先由用户确认本机鉴权/端点并重新授权。验收脚本passed仅是执行/持久化条件，不自动代表Driver/Scope或停止正确。
+
 - 开始任务前检查 `git status --short --branch`，保护用户现有修改。
 - 先读取当前阶段代码和测试，再确定最小改动。
 - 一般低风险实现可按 Roadmap 自主推进；重大产品方向、不可逆数据操作、生产部署、密钥和权限变更必须先获得用户确认。

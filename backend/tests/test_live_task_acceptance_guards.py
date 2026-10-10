@@ -23,15 +23,35 @@ ARGS = [
 
 class LiveTaskAcceptanceGuardTests(unittest.TestCase):
     def test_model_call_opt_in_is_required_before_any_external_work(self) -> None:
+        stderr = io.StringIO()
         with (
             patch.object(acceptance, "_load_explicit_model_settings") as load_settings,
             patch.object(acceptance, "_open_database") as open_database,
             patch.object(acceptance, "_install_explicit_model_client") as install_client,
-            redirect_stderr(io.StringIO()),
+            redirect_stderr(stderr),
         ):
             with self.assertRaises(SystemExit) as raised:
                 acceptance.main(ARGS[:-1])
         self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(stderr.getvalue(), "invalid_arguments\n")
+        load_settings.assert_not_called()
+        open_database.assert_not_called()
+        install_client.assert_not_called()
+
+    def test_unknown_argument_with_token_shaped_value_is_not_echoed(self) -> None:
+        stderr = io.StringIO()
+        fake_token = "sk-test-shaped-value-do-not-print"
+        with (
+            patch.object(acceptance, "_load_explicit_model_settings") as load_settings,
+            patch.object(acceptance, "_open_database") as open_database,
+            patch.object(acceptance, "_install_explicit_model_client") as install_client,
+            redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as raised:
+                acceptance.main(ARGS + ["--unexpected", fake_token])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(stderr.getvalue(), "invalid_arguments\n")
+        self.assertNotIn(fake_token, stderr.getvalue())
         load_settings.assert_not_called()
         open_database.assert_not_called()
         install_client.assert_not_called()

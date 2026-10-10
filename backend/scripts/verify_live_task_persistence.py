@@ -45,6 +45,13 @@ class AcceptanceFailure(Exception):
         super().__init__(self.code)
 
 
+class SafeArgumentParser(argparse.ArgumentParser):
+    """Keep argparse errors from echoing user-supplied argument values."""
+
+    def error(self, _message: str) -> None:
+        self.exit(2, "invalid_arguments\n")
+
+
 def validate_database_url(database_url: str) -> None:
     """Allow only the dedicated local acceptance database, without URL options."""
     try:
@@ -423,7 +430,7 @@ def _assert_only_own_task_queued(database_url: str, run_id: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = SafeArgumentParser(description=__doc__)
     parser.add_argument("--database-url", required=True)
     parser.add_argument("--model-env-file", required=True)
     parser.add_argument("--allow-model-call", action="store_true", required=True)
