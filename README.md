@@ -6,7 +6,7 @@ MetricSleuth 是一个 AI 自主数据调查与诊断系统。电商是首个验
 
 ## 当前 React 产品工作区（R4-002）
 
-默认 React 页面消费持久调查来源目录和任务 API，保留认可原型的五个导航区域。主线程真实 Edge 浏览器使用受控 HTTP fixture 最终验收通过；尚未通过真实 PostgreSQL 浏览器读取、真实模型调查或外部持续数据源验收。各页面当前展示范围见 [产品定义](docs/PRODUCT.md#4-认可的产品原型与界面边界) 和 [项目状态](docs/PROJECT_STATUS.md)。
+默认 React 页面消费持久调查来源目录和任务 API，保留认可原型的五个导航区域。主线程已分别验收受控HTTP交互与真实PostgreSQL/API/Edge的既有Olist失败历史读取及刷新复读；尚未通过真实模型成功调查或外部持续数据源验收。各页面当前展示范围见 [产品定义](docs/PRODUCT.md#4-认可的产品原型与界面边界) 和 [项目状态](docs/PROJECT_STATUS.md)。
 
 Vite 默认将 `/api` 与 `/health` 代理到 `http://127.0.0.1:8001`，与显式 task application API 默认端口一致。只有需要调试旧同步 Benchmark API 时，才显式设置 `METRICSLEUTH_DEV_API_TARGET` 覆盖代理目标。
 
@@ -33,7 +33,7 @@ Pop-Location
 
 ## 当前状态
 
-* **当前阶段（下方为历史快照）**：R4-002 默认 React 工作区已接线，持久化与 Worker 已通过隔离 PostgreSQL 受控验收；真实 PostgreSQL → API → 浏览器链路、真实模型成功调查、外部持续数据、可操作 Lab 与生产部署仍未验收。旧 Stage 1 状态及测试/Live 描述不应当作当前结果。
+* **当前阶段（下方为历史快照）**：R4-002默认React接线与R4-003真实PostgreSQL→API→浏览器既有失败历史读取已验收；真实模型成功调查、外部持续数据、可操作Lab与生产部署仍未验收。旧Stage1测试/Live描述不应当作当前结果。
 * **当前范围**：
   - 基础 Python 3.12+ 脚手架与元数据（当前验证解释器：Python 3.13.5）；
   - Phase 0 人工调查契约规格（[docs/phase-0-manual-investigation.md](docs/phase-0-manual-investigation.md)）；

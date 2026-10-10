@@ -306,7 +306,7 @@
 
 ## 7. R4 — 产品 API 与冻结原型接线
 
-**状态：进行中；R4-001、R4-002 UI切片已实现；真实 PostgreSQL → API → 浏览器验收待进行**
+**状态：进行中；R4-001/002已完成；R4-003真实PostgreSQL→API→浏览器既有失败历史读取通过，新模型调查与完整产品仍待验收**
 
 ### R4-001 — 任务客户端与配置来源目录（已完成）
 
@@ -321,7 +321,14 @@
 - 实现：`frontend/src/App.tsx` 渲染 `InvestigationWorkspace`；页面读取来源、提交任务、分页读取列表及详情；queued/running 详情每2秒轮询，终态或详情读取错误后不继续轮询。结果来自服务端持久事实；无取消、自动重试、追问、固定进度或页面实验注入。
 - 页面语义：概览计数只涵盖所选来源当前一页（最多20条）；指标页显示服务端配置能力目录而非趋势/计算值；数据页显示来源配置而非连通性、健康或同步状态；实验室已明确显示尚未接线。
 - 验证边界：主线程最终真实 Edge + 受控 HTTP fixture PASS，覆盖来源/能力渲染、历史翻页、成功与失败历史事实、失败不伪造 Diagnosis、单次提交/轮询和终态停止、来源切换及服务不可用错误。客户端18/18、API/应用24/24、lint/类型/build通过。无 PostgreSQL、外部数据或模型参与。记录：[`task-workspace-acceptance-2026-10-10.md`](evaluation-artifacts/task-workspace-acceptance-2026-10-10.md)。
-- 下一切片：优先启动隔离 PostgreSQL 中的受控任务应用，经真实 task API 由浏览器读取已持久的 Olist/Synthetic 任务历史；该验收不调用模型。另行保留真实 SDK 成功持久化 gate，不能以受控 Runner 替代。
+- 下一数据库读取切片已由 R4-003 完成，见下节。另行保留真实 SDK 成功持久化 gate，不能以受控 Runner 替代。
+
+### R4-003 — 真实 PostgreSQL 历史浏览器读取（已验收）
+
+- 目标/依赖：验证既有 R4-002 页面确实能从 R2 持久化和实际 API 读取历史；使用既有 Olist 静态验证记录，不新建业务能力。
+- 方案/模块：`frontend/scripts/verify-postgres-workspace.mjs` 启动真实 Edge 与只允许GET的本机静态/代理服务，读取显式 `task_application api`；没有 fixture、Worker、模型、迁移或数据写入。
+- 主线程验收：既有失败调查4个Tool Call / 27个Observation / 0Evidence / 0Diagnosis；页面事实与API一致，刷新复读通过；直接SQL与API首条GMV 16861.09/13355.61一致。浏览器写请求0、前后数据库计数相同，API和隔离PG验收后均停止。lint/脚本语法检查通过；见 [`postgres-browser-history-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-browser-history-acceptance-2026-10-10.md)。不是新的模型成功调查、实时外部源或完整R4。
+- 后续阻碍/顺序：继续R1-004官方接口/权限/能力比较，确定最小持续来源方案及资源请求；真实模型成功gate需新的授权。依据此次真实数据，后续UI切片改善Decimal显示和维度记录分层，同时保留原始值/引用；不扩展调度或重画原型。
 
 ### 目标
 
@@ -330,7 +337,7 @@
 ### 当前阻碍
 
 - 原型已提供并冻结；原型的固定进度、追问、取消及实验注入不等于已有后端能力。
-- 默认 React 调查工作区已接入 task API，但还没有真实 PostgreSQL → HTTP → 浏览器的端到端读取验收。
+- 默认 React 调查工作区已接入 task API，R4-003已通过真实 PostgreSQL → HTTP → 浏览器的既有失败历史读取；新的完整模型调查与成功Diagnosis页面仍未验收。
 - 概览异常指标/真实趋势、外部数据源连接与刷新 API、可执行 Sandbox Lab 尚未实现；任务应用仍需显式环境配置，默认旧 `app` 不自动注入任务服务。
 
 ### 技术方案
@@ -347,7 +354,7 @@
 - UI 不把 fallback/mock 内容表现为真实业务结果。
 - 真实调查不再暴露 Benchmark 场景选择器或注入动作。
 
-R4-002 的 UI 和受控 HTTP 浏览器验收不代表以上完整 R4 条件已满足；真实 PostgreSQL 浏览器历史读取、真实模型调查、持续外部来源、指标异常数据和 Lab 仍是未通过的产品验收项。
+R4-002受控UI与R4-003真实数据库历史读取不代表完整R4条件满足；真实模型调查、持续外部来源、指标异常数据和Lab仍未通过产品验收。
 
 ## 8. R5 — 隔离实验室
 

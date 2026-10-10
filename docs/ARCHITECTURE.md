@@ -406,7 +406,7 @@ R4-001 新增 GET `/api/investigation-sources`：`InvestigationTasksService.list
 
 新提交的 queued 任务及所选 queued/running 历史详情每2秒读取详情，终态不继续轮询；API读取错误显示安全错误代码并停止该轮轮询。详情按服务端记录展示 Tool Call、Observation、Evidence、Diagnosis 与失败状态；空 Diagnosis 不会被前端合成。来源切换清理所选详情和显式日期。该 UI 没有取消/重试/追问、固定进度条或 Synthetic 注入操作。
 
-R4-002 主线程最终真实 Edge + 受控 HTTP fixture 验收 PASS，记录见 `evaluation-artifacts/task-workspace-acceptance-2026-10-10.md`。此验证不连接 PostgreSQL、外部来源或模型；真实 PostgreSQL API→浏览器历史读取仍是下一验收门。
+R4-002 主线程最终真实 Edge + 受控 HTTP fixture 验收 PASS，记录见 `evaluation-artifacts/task-workspace-acceptance-2026-10-10.md`。随后R4-003用真实隔离PostgreSQL、独立任务API进程与Edge读回既有Olist失败调查并刷新复读，4工具/27Observation，无写请求/模型/Worker；见 `evaluation-artifacts/postgres-browser-history-acceptance-2026-10-10.md`。没有验收成功Diagnosis或新模型调查。
 
 ### Historical：旧同步 Benchmark 工作台
 
@@ -601,10 +601,10 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 
 1. 默认 Registry 仍绑定一个宽表和一套 Synthetic/Amazon 维度；虽已有可选 capability contract 适配，不同真实数据源/粒度仍未完成来源验证和连接器接入。
 2. Live API 会先注入 Synthetic 场景，真实外部数据闭环尚不存在。
-3. 新任务服务能重连读取历史，显式本地Runner/启动入口已实现；默认 React 前端现消费新任务 API，但 PostgreSQL → HTTP → 浏览器闭环和真实模型尚未验收。
+3. 新任务服务能重连读取历史，默认React已消费新任务API，真实PostgreSQL→HTTP→浏览器既有失败历史读取已验收；新模型成功调查闭环仍未通过。
 4. SQL 安全组件与 Analytics 主链脱节，数据库只读角色也没有由 API 自动保证。
 5. CORS、认证、错误暴露和生产部署配置仍是开发环境状态。
-6. 前端已保留五个原型导航区并接入持久任务读取/提交；指标趋势、数据连接/刷新和实验操作未接线。当前浏览器验收使用受控 HTTP fixture，实际 PostgreSQL 与默认服务配置的浏览器闭环仍待完成。
+6. 前端保留五个原型导航区并接入持久任务，已分别验收受控HTTP交互和实际PostgreSQL历史读取；指标趋势、外部连接/刷新与实验操作未接线，真实长Decimal/大量维度结果需要可读性改进。
 
 ### Planned
 
