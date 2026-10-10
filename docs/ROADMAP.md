@@ -331,6 +331,17 @@
 - 主线程验收：既有失败调查4个Tool Call / 27个Observation / 0Evidence / 0Diagnosis；页面事实与API一致，刷新复读通过；直接SQL与API首条GMV 16861.09/13355.61一致。浏览器写请求0、前后数据库计数相同，API和隔离PG验收后均停止。lint/脚本语法检查通过；见 [`postgres-browser-history-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-browser-history-acceptance-2026-10-10.md)。不是新的模型成功调查、实时外部源或完整R4。
 - 后续阻碍/顺序：R1-004a资料比较已完成，下一步R1-004b只读Orders probe，实际调用待专用开发店与应用权限；真实模型成功gate需新的授权。依据此次真实数据，后续UI切片改善Decimal显示和维度记录分层，同时保留原始值/引用；不扩展调度或重画原型。
 
+### R4-004 — 数值与调查明细阅读（已验收）
+
+- 目标/依赖：改善R4-003真实记录暴露的长Decimal/大量维度阅读问题；只改前端，不改指标计算、Runtime或持久化。
+- 实现：字符串精确数值格式化（最多4位小数、千分位、非零舍入标明≈），原始数值/区间/筛选/维度/Observation与Tool Call引用保留在原生details；第一条默认展开，其他按需展开，全部Observation仍呈现。相对变化保留原始比率，不添加推测币种/百分比。
+- 主线程验收：格式10/10、客户端18/18、lint/类型/build通过；真实Edge受控HTTP验证键盘展开/长小数/大整数/null与既有任务行为PASS。既有Olist实际PG→API→Edge重新读取27Observation通过，数据库计数未变、0写请求，测试进程已停止。见 [`investigation-readability-acceptance-2026-10-10.md`](evaluation-artifacts/investigation-readability-acceptance-2026-10-10.md)。没有新模型、商店调用或成功Diagnosis验收。
+
+### 下一接线切片（待开展）
+
+- 在隔离PostgreSQL/Synthetic环境验证浏览器提交→实际任务API→受控Worker→成功Diagnosis回读与刷新；复用现有Worker，不建立新执行机制。受控Runner只放验收工具，不作为产品模型替身。
+- 实际商店Orders gate继续等用户资源；真实模型成功gate另需新授权。上述接线不替代这两个gate。
+
 ### 目标
 
 在不重新设计产品的前提下，让工作概览、业务指标、AI 调查工作区、数据接入和实验室成为可操作页面。

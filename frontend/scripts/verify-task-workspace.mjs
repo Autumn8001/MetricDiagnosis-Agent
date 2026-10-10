@@ -22,21 +22,25 @@ const run = (id, status = 'failed', sourceId = sources[0].source_id) => ({ inves
   status, requested_metric: sourceId === sources[0].source_id ? 'sales' : 'orders', requested_at: stamp, started_at: stamp,
   finished_at: ['failed', 'succeeded'].includes(status) ? stamp : null, data_version: 'fixture-label-not-snapshot',
   query_reference: 'fixture-query', failure_code: status === 'failed' ? 'execution_failed' : null,
-  tool_call_count: status === 'queued' ? 0 : 1, observation_count: status === 'queued' ? 0 : 1, evidence_count: 0, diagnosis_count: 0 })
+  tool_call_count: status === 'queued' ? 0 : 1, observation_count: status === 'queued' ? 0 : 3, evidence_count: 0, diagnosis_count: 0 })
 const observation = { observation_id: 'fixture-observation', tool_call_id: 'fixture-tool', metric: 'sales', status: 'success',
   source_status: 'available', current_period_start: '2026-10-10', current_period_end: '2026-10-10',
   baseline_period_start: '2026-10-03', baseline_period_end: '2026-10-09', filters: {}, group_by: [], dimensions: {},
-  current_value: '80', baseline_value: '100', relative_change: '-0.2', unit: 'USD', sample_size: '8',
+  current_value: '16861.0900000000000000000000000', baseline_value: '13355.6100000000000000000000000', relative_change: '0.262472891937320947', unit: 'USD', sample_size: '8',
   query_reference: 'fixture-query', data_version: 'fixture-label-not-snapshot', error_code: null, created_at: stamp }
 const detail = (currentRun) => ({ run: currentRun, tool_calls: currentRun.tool_call_count ? [{
   tool_call_id: 'fixture-tool', tool_name: 'query_metric', status: 'succeeded', arguments: { metric: 'sales' },
   data_version: currentRun.data_version, query_reference: 'fixture-query', result_reference: 'fixture-result', requested_at: stamp,
-}] : [], observations: currentRun.observation_count ? [observation] : [], evidence: [], diagnoses: [] })
+}] : [], observations: currentRun.observation_count ? [observation,
+  { ...observation, observation_id: 'fixture-dimension-observation', group_by: ['customer_state'], dimensions: { customer_state: 'SP' }, current_value: '9007199254740993', baseline_value: null, relative_change: null },
+  { ...observation, observation_id: 'fixture-negative-observation', current_value: '-0.00001', baseline_value: '0', relative_change: null },
+] : [], evidence: [], diagnoses: [] })
 function successfulDetail() {
   const value = detail(run('historical-success', 'succeeded'))
   value.run.evidence_count = 1
   value.run.diagnosis_count = 1
-  value.observations = [{ ...observation, status: 'normal', current_value: '100', relative_change: '0' }]
+  value.run.observation_count = 1
+  value.observations = [{ ...observation, status: 'normal', current_value: '100', baseline_value: '100', relative_change: '0' }]
   value.evidence = [{ evidence_id: 'fixture-evidence', observation_id: observation.observation_id,
     tool_call_id: observation.tool_call_id, role: 'supporting', data_version: value.run.data_version,
     query_reference: 'fixture-query', created_at: stamp }]
@@ -175,6 +179,19 @@ try {
   await until(async () => (await text()).includes('fixture-observation'), 'saved failed observation')
   assert.ok((await text()).includes('execution_failed'))
   assert.ok((await text()).includes('未保存诊断结论'), 'failed task must not fabricate a diagnosis')
+  assert.equal(await evaluate('document.querySelectorAll(".observation-card").length'), 3, 'retain every observation')
+  assert.equal(await evaluate('document.querySelectorAll(".observation-details[open]").length'), 1, 'first record starts expanded; others remain readable on demand')
+  assert.ok((await text()).includes('16,861.09'), 'readable grouped current value')
+  assert.ok((await text()).includes('≈'), 'rounded values must be visibly approximate')
+  assert.ok((await text()).includes(observation.current_value), 'exact value remains visible in first disclosure')
+  await evaluate('document.querySelectorAll(".observation-details > summary")[1].focus()')
+  assert.equal(await evaluate('document.activeElement === document.querySelectorAll(".observation-details > summary")[1]'), true, 'native summary receives keyboard focus')
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 })
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 })
+  await until(() => evaluate('document.querySelectorAll(".observation-details")[1].open'), 'keyboard opens original dimension record')
+  assert.ok((await text()).includes('9007199254740993'), 'unsafe integer string must remain exact')
+  assert.ok((await text()).includes('fixture-dimension-observation'), 'dimension provenance remains accessible')
+  await evaluate('document.querySelectorAll(".observation-details")[1].open=false')
   await screenshot('investigation-desktop', 1440, 1000)
   await screenshot('investigation-mobile', 390, 844)
   await evaluate('document.querySelector(\'[data-testid="run-detail"]\').scrollIntoView()')
