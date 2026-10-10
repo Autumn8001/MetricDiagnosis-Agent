@@ -62,6 +62,7 @@ exit $testExit
 
 ```powershell
 Push-Location frontend
+npm run test:tasks
 npm run lint
 .\node_modules\.bin\tsc.cmd --noEmit -p tsconfig.app.json
 Pop-Location

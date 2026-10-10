@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 
 from .task_schemas import (
     InvestigationTaskCreate,
+    InvestigationSourcesResponse,
     TaskDetailResponse,
     TaskListResponse,
     TaskRunView,
@@ -35,6 +36,24 @@ def _raise_http_error(exc: TaskServiceError) -> None:
         status_code=exc.status_code,
         detail={"code": exc.code},
     ) from exc
+
+
+@task_router.get(
+    "/api/investigation-sources",
+    response_model=InvestigationSourcesResponse,
+)
+def list_investigation_sources(
+    service: Annotated[InvestigationTasksService, Depends(get_task_service)],
+) -> InvestigationSourcesResponse:
+    """List server-configured source capabilities; this does not probe health."""
+
+    try:
+        return service.list_sources()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "source_catalog_unavailable"},
+        ) from exc
 
 
 @task_router.post(
@@ -94,4 +113,4 @@ def get_investigation(
         ) from exc
 
 
-__all__ = ["get_task_service", "task_router"]
+__all__ = ["get_task_service", "list_investigation_sources", "task_router"]

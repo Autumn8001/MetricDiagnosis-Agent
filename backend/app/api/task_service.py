@@ -15,7 +15,15 @@ from app.persistence.task_execution_service import InvestigationTaskRequest
 from app.persistence.task_read_repository import InvestigationTaskReadRepository
 from app.persistence.worker import InvestigationWorker
 
-from .task_schemas import InvestigationTaskCreate, TaskDetailResponse, TaskListResponse, TaskRunView
+from .task_schemas import (
+    InvestigationSourceMetricCapability,
+    InvestigationSourcesResponse,
+    InvestigationSourceView,
+    InvestigationTaskCreate,
+    TaskDetailResponse,
+    TaskListResponse,
+    TaskRunView,
+)
 
 
 class TaskServiceError(Exception):
@@ -71,6 +79,41 @@ class InvestigationTasksService:
         self._connection_factory = connection_factory
         self._worker = worker
         self._sources = bindings
+
+    def list_sources(self) -> InvestigationSourcesResponse:
+        """Return configured source identity and declared metric capabilities.
+
+        This is an in-memory projection of the server-owned allow-list. It does
+        not test connectivity, synchronization freshness, or database health.
+        Fresh response models and lists are created on every call so callers
+        cannot mutate the configured capability objects through the response.
+        """
+
+        items: list[InvestigationSourceView] = []
+        for source_id in sorted(self._sources):
+            binding = self._sources[source_id]
+            descriptor = binding.descriptor
+            metrics = [
+                InvestigationSourceMetricCapability(
+                    metric_id=metric_id,
+                    supported=capability.supported,
+                    grain=list(capability.grain),
+                    dimensions=list(capability.dimensions),
+                    unavailable_reason=capability.unavailable_reason,
+                )
+                for metric_id, capability in sorted(binding.capabilities.metrics.items())
+            ]
+            items.append(
+                InvestigationSourceView(
+                    source_id=descriptor.source_id,
+                    display_name=descriptor.display_name,
+                    provider=descriptor.provider.value,
+                    environment=descriptor.environment.value,
+                    data_version=binding.data_version,
+                    metrics=metrics,
+                )
+            )
+        return InvestigationSourcesResponse(items=items)
 
     def submit(self, payload: InvestigationTaskCreate) -> TaskRunView:
         binding = self._binding(payload.source_id)

@@ -396,6 +396,8 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 
 旧请求/响应结构在 `backend/app/api/schemas.py`。新 `task_routes.py` 提供 POST `/api/investigations`（202）以及 GET 列表/详情；契约在 `task_schemas.py`。默认 `app` 未注入任务服务时返回 503。尚无数据源 CRUD、连接测试、Schema 探索或用户取消/显式重试接口。
 
+R4-001 新增 GET `/api/investigation-sources`：`InvestigationTasksService.list_sources()` 只投影配置的来源身份、版本标签和每项metric/grain/dimensions/supported能力，不开连接或提交任务；不是数据源CRUD、连接健康、刷新状态或日期覆盖接口。默认服务未配置仍503。
+
 `backend/app/main.py:16-29` 配置了开发端口的 CORS，并包含 `allow_origins=[..., "*"]`、全方法和全请求头；当前没有认证/授权中间件，也没有证据表明它托管 Vite 生产静态文件。
 
 ### Current：前端
@@ -410,6 +412,8 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 - Manual Daily Scan 和 Synthetic 场景控制栏。
 
 前端仅通过 `frontend/src/api.ts:33-75` 调用上述 6 个端点，状态使用 React 内存 state；没有历史导航、持久化缓存、来源管理、实验室页面或独立工作概览页面。应用启动时会自动请求一个 `mock_mode: true` 的 Fixture Preview（`frontend/src/App.tsx:203-220`），该结果是静态展示契约，不代表真实 Agent Run。
+
+R4-001 已新增独立 `frontend/src/tasks/contracts.ts` 与 `client.ts::createTaskClient`，支持来源目录、任务创建/列表/详情；JSON经过字段/来源身份校验，Decimal保留字符串或数值，错误只暴露安全code，POST不自动重试。旧App尚未消费此客户端，不能称为页面已接线。`npm run test:tasks` 使用唯一OS临时编译目录和Fake Fetch，无新增测试依赖。验收边界见 `evaluation-artifacts/task-frontend-contract-acceptance-2026-10-10.md`。
 
 ### Planned：产品 API/前端的架构责任
 

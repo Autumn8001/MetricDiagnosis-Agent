@@ -186,11 +186,45 @@ class TaskDetailResponse(BaseModel):
     diagnoses: list[DiagnosisView]
 
 
+class InvestigationSourceMetricCapability(BaseModel):
+    """Configured query capability for one metric on an investigation source."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metric_id: str
+    supported: bool
+    grain: list[str]
+    dimensions: list[str]
+    unavailable_reason: str | None
+
+
+class InvestigationSourceView(BaseModel):
+    """A source configured for task submission and its declared capabilities."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str
+    display_name: str
+    provider: str
+    environment: str
+    data_version: str
+    metrics: list[InvestigationSourceMetricCapability]
+
+
+class InvestigationSourcesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[InvestigationSourceView]
+
+
 __all__ = [
     "DiagnosisView",
     "DiagnosisChangeView",
     "EvidenceView",
     "InvestigationTaskCreate",
+    "InvestigationSourceMetricCapability",
+    "InvestigationSourcesResponse",
+    "InvestigationSourceView",
     "ObservationView",
     "TaskDetailResponse",
     "TaskListResponse",

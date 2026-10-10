@@ -4,9 +4,9 @@
 > 快照日期：2026-10-10
 > Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-005a 已提交）
 > 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器；R2-005a 单任务执行服务
-> 当前阶段：R2 持久化应用基础（进行中）
+> 当前阶段：R2真实模型成功gate未通过；R4产品接线进行中（R4-001合同基础完成）
 > 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b（`c8ea746`，受控验收）；Olist真实SQL/持久步骤（`15f2bae`）；模型失败尝试（`58d7c70`）；本次单源Worker领取/恢复隔离补验
-> 当前任务：认可的 HTML 原型已提供，完成基线登记与页面/API 映射；下一切片为持久调查前端接线。真实 SDK 首次授权尝试失败，新的调用授权尚未取得；R1-004 先做不依赖凭据的来源比较
+> 当前任务：R4-001任务客户端与配置来源目录已验收；下一切片R4-002为冻结原型调查页面接线。真实SDK首次尝试失败，新的调用授权尚未取得；R1-004先做不依赖凭据的来源比较
 
 ## 当前结论
 
@@ -14,6 +14,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 ## 已完成且本轮有源码/测试证据
 
+- R4-001：`frontend/src/tasks/` 持久调查 sources/submit/list/detail 客户端、完整响应校验、安全错误与取消请求；后端 GET `/api/investigation-sources` 只投影配置来源能力，不连接数据库或运行任务。主线程客户端18/18、后端目录/API/应用24/24、lint/类型/build通过；React页面仍未接线。记录：[`task-frontend-contract-acceptance-2026-10-10.md`](evaluation-artifacts/task-frontend-contract-acceptance-2026-10-10.md)。
 - 数据源能力契约（R1-001）：最小、领域无关、真正深层不可变契约模型，支持 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（frozen dataclass，嵌套内部容器使用 MappingProxyType，防范 Sequence 字符串混淆），具备指标独立 grain/维度、跨 grain 组合保护与 fail-closed 校验（`backend/app/data_sources/capabilities.py`；单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS）。
 - 指标能力矩阵与语义适配（R1-002）：当前 Synthetic Profile 的五个核心指标在 `configs/metrics.yaml` 显式声明 `date × asin × marketplace × traffic_source` atomic grain；`MetricRegistry` 严格校验显式 grain 并为旧配置提供明确 fallback；`build_capabilities_from_registry()` 保留 Registry 中的 metric dimensions/grain；`AnalyticsTools` 传入 capabilities 时在执行 SQL 前校验查询能力（主线程专项测试 51/51 PASS）。
 - Olist 能力降级表达（R1-003）：`configs/olist_validation_metrics.yaml` 的三个支持指标显式使用 `date × customer_state` grain；`build_olist_validation_capabilities()` 复用 Registry grain/dimensions，显式拒绝 `sessions`、`conversion_rate` 及 `marketplace`/`traffic_source`/`asin`；Olist 工具兼容性脚本已绑定该合同。已验证绑定合同后，漏斗指标与非法维度都在 SQL 前失败。证据限于本地 Hermetic 测试，不代表数据库连接、同步或持续真实数据接入。
@@ -216,7 +217,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 2. R1-004：自主比较 Shopify 与受控只读 PostgreSQL 的权限、数据能力、成本和现有代码兼容性，再明确需要用户准备的资源；两者当前均未提供。实际连接前通过 capability spike 决定首个持续连接器，静态 Olist 不替代持续接入。
 3. 现有端点的首次授权真实 SDK 尝试失败，先确认可用性，再经新授权完成模型成功与 Diagnosis 持久化 gate。模型配置标识为 `gemini-3.8-flash-high`，本次只核对指纹，没有网络调用；用户询问模型不构成重试授权。data_version 标签不等于快照，分析最小权限/稳定版本仍未验收，不再新增编排框架。
 
-本次仅登记原型、核对模型标识和更新文档；未修改业务功能、重跑模型或重跑以下历史测试。最近源码验收提交为 `d0f13793c3c9e6322af7a0ebf86179bd7b0b705e`。
+原型登记提交为 `313b7ae`；随后R4-001新增客户端与只读配置目录，并重跑离线回归和前端验证。未重跑真实数据库/模型，不将下列历史数据库结果表述为本次验收。
 
 ## 最新验证结果
 
@@ -230,7 +231,9 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
 | R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
 | R2-005a task-service 专项 | 11/11 PASS | Fake/Spy coordinator；事务外 Runner、失败分类与输入隔离；未执行 SQL |
-| 后端全量 unittest（2026-10-10，最新回归） | Ran 605 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；该命令无真实模型调用 |
+| 后端全量 unittest（2026-10-10，最新回归） | Ran 612 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；该命令无真实模型调用 |
+| R4-001客户端合同 | 18/18 PASS | Fake Fetch；目录/任务/来源/Decimal/编码/安全错误/取消；未做浏览器与真实HTTP端到端验收 |
+| R4-001配置目录/任务API/应用 | 24/24 PASS | TestClient+实际application配置合同；不连接数据库、不调用模型 |
 | 单源Worker领取/恢复实际PG补验 | 应用7/7；完整PG回归26/26 PASS | 两来源交叉队列/中断恢复/错误provider隔离；受控Runner，无模型调用 |
 | Olist/真实调用验收脚本守卫 | 13/13 PASS | 主线程离线终验；不是模型或数据库调查运行 |
 | Olist SQL/持久步骤专项（2026-10-10） | PASS | 实际公开 CSV / PostgreSQL / Analytics；受控4步27Observation，预期失败留存与新应用读回；不调用模型 |
@@ -246,6 +249,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | FastAPI 专项 | 24/24 PASS | Live 分支使用 patch，只证明契约/wiring |
 | 前端 lint | PASS | 静态检查 |
 | TypeScript `--noEmit` | PASS | 不生成构建产物 |
+| 前端production build（R4-001） | PASS | 写入被忽略的dist；仍是旧App，客户端尚未被页面消费；未部署 |
 | Git 审查快照 | `eba3d1846d08876df42c9730289009875dd73dc0` | 原 11 个提交与审查分支保留；R2-PG 在本地 main 新增提交，不推送/合并 |
 
 ## 当前关键技术决策
