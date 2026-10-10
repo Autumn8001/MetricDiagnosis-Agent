@@ -99,7 +99,7 @@
 
 ## 5. R2 — 持久化应用基础
 
-**状态：进行中（R2-001 至 R2-005a、R2-PG、R2-005b1 已验收；产品 API 未完成）**
+**状态：进行中（R2-001 至 R2-005a、R2-PG、R2-005b1、R2-005b2a 已验收；应用 Runner 与启动配置未完成）**
 
 ### 目标
 
@@ -107,9 +107,9 @@
 
 ### 当前阻碍
 
-- 现有 API 和 React 状态均为进程/页面内存态。
-- 产品 Runtime/API 的 Observation/Evidence 仍为内存态；独立持久化服务已验收，尚未接线。
-- 单 Worker 领取与中断终结已验收；尚未接产品入口、用户取消/显式重试及服务器进程生命周期。
+- 旧同步 API 和 React 状态仍为进程/页面内存态；新任务 API 在显式配置下可读写持久状态。
+- 默认应用没有持久服务/真实 Runner 配置，前端尚未使用新 API。
+- 单 Worker 领取与中断终结已验收；用户取消/显式重试及服务器进程生命周期未实现。
 
 ### 技术方案
 
@@ -252,9 +252,14 @@
 - 现有 SDK tools/Diagnosis Runtime 可选 progress_callback，保留原始参数和最终验证；真实模型运行仍待验。
 - 验收：真实 PostgreSQL 15/15，离线回归 552 tests / OK (skipped=1)，SDK 回调 5/5（Fake Analytics，无模型）。记录见 [`worker-checkpoint-acceptance-2026-10-10.md`](evaluation-artifacts/worker-checkpoint-acceptance-2026-10-10.md)。
 
-### 下一切片：R2-005b2 — 产品任务/历史 API 与应用 Runner 接线
+### R2-005b2 — 产品任务/历史 API 与应用 Runner 接线
 
-**状态：待开展；依赖 R2-005b1 已满足**
+**状态：进行中；R2-005b2a 已验收，R2-005b2b 待开展**
+
+- **R2-005b2a（已完成）**：POST `/api/investigations` 排队，GET 列表/详情读取状态、已保存步骤和结果；服务器绑定 source/provider/environment/capabilities/version，客户端不提供连接配置。FastAPI `create_app()` 显式注入服务；默认返回 503，不启动 Worker、不执行迁移、不注入 Scenario。
+- 主线程真实 PostgreSQL 验收：API 专项 4/4、含既有 Worker/持久化回归 19/19 PASS；新应用实例读取历史、失败步骤留存、跨来源 404、安全错误和非法能力拒绝均通过。Runner 为受控 SELECT，非真实模型。记录见 [`task-api-acceptance-2026-10-10.md`](evaluation-artifacts/task-api-acceptance-2026-10-10.md)。
+- **R2-005b2b（下一步）**：建立最小、显式、非生产的应用 Runner/进程启动配置，将现有 AnalyticsTools 与 SDK 回调接到已验收 Worker。先用受控执行验收配置与 SQL 来源边界，再在明确模型凭据和预算下做一次真实模型调查。不得复用旧 Scenario Injection，也不新增调度平台。
+- 服务 allowlist 不是用户授权；公开部署前仍需认证、收紧 CORS、隔离旧开发端点、日志/响应脱敏。用户取消与显式重试按真实展示需求确定，不先扩展通用任务框架。
 
 - 将执行服务接到明确的单 worker/任务入口，而不是直接把长模型调用塞入同步 HTTP
   处理器；先定义任务创建、查询、失败和取消边界，再选择可恢复的最小进程模型。
@@ -307,7 +312,7 @@
 
 - 认可的独立 HTML 原型不在仓库中。
 - 当前只有无 Router 的单页 Benchmark Workspace。
-- 缺少数据源、同步、历史、任务状态等 API。
+- 缺少数据源/同步 API；任务状态/历史 API 已有显式配置实现，但前端与默认应用尚未接线。
 
 ### 技术方案
 

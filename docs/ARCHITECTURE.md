@@ -2,7 +2,7 @@
 
 > **Status：Current + Planned boundary**
 > 更新日期：2026-10-10
-> 审查基线：`main` / `eba3d18`；包含本次 R2-PG 修复与本地数据库验收
+> 审查基线：`main` / `eba3d18` 后续本地提交；已包含 R2-PG、R2-005b1 与 R2-005b2a 验收
 > 证据范围：仓库源码、测试、Schema、配置和版本化脱敏 artifact。本文没有连接生产数据库，也没有检查已部署服务。
 
 本文是给后续开发者和接管 Agent 使用的**现状架构参考**。`Current` 只描述源码能够支持的行为；`Planned` 只描述已经确认的责任边界，不代表已经存在的表、接口或部署；`Unknown` 表示现有证据不足。历史任务书中的目标不能覆盖当前实现事实。
@@ -27,9 +27,20 @@ Observation → Evidence → Structured Diagnosis
 FastAPI JSON → React Diagnosis Workspace
 ```
 
-它已经具备一条可测试的“指标查询—动态调查—证据校验—结构化诊断”内核，但产品 API 仍围绕本地 Synthetic Benchmark 场景组织。它不是已经完成的多数据源、持久化、认证和生产部署平台。
+上图为原有调查内核与旧前端路径。它已经具备一条可测试的“指标查询—动态调查—证据校验—结构化诊断”内核，但默认 API/前端仍围绕 Synthetic Benchmark 场景组织。另已完成并验收持久任务 API/Worker 路径：
 
-当前最重要的复用点是 `MetricRegistry`、`AnalyticsTools`、Agents SDK Runtime、Observation/Evidence/Diagnosis 领域约束及 Evaluation 评分器；当前最重要的架构缺口是数据源身份、应用状态持久化、完整 provenance、外部数据接入和部署边界。
+```text
+显式配置的任务 API → PostgreSQL app_state queued
+                                  ↓
+                            最小 Worker → 注入的 Runner
+                                  ↓            ↓ 完整工具结果
+                         终态/Diagnosis    checkpoint Trace/Observation
+                                  └────────────┴→ app_state → GET 历史/详情
+```
+
+这条路径以受控 Runner 在真实数据库验收；默认应用尚未配置真实 SDK Runner，不是多数据源、认证或生产部署平台。
+
+当前最重要的复用点是 `MetricRegistry`、`AnalyticsTools`、Agents SDK Runtime、Observation/Evidence/Diagnosis、Evaluation，以及已验收的持久化/Worker/API；主要缺口是实际来源与 Runner 配置、完整查询快照 provenance、持续外部接入、前端和部署边界。
 
 ### Planned
 
@@ -37,10 +48,10 @@ FastAPI JSON → React Diagnosis Workspace
 
 - 外部数据源与 Synthetic/Sandbox 的身份和环境隔离；
 - 原始数据到可调查 canonical 指标数据的责任分层；
-- Run、Tool Call、Observation、Evidence、Diagnosis 的持久化与恢复；
+- 已实现持久 Run/事实在默认应用和前端中的配置与使用；
 - 可长期运行的安全部署、密钥注入、访问控制和运维边界。
 
-具体数据库表名、迁移方案和新增 API 尚未在当前架构中确定，不能从本节推导为已实现合同。
+`app_state` 表、migrations 001–004 和任务 API 已确定并验证，见后文 Current。外部 staging/canonical、用户权限与部署方案仍属规划。
 
 ### Unknown
 
@@ -58,14 +69,15 @@ FastAPI JSON → React Diagnosis Workspace
 | 区域 | 当前职责 | 主要证据 |
 |---|---|---|
 | 指标语义 | 读取并校验 YAML，建立只读内存 `MetricRegistry` | `configs/metrics.yaml`；`backend/app/metrics/registry.py:60-153` |
-| 数据源能力契约 | 纯领域不可变来源身份、环境与指标 grain/维度能力模型；可由 Registry 适配，并由 AnalyticsTools 可选校验（尚未接入 API/DB） | `backend/app/data_sources/capabilities.py`；`backend/app/data_sources/semantic_adapter.py`；`backend/tests/test_semantic_adapter.py` |
+| 数据源能力契约 | 不可变身份/粒度合同；Registry 适配、AnalyticsTools 可选校验及新任务 API 服务器绑定；不是连接器 | `backend/app/data_sources/capabilities.py`；`backend/app/data_sources/semantic_adapter.py`；`backend/app/api/task_service.py` |
 | Warehouse | Synthetic 数据 Schema、Seed 和异常注入 | `warehouse/schema.sql`；`warehouse/seed.py`；`warehouse/anomaly_injector.py` |
 | 分析工具 | 根据 Registry 校验参数并执行 PostgreSQL 聚合；传入能力契约时在 SQL 前做来源能力校验 | `backend/app/analytics/tools.py:20-178` |
 | SQL 安全 | 独立的 `sqlglot` AST 校验器和 LIMIT/allowlist 规则 | `backend/app/sql_safety/guard.py:49-251` |
 | 可信中间事实 | `MetricQueryResult` 转不可变 `Observation` | `backend/app/analytics/models.py:18-71`；`backend/app/observations/mapper.py:45-187` |
 | 证据和诊断 | Observation 显式提升为 Evidence，再组合为 Diagnosis | `backend/app/evidence/promoter.py:13-57`；`backend/app/diagnosis/composition.py:80-106` |
 | Agent Runtime | Agents SDK 工具桥、Trace 审计、结构化诊断意图 | `backend/app/agent_runtime/investigation_runtime.py`；`backend/app/agent_runtime/diagnosis_runtime.py` |
-| API 服务 | FastAPI 路由和进程内业务编排 | `backend/app/api/routes.py:30-116`；`backend/app/api/service.py` |
+| API 服务 | 旧同步调查 + 显式注入的持久任务/历史 API | `backend/app/api/routes.py`；`backend/app/api/task_routes.py`；`backend/app/api/task_service.py` |
+| 应用状态 | 短事务事实保存、最小 Worker、作用域读取 | `backend/migrations/`；`backend/app/persistence/`；`backend/tests/test_postgres_persistence_integration.py`；`backend/tests/test_postgres_task_api_integration.py` |
 | 前端 | React + TypeScript + Vite 单页工作台 | `frontend/src/App.tsx`；`frontend/src/api.ts`；`frontend/vite.config.ts` |
 | Evaluation | 纯评分、操作状态、Evidence/Unsupported Claim 评分和评测脚本 | `backend/app/evaluation/`；`backend/scripts/run_benchmark_evaluation.py` |
 
@@ -74,11 +86,11 @@ FastAPI JSON → React Diagnosis Workspace
 - 后端：Python `>=3.12`、FastAPI、Uvicorn、Pydantic 2、`psycopg`、PyYAML、`sqlglot`，以及 `openai-agents==0.22.0`（`backend/pyproject.toml:1-17`）。
 - 数据库：PostgreSQL 连接实现。仓库声明的 Synthetic Schema 不是外部用户数据库接入机制。
 - 前端：React 19、TypeScript 6、Vite 8，原生 CSS；依赖和脚本见 `frontend/package.json:1-23`。
-- 应用形态：当前没有可确认的 Dockerfile、Compose、迁移目录、应用 ORM 或生产静态资源托管配置。
+- 应用形态：已有 `backend/migrations/` 和显式参数化 Repository；无应用 ORM、Dockerfile/Compose 或生产静态资源托管配置。
 
 ### Unknown：验证口径
 
-本次文档整理没有执行真实模型调用、没有连接数据库、没有启动线上服务。`README.md`、`任务书.md` 和 `docs/agent-state.md` 对测试数量及 Live Evaluation 的描述存在时间/版本差异（例如 453 与 455 的测试数）；这些历史记录会在 Evaluation 小节标明边界，不作为本次新鲜运行证据。
+当前阶段实际运行过隔离本机 PostgreSQL 验收，未调用真实模型或操作线上服务。`README.md`、`任务书.md` 和 `docs/agent-state.md` 的测试数量/Live 描述来自不同时间；最新结果见 `PROJECT_STATUS.md` 与验收 artifact，不能混算历史和本轮证据。
 
 ## 3. 当前数据模型
 
@@ -351,10 +363,10 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 
 ### Unknown：尚未具备的产品 provenance
 
-当前没有可供 API/前端查询的持久 Run 记录，因此无法在服务重启后恢复一次调查。以下信息也没有被统一持久化：
+旧同步 API 不持久保存 Run；新任务 API 已可在显式配置下读取持久 Run、工具事实和结果（见 R2-005b2a）。来源身份、环境、data_version/query_reference 已保存，但它们仍不是可重建的完整数据库快照。以下信息没有被统一持久化：
 
 - SQL 文本、SQL hash 或查询执行计划；
-- source identity、数据库快照/同步水位、数据版本；
+- 数据库快照/同步水位及与 data_version 的可重建映射；
 - Prompt、模型配置和 Runtime 版本；
 - 完整 Observation 原始结果和失败重试关系；
 - 用户、权限、租户或审计主体。
@@ -363,7 +375,7 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 
 ### Planned：持久化责任边界
 
-持久化层应成为 Run 生命周期、状态转换、调查事实和审计引用的权威来源；Runtime 负责产生可信的运行摘要，数据访问层负责提供查询/快照 provenance，API 负责状态读取和恢复。具体存储对象、索引、迁移和历史保留策略需在实现前单独确认。
+持久化层已承担 Run 生命周期、状态转换、调查事实和审计引用；Runtime 产生可信摘要，新 API 读取已保存状态。查询快照映射、保留策略、用户权限与部署责任仍需补齐。
 
 ## 8. FastAPI 与 React 当前边界
 
@@ -380,7 +392,7 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 | `POST` | `/api/scans/daily` | 运行手动全局扫描，只返回候选指标 |
 | `POST` | `/api/investigate` | 返回 Fixture Preview 或一次同步 Live 调查结果 |
 
-请求/响应结构定义在 `backend/app/api/schemas.py:80-221`。没有数据源 CRUD、连接测试、Schema 探索、Run 列表/详情、历史结果恢复或异步任务接口。
+旧请求/响应结构在 `backend/app/api/schemas.py`。新 `task_routes.py` 提供 POST `/api/investigations`（202）以及 GET 列表/详情；契约在 `task_schemas.py`。默认 `app` 未注入任务服务时返回 503。尚无数据源 CRUD、连接测试、Schema 探索或用户取消/显式重试接口。
 
 `backend/app/main.py:16-29` 配置了开发端口的 CORS，并包含 `allow_origins=[..., "*"]`、全方法和全请求头；当前没有认证/授权中间件，也没有证据表明它托管 Vite 生产静态文件。
 
@@ -423,7 +435,7 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 
 ### Unknown：测试数量和部署级验收
 
-README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计数不同。当前工作区实际运行后端全量测试为 490/490 PASS（包含 R2-001/R2-002 专项），前端 lint 与 TypeScript `--noEmit` 的历史结果仍需单独复核；这些仍是离线/Hermetic 与静态验证，不是当前生产数据库、真实外部数据持续刷新、浏览器部署或重启恢复的验收证据。
+README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶段。最新实际测试结果统一查看 `PROJECT_STATUS.md` 和对应 acceptance artifact；离线/Hermetic、真实数据库、真实模型必须分别报告，前端静态结果不能替代浏览器或部署验收。
 
 ## 10. 规划架构的责任边界
 
@@ -466,7 +478,7 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   `DataSourceDescriptor` 把该 Runtime Trace、Observation、Evidence 和 Diagnosis
   映射到 Repository，避免每条事实从独立调用参数取得来源身份。写入顺序和所有
   交叉引用先由 Hermetic Spy 测试验证，后由 R2-PG/005b1 真实数据库验证。该 Writer
-  已经由 Coordinator 在最小 Worker 中调用，FastAPI 尚未接线。
+  已经由 Coordinator 在最小 Worker 中调用，新 FastAPI 任务服务通过 Worker 提交。
 - `backend/migrations/002_enforce_investigation_provenance.sql` 是已在隔离测试库执行的
   migration：它把 Tool Call、Observation、Evidence、Diagnosis 的三元来源身份
   外键绑定到 Investigation Run，而不是只验证其单独指向一个存在的 Data Source。
@@ -475,11 +487,11 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 - Repository 还提供条件化 `fail_investigation_run()`，只将受控 failure code 写入
   `failure_details`；Writer 的 `start()`、`complete()` 和 `fail()` 可分别由未来的
   短事务调用。它们不拥有 connection/commit/rollback；现由 Coordinator 和最小
-  Worker 调用，FastAPI 与用户取消/显式重试尚未接线。
+  Worker 调用，新 FastAPI 任务服务已接线；用户取消/显式重试未实现。
 - `backend/app/persistence/transaction_coordinator.py` 是当前唯一的 transaction
   owner：它通过注入的 factory 对 start/complete/fail 分别创建短连接事务，并返回绑定
   来源身份的 immutable handle。它不读取 `DATABASE_URL`、不保留 connection，也不
-  直接执行模型；最小 Worker 已注入该协调器，API 尚未接线。
+  直接执行模型；最小 Worker 已注入该协调器，新任务 API 通过 Worker 提交。
 - `backend/app/persistence/task_execution_service.py` 把一次已注入的 Agent runner
   放在 `start` 与 `complete/fail` 两个 coordinator 调用之间。其输入和 failure code
   都是深度校验、来源绑定和脱敏的；它不是后台 worker、HTTP endpoint 或模型实现，
@@ -501,9 +513,18 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 - `Coordinator.checkpoint()` 锁定 running Run 的来源/版本，将完整 Trace+Observation 短事务保存。Repository 幂等 INSERT 比较所有显式事实列，拒绝同 ID 不同事实；原错误文本仍不落库。
 - `Writer.complete(checkpointed=True)` 验证最终 Summary 包含已保存事实，再严格幂等重放完整目录，写 Evidence/Diagnosis 和 succeeded。事务失败不能抹去之前已提交的步骤；未产生 Diagnosis 时不保存假结果。
 - 三个 SDK FunctionTool 与 `run_evidence_driven_diagnosis()` 支持可选同步 progress_callback；回调使用 ToolContext 原始参数和 Observation payload，失败传播，最终 Trace/Diagnosis 校验不变。符合应用拥有持久化、SDK 保持调查循环的边界（[OpenAI SDK 文档](https://developers.openai.com/api/docs/guides/agents/sdk)）。
-- 已有库和全新隔离 PostgreSQL 17.11 验证 15/15；SDK callback 专项为 Fake Analytics，无真实模型。记录：[`worker-checkpoint-acceptance-2026-10-10.md`](evaluation-artifacts/worker-checkpoint-acceptance-2026-10-10.md)。当前 API/前端/后台进程仍未配置该 Worker。
+- 已有库和全新隔离 PostgreSQL 17.11 验证 15/15；SDK callback 专项为 Fake Analytics，无真实模型。记录：[`worker-checkpoint-acceptance-2026-10-10.md`](evaluation-artifacts/worker-checkpoint-acceptance-2026-10-10.md)。新 API 可显式注入该 Worker；默认应用、前端与后台进程尚未配置。
 
-### Planned：产品任务 API 与运行时配置接线（R2-005b2）
+### Current：持久任务/历史 API（R2-005b2a）
+
+- `main.py:create_app()` 显式注入 `InvestigationTasksService`；无配置时任务端点 fail closed（503），不发现凭据、不迁移、不启动线程。旧六端点行为保持不变。
+- `api/task_service.py:TaskSourceBinding` 在服务器绑定 descriptor、capabilities 和版本。客户端只提交 source_id、metric、单日日期、filters、group_by；不接受环境、provider、DSN、模型或自由 Prompt。能力校验不等于连接器已验证，也不是用户认证。
+- POST 只调用 Worker.submit，不在 HTTP 中运行调查；GET 经 `task_read_repository.py` 的显式投影和 source/environment/worker 条件查询。读事务使用 REPEATABLE READ READ ONLY，独立关闭连接。
+- 详情返回 Tool Call、Observation、Evidence 引用与结构化 Diagnosis；不返回 request parameters、failure_details、Evidence payload、原始 error_message。工具参数与结构化业务字段仍需要写入边界验证，不能视为任意文本通用脱敏。
+- task 路径输入验证和服务错误只返回固定 code，不回显误传凭据或连接异常。旧端点的错误响应与 wildcard CORS 未在本切片改变，公开部署前必须收紧。
+- 真实 PostgreSQL API 专项 4/4、含持久化/Worker 回归 19/19 PASS；HTTP 使用 TestClient，Runner 为受控 SQL，无真实模型/外部源/浏览器/生产部署。证据：[`task-api-acceptance-2026-10-10.md`](evaluation-artifacts/task-api-acceptance-2026-10-10.md)。
+
+### Planned：应用 Runner 与进程配置接线（R2-005b2b）
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、
@@ -552,7 +573,7 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 
 1. 默认 Registry 仍绑定一个宽表和一套 Synthetic/Amazon 维度；虽已有可选 capability contract 适配，不同真实数据源/粒度仍未完成来源验证和连接器接入。
 2. Live API 会先注入 Synthetic 场景，真实外部数据闭环尚不存在。
-3. 应用 Run 只在请求生命周期内存在，服务重启后没有历史恢复能力。
+3. 新任务服务能重连读取持久历史，但默认应用与前端仍使用旧内存路径，真实 SDK Runner/进程启动配置未完成。
 4. SQL 安全组件与 Analytics 主链脱节，数据库只读角色也没有由 API 自动保证。
 5. CORS、认证、错误暴露和生产部署配置仍是开发环境状态。
 6. 前端是单页调查工作台，不是已接线的五页面完整产品。
