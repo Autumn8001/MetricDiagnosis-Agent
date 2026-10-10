@@ -11,6 +11,8 @@ import datetime
 from dataclasses import replace
 from decimal import Decimal
 import os
+import subprocess
+import sys
 from pathlib import Path
 import unittest
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -45,6 +47,7 @@ from app.persistence import (
     RunState,
     RunStatus,
 )
+from app.persistence.worker import InvestigationWorker
 
 
 _DATABASE_ENV = "METRICSLEUTH_TEST_DATABASE_URL"
@@ -641,6 +644,217 @@ class PostgresPersistenceAcceptanceTests(unittest.TestCase):
                 "diagnosis_evidence": 0,
             },
         )
+
+    def test_checkpoint_replay_rejects_conflicting_facts_and_terminal_writes(self) -> None:
+        request = self._request()
+        summary = self._controlled_summary(request)
+        handle = self.coordinator.start(
+            self.descriptor, run_id=self.run_id, requested_metric="sales",
+            data_version=self.data_version,
+        )
+        trace = summary.investigation.tool_trace[0]
+        observations = summary.observation_catalog
+        self.coordinator.checkpoint(handle, trace, observations)
+        self.coordinator.checkpoint(handle, trace, observations)
+        changed = replace(observations[0], current_value=Decimal("70"))
+        with self.assertRaises(PersistenceRepositoryError):
+            self.coordinator.checkpoint(handle, trace, (changed,))
+        changed_trace = replace(trace, arguments={"metric": "orders"})
+        with self.assertRaises(PersistenceRepositoryError):
+            self.coordinator.checkpoint(handle, changed_trace, observations)
+        # A new tool insert followed by a conflicting Observation ID must
+        # roll back the tool insert as part of the same step transaction.
+        extra_trace = replace(trace, tool_call_id=_new_id("conflicting-call"))
+        reused_observation = replace(observations[0], tool_call_id=extra_trace.tool_call_id)
+        with self.assertRaises(PersistenceRepositoryError):
+            self.coordinator.checkpoint(handle, extra_trace, (reused_observation,))
+        wrong_version = replace(handle, data_version="different-validation-version")
+        with self.assertRaises(PersistenceRepositoryError):
+            self.coordinator.checkpoint(wrong_version, trace, observations)
+        self.coordinator.complete(
+            handle, summary, query_reference=self.query_reference, checkpointed=True,
+        )
+        run, counts = self._read_run_and_counts(self.run_id)
+        self.assertEqual(run.status, RunStatus.SUCCEEDED)
+        self.assertEqual(counts["tool_calls"], 1)
+        self.assertEqual(counts["observations"], 1)
+        self.assertEqual(counts["diagnoses"], 1)
+        with self.assertRaises(PersistenceRepositoryError):
+            self.coordinator.checkpoint(handle, trace, observations)
+
+    def test_final_summary_cannot_omit_checkpointed_steps(self) -> None:
+        request = self._request()
+        summary = self._controlled_summary(request)
+        handle = self.coordinator.start(
+            self.descriptor, run_id=self.run_id, requested_metric="sales",
+            data_version=self.data_version,
+        )
+        extra_trace = InvestigationToolTraceEntry(
+            tool_call_id=_new_id("definition-call"),
+            tool_name="get_metric_definition", arguments={"metric": "sales"},
+            observation_ids=(),
+        )
+        self.coordinator.checkpoint(handle, extra_trace, ())
+        with self.assertRaises(ValueError):
+            self.coordinator.complete(handle, summary, checkpointed=True)
+        run, counts = self._read_run_and_counts(self.run_id)
+        self.assertEqual(run.status, RunStatus.RUNNING)
+        self.assertEqual(counts["tool_calls"], 1)
+        self.assertEqual(counts["diagnoses"], 0)
+
+    def test_autocommit_connection_is_rejected_before_lifecycle_writes(self) -> None:
+        coordinator = InvestigationTransactionCoordinator(self._connect)
+        with self.assertRaises(ValueError):
+            coordinator.start(
+                self.descriptor, run_id=self.run_id, requested_metric="sales",
+                data_version=self.data_version,
+            )
+        run, _counts = self._read_run_and_counts(self.run_id)
+        self.assertIsNone(run)
+
+    def test_worker_success_and_exclusive_claim_with_short_transactions(self) -> None:
+        calls = []
+
+        def runner(request, progress):
+            calls.append(request.run_id)
+            competitor = InvestigationWorker(
+                self._transaction_connection,
+                lambda *_args: self.fail("Competing worker must not execute."),
+            )
+            self.assertIsNone(competitor.run_once())
+            connection = self._connect()
+            try:
+                idle_transactions = connection.execute(
+                    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
+                    "AND state = 'idle in transaction'"
+                ).fetchone()[0]
+                self.assertEqual(idle_transactions, 0)
+            finally:
+                connection.close()
+            summary = self._controlled_summary(request)
+            progress(summary.investigation.tool_trace[0], summary.observation_catalog)
+            progress(summary.investigation.tool_trace[0], summary.observation_catalog)
+            return summary
+
+        worker = InvestigationWorker(self._transaction_connection, runner)
+        worker.submit(self._request())
+        self.assertEqual(worker.run_once(), self.run_id)
+        self.assertIsNone(worker.run_once())
+        run, counts = self._read_run_and_counts(self.run_id)
+        self.assertEqual(calls, [self.run_id])
+        self.assertEqual(run.status, RunStatus.SUCCEEDED)
+        self.assertEqual(counts["tool_calls"], 1)
+        self.assertEqual(counts["observations"], 1)
+        self.assertEqual(counts["diagnoses"], 1)
+
+    def test_worker_failure_keeps_prior_facts_without_diagnosis(self) -> None:
+        def runner(request, progress):
+            summary = self._controlled_summary(request)
+            progress(summary.investigation.tool_trace[0], summary.observation_catalog)
+            raise RuntimeError("controlled private response must not persist")
+
+        worker = InvestigationWorker(self._transaction_connection, runner)
+        worker.submit(self._request())
+        self.assertEqual(worker.run_once(), self.run_id)
+        run, counts = self._read_run_and_counts(self.run_id)
+        self.assertEqual(run.status, RunStatus.FAILED)
+        self.assertEqual(counts["tool_calls"], 1)
+        self.assertEqual(counts["observations"], 1)
+        self.assertEqual(counts["evidence"], 0)
+        self.assertEqual(counts["diagnoses"], 0)
+        connection = self._connect()
+        try:
+            details = connection.execute(
+                "SELECT failure_details FROM app_state.investigation_runs "
+                "WHERE investigation_run_id = %s", (self.run_id,),
+            ).fetchone()[0]
+            self.assertEqual(details, {"code": "execution_failed"})
+        finally:
+            connection.close()
+
+    def test_worker_skips_locked_queue_row_and_rejects_duplicate_submission(self) -> None:
+        called = []
+
+        def runner(request, progress):
+            called.append(request.run_id)
+            return self._controlled_summary(request)
+
+        worker = InvestigationWorker(self._transaction_connection, runner)
+        request = self._request()
+        second_request = replace(request, run_id=_new_id("second-queued-run"))
+        worker.submit(request)
+        with self.assertRaises(self._psycopg.IntegrityError):
+            worker.submit(request)
+        worker.submit(second_request)
+        blocker = self._transaction_connection()
+        try:
+            blocker.execute(
+                "SELECT investigation_run_id FROM app_state.investigation_runs "
+                "WHERE investigation_run_id = %s FOR UPDATE", (self.run_id,),
+            )
+            self.assertEqual(worker.run_once(), second_request.run_id)
+        finally:
+            blocker.rollback()
+            blocker.close()
+        self.assertEqual(worker.run_once(), self.run_id)
+        self.assertEqual(called, [second_request.run_id, self.run_id])
+        self.assertIsNone(worker.run_once())
+
+    def test_worker_process_exit_preserves_steps_and_recovers_without_replay(self) -> None:
+        # Abrupt child-process exit: no finally/normal runner failure path.
+        worker = InvestigationWorker(
+            self._transaction_connection,
+            lambda *_args: self.fail("Interrupted work must not be replayed."),
+        )
+        worker.submit(self._request())
+        script = '''
+import os
+from tests.test_postgres_persistence_integration import PostgresPersistenceAcceptanceTests as T
+from app.persistence.worker import InvestigationWorker
+T.setUpClass()
+fixture = T()
+fixture.setUp()
+def runner(request, progress):
+    summary = fixture._controlled_summary(request)
+    progress(summary.investigation.tool_trace[0], summary.observation_catalog)
+    os._exit(23)
+InvestigationWorker(T._transaction_connection, runner).run_once()
+'''
+        result = subprocess.run(
+            [sys.executable, "-B", "-c", script], cwd=Path(__file__).resolve().parents[1],
+            capture_output=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 23, "Controlled child worker did not reach its exit point.")
+        run, counts = self._read_run_and_counts(self.run_id)
+        self.assertEqual(run.status, RunStatus.RUNNING)
+        self.assertEqual(counts["observations"], 1)
+        self.assertIsNone(worker.run_once())
+        run, counts = self._read_run_and_counts(self.run_id)
+        self.assertEqual(run.status, RunStatus.FAILED)
+        self.assertEqual(counts["tool_calls"], 1)
+        self.assertEqual(counts["observations"], 1)
+        self.assertEqual(counts["diagnoses"], 0)
+        connection = self._connect()
+        try:
+            details = connection.execute(
+                "SELECT failure_details FROM app_state.investigation_runs "
+                "WHERE investigation_run_id = %s", (self.run_id,),
+            ).fetchone()[0]
+            self.assertEqual(details, {"code": "worker_interrupted"})
+        finally:
+            connection.close()
+
+    def test_worker_recovery_does_not_touch_inline_runs(self) -> None:
+        self.coordinator.start(
+            self.descriptor, run_id=self.run_id, requested_metric="sales",
+            data_version=self.data_version,
+        )
+        worker = InvestigationWorker(
+            self._transaction_connection, lambda *_args: self.fail("No work expected."),
+        )
+        self.assertIsNone(worker.run_once())
+        run, _counts = self._read_run_and_counts(self.run_id)
+        self.assertEqual(run.status, RunStatus.RUNNING)
 
 
 if __name__ == "__main__":

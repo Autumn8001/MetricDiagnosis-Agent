@@ -8,7 +8,7 @@ methods.  It neither opens a connection nor owns a transaction.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -19,6 +19,7 @@ import re
 from typing import Protocol
 
 from app.agent_runtime.diagnosis_runtime import EvidenceDrivenRunSummary
+from app.agent_runtime.investigation_runtime import InvestigationToolTraceEntry
 from app.data_sources.capabilities import DataSourceDescriptor
 from app.diagnosis.models import Diagnosis
 from app.evidence.models import Evidence
@@ -89,6 +90,7 @@ class ApplicationStateRepositoryProtocol(Protocol):
         status: RunStatus,
         arguments: Mapping[str, object],
         data_version: str | None = None,
+        idempotent: bool = False,
     ) -> object:
         ...
 
@@ -100,7 +102,17 @@ class ApplicationStateRepositoryProtocol(Protocol):
         environment: object,
         *,
         data_version: str | None = None,
+        idempotent: bool = False,
     ) -> object:
+        ...
+
+    def lock_running_run(
+        self, run_id: str, source_id: str, environment: object,
+        data_version: str | None = None,
+    ) -> None:
+        ...
+
+    def get_run_fact_ids(self, run_id: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
         ...
 
     def record_evidence(
@@ -387,6 +399,7 @@ class EvidenceDrivenRunPersistenceWriter:
         *,
         run_id: str,
         query_reference: str | None = None,
+        checkpointed: bool = False,
     ) -> str:
         """Persist facts and diagnosis, then mark an already-running run done.
 
@@ -399,10 +412,25 @@ class EvidenceDrivenRunPersistenceWriter:
         clean_run_id = _clean_required(run_id, "run_id")
         clean_query_reference = _clean_optional(query_reference, "query_reference")
         verified_summary = _validate_summary(summary)
+        if type(checkpointed) is not bool:
+            raise InvestigationPersistenceValidationError("checkpointed must be a boolean.")
 
         source_id = self.descriptor.source_id
         environment = self.descriptor.environment
         repository = self.repository
+
+        if checkpointed:
+            repository.lock_running_run(
+                clean_run_id, source_id, environment, data_version=self.data_version,
+            )
+            saved_calls, saved_observations = repository.get_run_fact_ids(clean_run_id)
+            if (
+                not set(saved_calls).issubset(verified_summary.investigation.tool_call_ids)
+                or not set(saved_observations).issubset(verified_summary.investigation.observation_ids)
+            ):
+                raise InvestigationPersistenceValidationError(
+                    "Final summary omits previously persisted investigation facts."
+                )
 
         catalog_by_call_id: dict[str, list[Observation]] = {}
         for observation in verified_summary.observation_catalog:
@@ -411,6 +439,7 @@ class EvidenceDrivenRunPersistenceWriter:
         # Persist the audited trace in call order.  Each call's observations
         # immediately follow it; no evidence can precede the full catalog.
         for trace_entry in verified_summary.investigation.tool_trace:
+            replay_options = {"idempotent": True} if checkpointed else {}
             repository.record_tool_call(
                 trace_entry.tool_call_id,
                 clean_run_id,
@@ -420,6 +449,7 @@ class EvidenceDrivenRunPersistenceWriter:
                 status=RunStatus.SUCCEEDED,
                 arguments=trace_entry.arguments,
                 data_version=self.data_version,
+                **replay_options,
             )
             for observation in catalog_by_call_id.get(trace_entry.tool_call_id, ()):
                 repository.record_observation(
@@ -428,6 +458,7 @@ class EvidenceDrivenRunPersistenceWriter:
                     source_id,
                     environment,
                     data_version=self.data_version,
+                    **replay_options,
                 )
 
         for evidence in verified_summary.composition.evidence:
@@ -452,6 +483,60 @@ class EvidenceDrivenRunPersistenceWriter:
             target_status=RunStatus.SUCCEEDED,
         )
         return clean_run_id
+
+    def checkpoint(
+        self,
+        trace_entry: InvestigationToolTraceEntry,
+        observations: Sequence[Observation],
+        *,
+        run_id: str,
+    ) -> None:
+        """Save one completed tool step without inventing Evidence or Diagnosis.
+
+        The caller commits this independently of the model call. The repository
+        locks the source-bound running run; exact replays are accepted while
+        conflicting IDs fail closed. A step is stored all-or-nothing.
+        """
+
+        clean_run_id = _clean_required(run_id, "run_id")
+        if not isinstance(trace_entry, InvestigationToolTraceEntry):
+            raise InvestigationPersistenceValidationError("Invalid checkpoint trace entry.")
+        if isinstance(observations, (str, bytes)) or not isinstance(observations, Sequence):
+            raise InvestigationPersistenceValidationError("Checkpoint observations must be a sequence.")
+        snapshot = tuple(observations)
+        try:
+            trace_entry.__post_init__()
+            for observation in snapshot:
+                if not isinstance(observation, Observation):
+                    raise InvestigationPersistenceValidationError("Invalid checkpoint Observation.")
+                observation.__post_init__()
+        except Exception as exc:
+            raise InvestigationPersistenceValidationError("Invalid checkpoint facts.") from exc
+        if tuple(item.observation_id for item in snapshot) != trace_entry.observation_ids:
+            raise InvestigationPersistenceValidationError("Checkpoint Observation IDs do not match trace.")
+        if any(
+            item.tool_call_id != trace_entry.tool_call_id or item.tool_name != trace_entry.tool_name
+            for item in snapshot
+        ):
+            raise InvestigationPersistenceValidationError("Checkpoint tool identities do not match.")
+
+        repository = self.repository
+        source_id = self.descriptor.source_id
+        environment = self.descriptor.environment
+        repository.lock_running_run(
+            clean_run_id, source_id, environment, data_version=self.data_version,
+        )
+        repository.record_tool_call(
+            trace_entry.tool_call_id, clean_run_id, source_id, environment,
+            trace_entry.tool_name, status=RunStatus.SUCCEEDED,
+            arguments=trace_entry.arguments, data_version=self.data_version,
+            idempotent=True,
+        )
+        for observation in snapshot:
+            repository.record_observation(
+                observation, clean_run_id, source_id, environment,
+                data_version=self.data_version, idempotent=True,
+            )
 
     def fail(self, *, run_id: str, failure_code: str) -> RunStatus:
         """Mark a queued/running run failed using only a controlled code."""

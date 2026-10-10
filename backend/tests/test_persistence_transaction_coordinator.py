@@ -140,7 +140,7 @@ class FakeWriter:
             raise self.operation_error
         return run_id
 
-    def complete(self, summary, *, run_id, query_reference=None):
+    def complete(self, summary, *, run_id, query_reference=None, checkpointed=False):
         self.__class__.events.append(
             (
                 "complete",

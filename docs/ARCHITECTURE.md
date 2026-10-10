@@ -465,8 +465,8 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   `observation_catalog`。`backend/app/persistence/investigation_writer.py` 以单一
   `DataSourceDescriptor` 把该 Runtime Trace、Observation、Evidence 和 Diagnosis
   映射到 Repository，避免每条事实从独立调用参数取得来源身份。写入顺序和所有
-  交叉引用先由 Hermetic Spy 测试验证；该 Writer 尚未连接 FastAPI/worker，不能
-  当作运行中任务进度或 Worker 恢复的证据；受控调用的事务提交另由 R2-PG 验证。
+  交叉引用先由 Hermetic Spy 测试验证，后由 R2-PG/005b1 真实数据库验证。该 Writer
+  已经由 Coordinator 在最小 Worker 中调用，FastAPI 尚未接线。
 - `backend/migrations/002_enforce_investigation_provenance.sql` 是已在隔离测试库执行的
   migration：它把 Tool Call、Observation、Evidence、Diagnosis 的三元来源身份
   外键绑定到 Investigation Run，而不是只验证其单独指向一个存在的 Data Source。
@@ -474,16 +474,16 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   SQL parser 本身不能证明执行成功；独立 PostgreSQL 集成测试已验证约束生效与重复执行。
 - Repository 还提供条件化 `fail_investigation_run()`，只将受控 failure code 写入
   `failure_details`；Writer 的 `start()`、`complete()` 和 `fail()` 可分别由未来的
-  短事务调用。它们不拥有 connection/commit/rollback，也未被 FastAPI 或 worker
-  调用，因此当前没有任务领取、重试或运行中进度；实际事务边界由 Coordinator 提供并已验收。
+  短事务调用。它们不拥有 connection/commit/rollback；现由 Coordinator 和最小
+  Worker 调用，FastAPI 与用户取消/显式重试尚未接线。
 - `backend/app/persistence/transaction_coordinator.py` 是当前唯一的 transaction
   owner：它通过注入的 factory 对 start/complete/fail 分别创建短连接事务，并返回绑定
   来源身份的 immutable handle。它不读取 `DATABASE_URL`、不保留 connection，也不
-  直接执行模型；API/worker 尚未注入这个协调器。
+  直接执行模型；最小 Worker 已注入该协调器，API 尚未接线。
 - `backend/app/persistence/task_execution_service.py` 把一次已注入的 Agent runner
   放在 `start` 与 `complete/fail` 两个 coordinator 调用之间。其输入和 failure code
   都是深度校验、来源绑定和脱敏的；它不是后台 worker、HTTP endpoint 或模型实现，
-  受控 Runner 与数据库持久化已验收，但没有真实模型、后台队列/取消或任务中断恢复证据。
+  受控 Runner 与数据库持久化已验收；后台领取与中断恢复见 R2-005b1，真实模型与用户取消尚未验收。
 
 ### Current：R2-PG 验证与安全边界
 
@@ -491,9 +491,19 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 - `RunState` 和 Repository 一致允许 queued→failed。Coordinator factory 必须提供事务连接（psycopg `autocommit=False`），每次生命周期操作独立 commit/rollback，不跨 Runner 持有事务。
 - Repository 不保存 Observation 原始 error_message；非格式合规 error_code 降级为 `tool_error`。Evidence 默认 payload 同样去除错误文本，自定义 payload 拒绝嵌套 error_message（含大小写/分隔符变体）。这不是任意文本通用脱敏器；API/日志和外部接入边界仍需单独保护。
 - `tests/test_postgres_persistence_integration.py` 仅显式接入本机专用 `metricsleuth_r2_acceptance`，不会读取应用 `.env`/DATABASE_URL。迁移重复执行，受控 SELECT/Runner 完整持久化、失败、安全文本、身份与来源隔离、真实事务回滚和重新连接：7/7 PASS。
-- PostgreSQL 进程重启后成功结果仍可读取；尚无后台 Worker 或失败前事实增量写入。验收记录：[`postgres-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md)。
+- PostgreSQL 进程重启后成功结果仍可读取；R2-PG 当时未实现的 Worker/checkpoint 已由下述 R2-005b1 补齐。历史验收记录：[`postgres-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md)。
 
-### Planned：应用状态与运行时接线（R2-005b）
+### Current：最小 Worker 与增量工具事实（R2-005b1）
+
+- `persistence/worker.py:InvestigationWorker` 接受显式 connection factory 和 Runner，提供 submit/run_once，不发现配置、启动线程、轮询或调用模型。
+- `004_worker_execution_mode.sql` 增加 inline/worker 区分；既有 Run 默认 inline。单 Worker session advisory lock 跨 Runner 存活，但所有事务在模型调用前提交；需要专用物理连接，不可把持锁连接归还普通连接池。
+- queued Worker 任务使用行锁原子领取；新 Worker 获锁后将遗留 running Worker 任务标记 `worker_interrupted`，不重放收费调用。inline 不参与该恢复。
+- `Coordinator.checkpoint()` 锁定 running Run 的来源/版本，将完整 Trace+Observation 短事务保存。Repository 幂等 INSERT 比较所有显式事实列，拒绝同 ID 不同事实；原错误文本仍不落库。
+- `Writer.complete(checkpointed=True)` 验证最终 Summary 包含已保存事实，再严格幂等重放完整目录，写 Evidence/Diagnosis 和 succeeded。事务失败不能抹去之前已提交的步骤；未产生 Diagnosis 时不保存假结果。
+- 三个 SDK FunctionTool 与 `run_evidence_driven_diagnosis()` 支持可选同步 progress_callback；回调使用 ToolContext 原始参数和 Observation payload，失败传播，最终 Trace/Diagnosis 校验不变。符合应用拥有持久化、SDK 保持调查循环的边界（[OpenAI SDK 文档](https://developers.openai.com/api/docs/guides/agents/sdk)）。
+- 已有库和全新隔离 PostgreSQL 17.11 验证 15/15；SDK callback 专项为 Fake Analytics，无真实模型。记录：[`worker-checkpoint-acceptance-2026-10-10.md`](evaluation-artifacts/worker-checkpoint-acceptance-2026-10-10.md)。当前 API/前端/后台进程仍未配置该 Worker。
+
+### Planned：产品任务 API 与运行时配置接线（R2-005b2）
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、

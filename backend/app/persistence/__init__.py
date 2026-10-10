@@ -50,8 +50,13 @@ from app.persistence.task_execution_service import (
     TaskRunner,
     TransactionCoordinatorProtocol,
 )
+from app.persistence.worker import InvestigationWorker, ProgressCallback, WorkerError, WorkerRunner
 
 __all__ = [
+    "InvestigationWorker",
+    "ProgressCallback",
+    "WorkerError",
+    "WorkerRunner",
     "DEFAULT_MIGRATION_NAME",
     "MIGRATIONS_DIRECTORY",
     "DataSourceReference",

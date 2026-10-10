@@ -13,11 +13,13 @@ sharing a transaction across the model call.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol, TypeVar
 
 from app.agent_runtime.diagnosis_runtime import EvidenceDrivenRunSummary
+from app.agent_runtime.investigation_runtime import InvestigationToolTraceEntry
+from app.observations.models import Observation
 from app.data_sources.capabilities import DataSourceDescriptor
 from app.persistence.investigation_writer import EvidenceDrivenRunPersistenceWriter
 from app.persistence.models import (
@@ -129,6 +131,8 @@ class InvestigationTransactionCoordinator:
         connection: DBAPIConnection | None = None
         try:
             connection = self._factory()
+            if getattr(connection, "autocommit", False):
+                raise PersistenceValidationError("Coordinator requires a transaction connection.")
             repository = ApplicationStateRepository(connection)
             writer = EvidenceDrivenRunPersistenceWriter(
                 repository,
@@ -195,6 +199,7 @@ class InvestigationTransactionCoordinator:
         summary: EvidenceDrivenRunSummary,
         *,
         query_reference: str | None = None,
+        checkpointed: bool = False,
     ) -> str:
         """Persist facts and diagnosis in a new transaction and mark success."""
 
@@ -206,6 +211,24 @@ class InvestigationTransactionCoordinator:
                 summary,
                 run_id=validated_handle.run_id,
                 query_reference=query_reference,
+                checkpointed=checkpointed,
+            ),
+        )
+
+    def checkpoint(
+        self,
+        handle: InvestigationRunHandle,
+        trace_entry: InvestigationToolTraceEntry,
+        observations: Sequence[Observation],
+    ) -> None:
+        """Commit an already-produced tool step in its own short transaction."""
+
+        validated_handle = self._validate_handle(handle)
+        return self._transaction(
+            validated_handle.descriptor,
+            validated_handle.data_version,
+            lambda writer: writer.checkpoint(
+                trace_entry, observations, run_id=validated_handle.run_id,
             ),
         )
 

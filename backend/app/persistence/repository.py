@@ -379,6 +379,39 @@ class ApplicationStateRepository:
         finally:
             self._close_cursor(cursor)
 
+    def _execute_idempotent_insert(
+        self,
+        sql: str,
+        params: Sequence[object],
+        *,
+        table: str,
+        primary_key: str,
+        columns: Sequence[str],
+    ) -> None:
+        """Replay an insert only when every explicitly written fact is equal."""
+
+        compared_columns = tuple(column for column in columns if column != primary_key)
+        conflict_clause = f"""
+            ON CONFLICT ({primary_key}) DO UPDATE SET
+                {primary_key} = EXCLUDED.{primary_key}
+            WHERE {" AND ".join(
+                f"app_state.{table}.{column} IS NOT DISTINCT FROM EXCLUDED.{column}"
+                for column in compared_columns
+            )}
+        """
+        cursor = self._connection.cursor()  # type: ignore[attr-defined]
+        try:
+            cursor.execute(  # type: ignore[attr-defined]
+                f"{sql.rstrip()} {conflict_clause}", tuple(params)
+            )
+            rowcount = getattr(cursor, "rowcount", None)
+        finally:
+            self._close_cursor(cursor)
+        if rowcount == 0:
+            raise PersistenceRepositoryError(
+                "Idempotent fact conflicts with an existing record."
+            )
+
     def upsert_data_source(
         self,
         source: DataSourceDescriptor | str | None = None,
@@ -664,9 +697,12 @@ class ApplicationStateRepository:
         data_version: str | None = None,
         query_reference: str | None = None,
         result_reference: str | None = None,
+        idempotent: bool = False,
     ) -> str:
         """Persist a tool invocation trace without persisting credentials."""
 
+        if type(idempotent) is not bool:
+            raise PersistenceValidationError("idempotent must be a bool.")
         clean_tool_call_id = _identifier(tool_call_id, "tool_call_id")
         resolved_run_id = _run_id(investigation_run_id, run_id)
         source, environment_value = _required_source(source_id, environment)
@@ -690,23 +726,43 @@ class ApplicationStateRepository:
                 %s, %s, %s
             )
         """
-        self._execute(
-            sql,
-            (
-                clean_tool_call_id,
-                resolved_run_id,
-                source,
-                environment_value,
-                clean_tool_name,
-                status_value,
-                arguments_json,
-                dimensions_json,
-                filters_json,
-                data_version_value,
-                query_reference_value,
-                result_reference_value,
-            ),
+        params = (
+            clean_tool_call_id,
+            resolved_run_id,
+            source,
+            environment_value,
+            clean_tool_name,
+            status_value,
+            arguments_json,
+            dimensions_json,
+            filters_json,
+            data_version_value,
+            query_reference_value,
+            result_reference_value,
         )
+        if idempotent:
+            self._execute_idempotent_insert(
+                sql,
+                params,
+                table="tool_calls",
+                primary_key="tool_call_id",
+                columns=(
+                    "tool_call_id",
+                    "investigation_run_id",
+                    "source_id",
+                    "environment",
+                    "tool_name",
+                    "status",
+                    "arguments",
+                    "dimensions",
+                    "filters",
+                    "data_version",
+                    "query_reference",
+                    "result_reference",
+                ),
+            )
+        else:
+            self._execute(sql, params)
         return clean_tool_call_id
 
     def record_observation(
@@ -718,9 +774,12 @@ class ApplicationStateRepository:
         *,
         run_id: str | None = None,
         data_version: str | None = None,
+        idempotent: bool = False,
     ) -> str:
         """Persist one Observation with its tool, source, and query reference."""
 
+        if type(idempotent) is not bool:
+            raise PersistenceValidationError("idempotent must be a bool.")
         if not isinstance(observation, Observation):
             raise PersistenceValidationError("observation must be an Observation instance.")
         resolved_run_id = _run_id(investigation_run_id, run_id)
@@ -744,36 +803,69 @@ class ApplicationStateRepository:
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
-        self._execute(
-            sql,
-            (
-                observation.observation_id,
-                resolved_run_id,
-                observation.tool_call_id,
-                source,
-                environment_value,
-                observation.metric,
-                observation.status.value,
-                observation.source_status,
-                observation.current_period.start_date,
-                observation.current_period.end_date,
-                observation.baseline_period.start_date,
-                observation.baseline_period.end_date,
-                _json_object(observation.filters, "observation.filters"),
-                _json_parameter(observation.group_by, "observation.group_by"),
-                _json_object(observation.dimensions, "observation.dimensions"),
-                observation.current_value,
-                observation.baseline_value,
-                observation.relative_change,
-                observation.unit,
-                observation.sample_size,
-                data_version_value,
-                observation.query_or_result_reference,
-                _safe_observation_error_code(observation.error_code),
-                None,
-                observation.created_at,
-            ),
+        params = (
+            observation.observation_id,
+            resolved_run_id,
+            observation.tool_call_id,
+            source,
+            environment_value,
+            observation.metric,
+            observation.status.value,
+            observation.source_status,
+            observation.current_period.start_date,
+            observation.current_period.end_date,
+            observation.baseline_period.start_date,
+            observation.baseline_period.end_date,
+            _json_object(observation.filters, "observation.filters"),
+            _json_parameter(observation.group_by, "observation.group_by"),
+            _json_object(observation.dimensions, "observation.dimensions"),
+            observation.current_value,
+            observation.baseline_value,
+            observation.relative_change,
+            observation.unit,
+            observation.sample_size,
+            data_version_value,
+            observation.query_or_result_reference,
+            _safe_observation_error_code(observation.error_code),
+            None,
+            observation.created_at,
         )
+        if idempotent:
+            self._execute_idempotent_insert(
+                sql,
+                params,
+                table="observations",
+                primary_key="observation_id",
+                columns=(
+                    "observation_id",
+                    "investigation_run_id",
+                    "tool_call_id",
+                    "source_id",
+                    "environment",
+                    "metric",
+                    "status",
+                    "source_status",
+                    "current_period_start",
+                    "current_period_end",
+                    "baseline_period_start",
+                    "baseline_period_end",
+                    "filters",
+                    "group_by",
+                    "dimensions",
+                    "current_value",
+                    "baseline_value",
+                    "relative_change",
+                    "unit",
+                    "sample_size",
+                    "data_version",
+                    "query_reference",
+                    "error_code",
+                    "error_message",
+                    "created_at",
+                ),
+            )
+        else:
+            self._execute(sql, params)
         return observation.observation_id
 
     def record_evidence(
@@ -924,6 +1016,102 @@ class ApplicationStateRepository:
         finally:
             self._close_cursor(cursor)
         return diagnosis.diagnosis_id
+
+    def lock_running_run(
+        self,
+        run_id: str,
+        source_id: str,
+        environment: SourceEnvironment,
+        data_version: str | None = None,
+    ) -> None:
+        """Lock and verify the active run before writing incremental facts."""
+
+        clean_run_id = _identifier(run_id, "run_id")
+        source, environment_value = _required_source(source_id, environment)
+        version = _optional_text(data_version, "data_version")
+        sql = """
+            SELECT status, source_id, environment, data_version
+            FROM app_state.investigation_runs
+            WHERE investigation_run_id = %s
+            FOR UPDATE
+        """
+        cursor = self._connection.cursor()  # type: ignore[attr-defined]
+        try:
+            cursor.execute(sql, (clean_run_id,))  # type: ignore[attr-defined]
+            row = cursor.fetchone()  # type: ignore[attr-defined]
+        finally:
+            self._close_cursor(cursor)
+        if row is None:
+            raise PersistenceRepositoryError(
+                "Investigation run is unavailable for checkpoint persistence."
+            )
+        try:
+            if isinstance(row, Mapping):
+                status = row["status"]
+                actual_source = row["source_id"]
+                actual_environment = row["environment"]
+                actual_version = row["data_version"]
+            else:
+                status, actual_source, actual_environment, actual_version = row
+        except (KeyError, TypeError, ValueError) as exc:
+            raise PersistenceRepositoryError(
+                "Investigation run state is unavailable for checkpoint persistence."
+            ) from exc
+        if (
+            status != RunStatus.RUNNING.value
+            or actual_source != source
+            or actual_environment != environment_value
+            or actual_version != version
+        ):
+            raise PersistenceRepositoryError(
+                "Investigation run is unavailable for checkpoint persistence."
+            )
+
+    def get_run_fact_ids(
+        self, run_id: str
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """Return sorted tool-call and observation IDs already persisted for a run."""
+
+        clean_run_id = _identifier(run_id, "run_id")
+        tool_sql = """
+            SELECT tool_call_id
+            FROM app_state.tool_calls
+            WHERE investigation_run_id = %s
+            ORDER BY tool_call_id
+        """
+        observation_sql = """
+            SELECT observation_id
+            FROM app_state.observations
+            WHERE investigation_run_id = %s
+            ORDER BY observation_id
+        """
+        fact_ids: list[tuple[str, ...]] = []
+        for sql, id_column in (
+            (tool_sql, "tool_call_id"),
+            (observation_sql, "observation_id"),
+        ):
+            cursor = self._connection.cursor()  # type: ignore[attr-defined]
+            try:
+                cursor.execute(sql, (clean_run_id,))  # type: ignore[attr-defined]
+                rows = cursor.fetchall()  # type: ignore[attr-defined]
+            finally:
+                self._close_cursor(cursor)
+            try:
+                ids = tuple(
+                    sorted(
+                        _identifier(
+                            row[id_column] if isinstance(row, Mapping) else row[0],
+                            "fact_id",
+                        )
+                        for row in rows
+                    )
+                )
+            except (KeyError, IndexError, TypeError, PersistenceValidationError) as exc:
+                raise PersistenceRepositoryError(
+                    "Stored investigation fact identifiers are invalid."
+                ) from exc
+            fact_ids.append(ids)
+        return fact_ids[0], fact_ids[1]
 
     def get_investigation_run(
         self,

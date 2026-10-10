@@ -137,6 +137,59 @@ def _metric_definition_to_json(definition: MetricDefinition) -> dict[str, Any]:
     }
 
 
+def _report_tool_progress(
+    context: ToolContext,
+    payload: Mapping[str, Any],
+    progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None,
+) -> None:
+    """Report a completed tool result using the same facts as the SDK payload."""
+    if progress_callback is None:
+        return
+
+    # Keep this import local: investigation_runtime owns the canonical trace
+    # argument parser and imports this module for the SDK tools.
+    from types import SimpleNamespace
+
+    from app.agent_runtime.investigation_runtime import (
+        InvestigationToolTraceEntry,
+        _parse_tool_call_arguments,
+    )
+
+    tool_call_id = payload.get("tool_call_id")
+    tool_name = payload.get("tool_name")
+    if (
+        not isinstance(tool_call_id, str)
+        or tool_call_id != context.tool_call_id
+        or not isinstance(tool_name, str)
+        or tool_name != context.tool_name
+    ):
+        raise RuntimeTraceError("Completed tool payload identity does not match SDK context.")
+
+    # ToolContext.tool_arguments preserves the original JSON supplied to the
+    # SDK. Do not rebuild it from Python parameters: omitted schema defaults
+    # must remain omitted in the persisted trace.
+    call_item = SimpleNamespace(
+        raw_item=SimpleNamespace(arguments=context.tool_arguments)
+    )
+    arguments = _parse_tool_call_arguments(call_item)
+
+    observation_payloads = payload.get("observations", [])
+    if not isinstance(observation_payloads, list):
+        raise RuntimeTraceError("Completed tool observations must be a list.")
+    observations = tuple(
+        observation_from_json(item) for item in observation_payloads
+    )
+    trace_entry = InvestigationToolTraceEntry(
+        tool_call_id=tool_call_id,
+        tool_name=tool_name,
+        arguments=arguments,
+        observation_ids=tuple(item.observation_id for item in observations),
+    )
+    # Deliberately do not catch callback errors. A persistence failure must
+    # fail the tool invocation so the run cannot report unpersisted progress.
+    progress_callback(trace_entry, observations)
+
+
 def get_metric_definition_adapter(
     analytics_tools: AnalyticsTools,
     *,
@@ -420,6 +473,7 @@ def create_query_metric_tool(
     *,
     budget_guard: ToolCallBudgetGuard,
     clock: Callable[[], datetime.datetime] | None = None,
+    progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
 ) -> FunctionTool:
     """Create the fail-closed SDK query_metric tool."""
     now = clock or (lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -446,7 +500,7 @@ def create_query_metric_tool(
                 or ``["marketplace", "US"]``.
             group_by: Optional semantic dimensions used to segment the result.
         """
-        return query_metric_observations_adapter(
+        payload = query_metric_observations_adapter(
             analytics_tools,
             tool_call_id=context.tool_call_id,
             metric=metric,
@@ -458,6 +512,8 @@ def create_query_metric_tool(
             budget_guard=budget_guard,
             created_at=now(),
         )
+        _report_tool_progress(context, payload, progress_callback)
+        return payload
 
     # A free-form string map is represented by ``additionalProperties`` in JSON
     # Schema, which the SDK's strict-schema normalizer rejects.  Keep the
@@ -470,6 +526,7 @@ def create_get_metric_definition_tool(
     analytics_tools: AnalyticsTools,
     *,
     budget_guard: ToolCallBudgetGuard,
+    progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
 ) -> FunctionTool:
     """Create the fail-closed production semantic-definition tool."""
 
@@ -482,12 +539,14 @@ def create_get_metric_definition_tool(
         Args:
             metric: Metric identifier to look up in the configured semantic registry.
         """
-        return get_metric_definition_adapter(
+        payload = get_metric_definition_adapter(
             analytics_tools,
             tool_call_id=context.tool_call_id,
             metric=metric,
             budget_guard=budget_guard,
         )
+        _report_tool_progress(context, payload, progress_callback)
+        return payload
 
     return function_tool(get_metric_definition, failure_error_function=None)
 
@@ -497,6 +556,7 @@ def create_query_related_metrics_tool(
     *,
     budget_guard: ToolCallBudgetGuard,
     clock: Callable[[], datetime.datetime] | None = None,
+    progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
 ) -> FunctionTool:
     """Create the fail-closed SDK query_related_metrics tool."""
     now = clock or (lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -523,7 +583,7 @@ def create_query_related_metrics_tool(
                 or ``["marketplace", "US"]``.
             group_by: Optional semantic dimensions used to segment the result.
         """
-        return query_related_metrics_observations_adapter(
+        payload = query_related_metrics_observations_adapter(
             analytics_tools,
             tool_call_id=context.tool_call_id,
             metric=metric,
@@ -535,6 +595,8 @@ def create_query_related_metrics_tool(
             budget_guard=budget_guard,
             created_at=now(),
         )
+        _report_tool_progress(context, payload, progress_callback)
+        return payload
 
     return function_tool(
         query_related_metrics,
@@ -549,11 +611,26 @@ def create_investigation_tools(
     budget_guard: ToolCallBudgetGuard | None = None,
     max_tool_calls: int = DEFAULT_INVESTIGATION_TOOL_BUDGET,
     clock: Callable[[], datetime.datetime] | None = None,
+    progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
 ) -> tuple[FunctionTool, FunctionTool, FunctionTool]:
     """Create all controlled tools with one per-run shared call budget."""
     guard = budget_guard or ToolCallBudgetGuard(max_calls=max_tool_calls)
     return (
-        create_get_metric_definition_tool(analytics_tools, budget_guard=guard),
-        create_query_metric_tool(analytics_tools, budget_guard=guard, clock=clock),
-        create_query_related_metrics_tool(analytics_tools, budget_guard=guard, clock=clock),
+        create_get_metric_definition_tool(
+            analytics_tools,
+            budget_guard=guard,
+            progress_callback=progress_callback,
+        ),
+        create_query_metric_tool(
+            analytics_tools,
+            budget_guard=guard,
+            clock=clock,
+            progress_callback=progress_callback,
+        ),
+        create_query_related_metrics_tool(
+            analytics_tools,
+            budget_guard=guard,
+            clock=clock,
+            progress_callback=progress_callback,
+        ),
     )

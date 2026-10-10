@@ -11,7 +11,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass, replace
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 
 from agents import Agent, RunConfig, RunResult, Runner
 
@@ -123,6 +123,7 @@ def create_evidence_driven_agent(
     *,
     model: Any,
     budget_guard: ToolCallBudgetGuard,
+    progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
 ) -> Agent:
     """Create an SDK Agent whose output is fact-free diagnosis intent.
 
@@ -131,7 +132,17 @@ def create_evidence_driven_agent(
     only source of Observation identifiers and facts; the final structured
     output contains references and diagnosis intent only.
     """
-    tools = create_investigation_tools(analytics_tools, budget_guard=budget_guard)
+    if progress_callback is None:
+        tools = create_investigation_tools(
+            analytics_tools,
+            budget_guard=budget_guard,
+        )
+    else:
+        tools = create_investigation_tools(
+            analytics_tools,
+            budget_guard=budget_guard,
+            progress_callback=progress_callback,
+        )
     return Agent(
         name="MetricSleuthEvidenceDrivenDiagnosisAgent",
         model=model,
@@ -271,6 +282,7 @@ def run_evidence_driven_diagnosis(
     max_turns: int = DEFAULT_EVIDENCE_DRIVEN_MAX_TURNS,
     run_config: RunConfig | None = None,
     created_at: datetime.datetime | None = None,
+    progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
 ) -> EvidenceDrivenRunSummary:
     """Run one bounded SDK investigation and resolve a structured Diagnosis.
 
@@ -290,11 +302,19 @@ def run_evidence_driven_diagnosis(
     configure_openai_api_from_env()
 
     guard = ToolCallBudgetGuard(max_calls=max_tool_calls)
-    agent = create_evidence_driven_agent(
-        analytics_tools,
-        model=model,
-        budget_guard=guard,
-    )
+    if progress_callback is None:
+        agent = create_evidence_driven_agent(
+            analytics_tools,
+            model=model,
+            budget_guard=guard,
+        )
+    else:
+        agent = create_evidence_driven_agent(
+            analytics_tools,
+            model=model,
+            budget_guard=guard,
+            progress_callback=progress_callback,
+        )
     result = Runner.run_sync(
         agent,
         input=prompt.strip(),

@@ -5,8 +5,8 @@
 > Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-005a 已提交）
 > 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器；R2-005a 单任务执行服务
 > 当前阶段：R2 持久化应用基础（进行中）
-> 最近新增验收：R2-PG 数据源身份保护、状态规则统一与真实 PostgreSQL 持久化验收（本次提交）
-> 当前任务：R2-005b 最小 Worker、失败前事实保存与中断恢复；R1-004 仍需等待外部接入资源
+> 最近新增验收：R2-PG（`71e284f`）；R2-005b1 最小 Worker、步骤保存与中断恢复（本次提交）
+> 当前任务：R2-005b2 持久任务/历史 API 与应用 Runner 配置接线；R1-004 仍需等待外部接入资源
 
 ## 当前结论
 
@@ -42,7 +42,18 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - 实际数据库验证来源组合外键、Diagnosis 冲突后的整批回滚、Observation 原始错误文本不落库，以及全新连接读取。数据库进程重启后再次读回同一成功调查和 Diagnosis。
 - 主线程终验：真实 PostgreSQL **7/7 PASS**；离线回归原始输出 **Ran 535 tests / OK (skipped=1)**，数据库测试类因未配置专用变量跳过。二者分别运行，不混算模型效果。
 - 记录与复现命令：[`postgres-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md)。测试实例已停止，测试数据保留在仓库外。
-- 尚未完成 Worker/API 接线、失败前工具事实增量保存、任务恢复、外部业务同步与真实模型验收。
+- R2-PG 验收时尚未完成 Worker/API 接线、失败前工具事实增量保存、任务恢复；其中 Worker 与步骤保存现已由下述 R2-005b1 补齐。外部业务同步与真实模型仍未验收。
+
+## R2-005b1：最小 Worker 与失败前步骤保存已验收
+
+- `InvestigationWorker.submit()/run_once()` 在 PostgreSQL 排队、原子领取一个调查；session advisory lock 保证只有一个 Worker 执行，Runner 期间不持有数据库事务。
+- `004_worker_execution_mode.sql` 将 Worker 任务与旧 inline 调查隔开。中断恢复仅处理 Worker 的 running 任务，写 `worker_interrupted`，不自动重放模型、不影响 inline。
+- 每个完整工具结果通过 `Coordinator.checkpoint()` 独立提交 Trace/Observation；失败前事实保留，不生成缺失的 Evidence/Diagnosis。
+- 幂等重放只接受完全相同的事实；不同内容、不同来源/版本、终态写入均拒绝。成功完成不能遗漏已保存步骤。
+- Agents SDK 三个现有工具和 Diagnosis Runtime 提供可选 `progress_callback`；沿用原始 SDK 调用参数、原 Observation 和最终校验。未改 Prompt、策略、预算或模型。
+- 主线程实际 PostgreSQL **15/15 PASS**（含原 7 项回归），新库 migrations 001–004 和已有库升级/重放均验证；子 Worker 突然退出后事实保留，新 Worker 安全终结，未再次调用 Runner。
+- 全量离线回归 **Ran 552 tests / OK (skipped=1)**；SDK 回调专项 5 项为 Fake Analytics/真实 FunctionTool invocation，无真实模型。
+- 记录：[`worker-checkpoint-acceptance-2026-10-10.md`](evaluation-artifacts/worker-checkpoint-acceptance-2026-10-10.md)。没有 HTTP/前端或后台进程启动接线，不代表可部署产品已完成。
 
 以下 R2-001 至 R2-005a 条目保留各切片当时的历史验证边界；其中“未执行迁移/未验证数据库”已由上述 R2-PG 验收更新，不代表当前仍未执行。
 
@@ -142,11 +153,11 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 - 能力契约与 API、Agent Runtime、数据库来源发现及外部连接器的产品级接入（当前仅完成 Registry/AnalyticsTools 的纯内存适配，以及 Olist 验证合同表达）。
 - Shopify 或用户外部 PostgreSQL 的产品级接入、连接器实现、数据同步和水位（当前绝对未接入真实外部库或 Shopify API）。
-- repository/API 接线、Run 并发/重试/取消、任务中断恢复和持久化
+- repository/API 接线、用户取消/显式重试、生产进程恢复和持久化
   后的多 grain 查询支持。
-- 面向用户的调查历史读取 API、运行中与失败前事实保存（成功结果数据库持久化已验收）。
+- 面向用户的调查历史/步骤读取 API，以及应用配置的真实 Runner（步骤保存和最小 Worker 中断恢复已验收）。
 - 数据接入、工作概览、独立指标页和实验室的真实 API。
-- 用户认证、生产安全、后台任务恢复和服务器部署资产。
+- 用户认证、生产安全、后台进程生命周期与服务器部署资产。
 - 独立 Holdout、真实外部数据评测、Next Action/Stop Condition 评分。
 
 ## 当前阻碍与待提供资源
@@ -160,7 +171,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 继续推进 Roadmap R2：
 
-1. R2-005b：先实现最小单 Worker 的原子任务领取、中断终结和失败前 Trace/Observation 保存；复用已验收数据库，不扩展成通用调度器。不自动重放可能重复收费的模型任务，不伪造缺失 Diagnosis。随后接任务创建/历史读取 API。全程使用隔离测试库，不操作生产。
+1. R2-005b2：将任务提交、状态、步骤和历史结果读取接到 FastAPI；明确配置归属与安全错误响应，复用 Worker 和现有 SDK Runner。增加真实 PostgreSQL API 验收，不新增调度框架。真实模型验收需要明确配置的受控凭据/预算；不操作生产。
 2. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
@@ -175,7 +186,9 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
 | R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
 | R2-005a task-service 专项 | 11/11 PASS | Fake/Spy coordinator；事务外 Runner、失败分类与输入隔离；未执行 SQL |
-| 后端全量 unittest（2026-10-10） | Ran 535 tests / OK (skipped=1) | 未配置专用 DB 变量；数据库测试类跳过；无真实模型调用 |
+| 后端全量 unittest（2026-10-10） | Ran 552 tests / OK (skipped=1) | 未配置专用 DB 变量；数据库测试类跳过；无真实模型调用 |
+| R2-005b1 数据库/Worker 专项 | 15/15 PASS | PostgreSQL 17.11；全新库、升级库、事实重放、失败留存、实际子进程退出与安全终结 |
+| SDK 进度回调专项 | 5/5 PASS | Fake Analytics + 真实 FunctionTool invocation；无真实模型 |
 | R2-PG 真实数据库专项（2026-10-10） | 7/7 PASS | PostgreSQL 17.11；迁移、约束、受控 Runner、成功/失败、回滚、重连、安全错误文本 |
 | PostgreSQL 进程重启读取（2026-10-10） | PASS | 同一成功 Run、Diagnosis、data_version/query_reference；不是 Worker 恢复 |
 | Olist 验证能力专项 | 5/5 PASS | Registry grain/dimensions、漏斗指标 unavailable、非法维度与错误来源身份；Fake connection 未执行 SQL |

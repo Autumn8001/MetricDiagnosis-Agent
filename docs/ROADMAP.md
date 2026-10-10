@@ -99,7 +99,7 @@
 
 ## 5. R2 — 持久化应用基础
 
-**状态：进行中（R2-001 至 R2-005a、R2-PG 已验收；Worker/API 未完成）**
+**状态：进行中（R2-001 至 R2-005a、R2-PG、R2-005b1 已验收；产品 API 未完成）**
 
 ### 目标
 
@@ -109,7 +109,7 @@
 
 - 现有 API 和 React 状态均为进程/页面内存态。
 - 产品 Runtime/API 的 Observation/Evidence 仍为内存态；独立持久化服务已验收，尚未接线。
-- 没有任务并发、幂等、重启恢复或失败重试语义。
+- 单 Worker 领取与中断终结已验收；尚未接产品入口、用户取消/显式重试及服务器进程生命周期。
 
 ### 技术方案
 
@@ -242,19 +242,29 @@
 - 边界：不是外部业务数据同步、真实模型或 Worker 验收。此前切片中的“未执行 migration”是其历史完成时状态。
 - 记录：[`postgres-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md)。
 
-### 下一切片：R2-005b — 最小 Worker、失败前事实与恢复，再接 API
+### R2-005b1 — 最小 Worker、失败前事实与恢复
 
-**状态：待开展**
+**状态：已完成并由主线程验收（2026-10-10）**
+
+- `InvestigationWorker` 只负责 submit/run_once；PostgreSQL session advisory lock 保证单 Worker，`FOR UPDATE SKIP LOCKED` 领取一个任务。不引入进程池、重试平台或消息中间件。
+- 每个完整工具结果用独立短事务 checkpoint；同 ID 同事实可重放，不同事实拒绝。完成结果不能遗漏已保存步骤。
+- 中断 Worker 任务安全终结，不自动重放模型；inline 任务隔离。真实子进程突然退出后前序步骤仍存在，无伪造 Diagnosis。
+- 现有 SDK tools/Diagnosis Runtime 可选 progress_callback，保留原始参数和最终验证；真实模型运行仍待验。
+- 验收：真实 PostgreSQL 15/15，离线回归 552 tests / OK (skipped=1)，SDK 回调 5/5（Fake Analytics，无模型）。记录见 [`worker-checkpoint-acceptance-2026-10-10.md`](evaluation-artifacts/worker-checkpoint-acceptance-2026-10-10.md)。
+
+### 下一切片：R2-005b2 — 产品任务/历史 API 与应用 Runner 接线
+
+**状态：待开展；依赖 R2-005b1 已满足**
 
 - 将执行服务接到明确的单 worker/任务入口，而不是直接把长模型调用塞入同步 HTTP
   处理器；先定义任务创建、查询、失败和取消边界，再选择可恢复的最小进程模型。
 - 接线前必须明确迁移执行的受控环境与 connection factory 的配置归属。失败必须保留
   已发生的状态与安全的失败分类，但不得保存凭据、完整连接串或模型原始敏感输出。
-- 当前不自动执行 migration、启动 worker 或连接部署数据库。
+- 当前没有后台进程启动入口，不连接部署数据库；迁移只在明确的隔离测试环境执行。
 - 依赖：R2-PG 已通过；后续开发继续使用隔离数据库，不扩展通用调度平台。
-- 先实现原子领取与单 Worker；中断任务明确标记失败，保留已保存事实，不默认重新执行可能重复收费的模型调用。
-- 增量保存已发生的 Tool Trace/Observation；Runner 失败仍可查看前序步骤，未产生 Diagnosis 时不得补造。
-- 验收必须包含真实 PostgreSQL 的重复领取防护、中断恢复、失败前事实保留和成功调查；Fake 测试不替代这些场景。随后再完成最小任务创建/状态/历史 API。
+- 复用已验收的领取/恢复/checkpoint；先提供提交、状态、历史与事实详情接口，明确 source/metric/time-range 的授权和能力校验。
+- API 的真实数据库验收必须包含排队、成功/失败、已保存步骤读取与服务重新连接；Mock 测试不替代这些场景。
+- 再用明确配置的受控模型与数据验证应用 Runner，不把可选 callback 接线当作真实模型成功。
 
 ## 6. R3 — 首个持续真实数据闭环
 

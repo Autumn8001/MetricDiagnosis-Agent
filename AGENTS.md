@@ -26,6 +26,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。它读取受�
 - `backend/app/evaluation/`：确定性评分与聚合。
 - `backend/app/api/`：FastAPI 产品接口。
 - `backend/app/monitoring/`：手动异常扫描。
+- `backend/app/persistence/`：短事务、调查步骤保存与最小 PostgreSQL Worker；部署接线仍需查当前状态。
 - `frontend/`：React + TypeScript + Vite 单页工作区。
 - `warehouse/`：Synthetic Benchmark、PostgreSQL Schema、Seed 与隔离验证脚本。
 - `configs/`：指标定义。
