@@ -15,6 +15,7 @@ SDK 返回 `InternalServerError`。没有已完成的模型轮次或工具结果
 - PostgreSQL 17.11，`127.0.0.1:55440` 的专用 `metricsleuth_r2_acceptance`；没有生产、外部业务库或 Shopify 调用。
 - `openai-agents 0.22.0`、`openai 3.5.0`、`psycopg 3.3.4`。
 - 显式读取被 Git 忽略的本机 `.env`，只采用现有 API key、端点、API模式与模型名；未打印或提交这些原始配置。实际模式 `chat_completions`，自定义端点，沿用原模型。模型配置字符串 SHA-256：`ab92b864a47dcb51ad091da3dc8e5b1e538edb2170789fa7a30edd21ad7f222a`；没有保存密钥指纹。
+- 用户询问模型后，2026-10-10 仅核对本机 `METRICSLEUTH_AGENT_MODEL`：配置标识为 `gemini-3.8-flash-high`，指纹与本次尝试记录一致。它是发送给 OpenAI-compatible 端点的模型标识；未验证端点是否支持该标识、服务商实际映射或官方型号名称，不据此宣称调用 Google 官方端点。此次核对没有发起模型请求，也不是新增调用授权。
 - 客户端 `max_retries=0`、单请求 timeout 60秒；SDK 工具预算8、轮次预算10。次数/超时不是费用硬上限或整个调查的 wall-clock 硬上限。
 - 原有 Source Runner 使用 `RunConfig(tracing_disabled=True, trace_include_sensitive_data=False)`；验收进程也关闭追踪，客户端不用于 tracing。保留本机步骤保存而不导出远程追踪，符合 [SDK observability 配置](https://developers.openai.com/api/docs/guides/agents/integrations-observability) 的控制方式。Synthetic 指标仍会在实际模型请求中发送，不能把禁用 tracing 解释为完全不发送数据。
 - 原始异常、连接信息与外部响应均不打印、不落数据库。未改 Runtime/Prompt/领域校验来迎合本次失败。

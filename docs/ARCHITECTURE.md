@@ -56,7 +56,7 @@ FastAPI JSON → React Diagnosis Workspace
 ### Unknown
 
 - 当前个人服务器上是否已经存在可连接的 PostgreSQL 实例、其中实际有哪些表和数据，本次未连接验证。
-- 已认可的独立 HTML 产品原型不在本仓库中；仓库中可确认的是 `frontend/index.html` 这一 Vite 挂载壳，不足以代表完整原型。
+- 已认可的独立 HTML 产品原型已由产品方提供，文件、哈希与页面/API 边界见 `PRODUCT.md` 第4节；它尚未接入 React 或后端，不代表完整产品已实现。
 - Shopify、外部用户 PostgreSQL、Webhook 和 Jev 尚未进入当前 Runtime/API。
 - 生产反向代理、TLS、认证、密钥管理和进程监管方案尚未落地。
 
@@ -606,6 +606,6 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 - canonical 数据口径和刷新/延迟承诺；
 - Run/Observation/Evidence/Diagnosis 的保留、脱敏和查询需求；
 - 个人服务器的数据库、反向代理、TLS、备份和认证条件；
-- 产品原型文件的实际页面和交互合同。
+- 原型交互接入真实 API 后的验收结果；当前静态示例不是运行证据。
 
 维护本文件时，新增能力必须同时补充：源码入口、数据/状态边界、测试层次和“能证明/不能证明”说明。任何规划中的表、接口、第三方连接器或部署组件，只有实现并通过相应验收后才能从 `Planned` 移到 `Current`。
