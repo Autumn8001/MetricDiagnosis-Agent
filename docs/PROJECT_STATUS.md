@@ -2,18 +2,19 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-10
-> Git 快照：`main`；R1-004b提交 `1783280`，随后R4-004展示/验收形成独立本地提交（用git log查询）；未推送
-> 最近完成：R4-004数值/明细阅读，真实PG既有Olist调查页面复读通过；实际开发店API尚未验收
+> Git 快照：`main`；基线R4-004 `a58d28c`，R4-005验收形成独立本地提交（用git log查询）；未推送
+> 最近完成：R4-005浏览器单次提交、实际PG受控Worker成功保存及刷新复读；实际开发店API尚未验收
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
 > 最近数据库验收：R2-PG、R2-005b1、R2-005b2a/b2b 和 Olist 受控 PostgreSQL 历史记录，详见下文与各 acceptance artifact
-> 当前任务：下一切片验证隔离PG下浏览器提交→实际任务API→受控Worker→成功Diagnosis回读；不运行收费模型。R1-004b真实API验收待开发店/应用权限，不扩大同步底座
+> 当前任务：R4-005已收尾，按用户要求暂停开启新切片供查看成果；下一轮优先实际模型成功gate/Shopify Orders能力验证，分别等待授权与店/应用权限，不扩大同步底座
 
 ## 当前结论
 
-MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL 任务 API/Worker，以及默认 React 产品工作区。R4-003已让实际浏览器读到隔离数据库的既有Olist调查并刷新复读，但没有新模型调用。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接与真实模型成功gate均未完成。
+MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL 任务 API/Worker，以及默认 React 产品工作区。R4-005已验证浏览器新建任务经真实SQL保存成功结论，并在API进程重启后刷新复读；调查选择由受控Runner执行，没有新模型调用。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接与真实模型成功gate均未完成。
 
 ## 已完成且本轮有源码/测试证据
 
+- R4-005：新专用PG库迁移001–004、稳定Synthetic八天数据；浏览器POST一次→202 queued→既有Worker→实际Analytics SQL→succeeded，保存1/1/1/1 Tool/Observation/Evidence/Diagnosis；新API进程与浏览器刷新重开读回100.00/100.00/0及no_material_anomaly。首次两个脚本断言错误已记录并修正，仅只读resume复验PASS，未重提/清库。原库计数不变，测试API/PG已停止，原型哈希未变。受控规则不是模型、异常归因或持续来源验收。见 [`browser-task-roundtrip-acceptance-2026-10-10.md`](evaluation-artifacts/browser-task-roundtrip-acceptance-2026-10-10.md)。
 - R4-004：字符串精确格式化与原始事实disclosure；格式10/10、客户端18/18、lint/类型/build、受控HTTP真实Edge通过。实际PG/API/Edge重读既有Olist失败记录4/27/0/0，前后数据库计数178/117/155/70/70不变、0浏览器写请求，测试API/PG已停止。原型哈希不变；不是新模型/连续来源/成功诊断验收。见 [`investigation-readability-acceptance-2026-10-10.md`](evaluation-artifacts/investigation-readability-acceptance-2026-10-10.md)。
 - R1-004b离线准备：独立只读Orders probe与守卫18/18 PASS（主线程执行，MockTransport/patch）；请求固定query/域名/版本、最多5页、无重试、安全错误与聚合输出。没有商店API/DB/模型调用，没有连接器接入应用。运行说明 [`shopify-orders-probe.md`](shopify-orders-probe.md)，证据 [`shopify-probe-offline-acceptance-2026-10-10.md`](evaluation-artifacts/shopify-probe-offline-acceptance-2026-10-10.md)。真实gate未通过。
 - R1-004a：[`data-source-selection.md`](data-source-selection.md)记录官方权限、订单/会话粒度、开发店限制及最小版本发布方案。已选择Shopify开发店为下一外部验证对象；只是资料和资源决策，不是连接器或实际API测试。官方sessions转化率与Synthetic orders/sessions不同，不直接复用公式；开发店始终sandbox。
@@ -38,7 +39,7 @@ MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL �
 
 - 旧同步 Live API 的完整模型执行路径尚未复验；新应用 Runner 的 AnalyticsTools 聚合 SQL 已由 R2-005b2b 在真实 PostgreSQL 验证，不是外部数据同步。
 - 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录。此前“没有模型凭据”的说法仅检查进程环境，已纠正；被忽略的 `.env` 实际有现存配置。2026-10-10 经一次性授权已尝试SDK持久调查，返回 `InternalServerError`，未得到完成工具结果；新的真实模型成功 gate 仍未通过，详见本次尝试记录。
-- 前端 production build：历史文档记录通过；R0 运行过 lint 和无输出类型检查，本次后端验收未重新运行前端检查。
+- 前端 production build、lint与类型检查已在R4-005重新通过；这不代表服务器部署或所有页面功能完成。
 
 ## R2-PG：真实 PostgreSQL 持久化验收已通过
 
@@ -208,16 +209,16 @@ MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL �
 
 ## 当前阻碍与待提供资源
 
-1. R4-003/004已验收真实数据库既有失败历史到浏览器读取和数值/明细阅读；成功Diagnosis与新调查模型闭环尚未验收。大量Observation仍逐条呈现，没有过滤/分页，不把本次数值优化称为完整大规模阅读方案。
+1. R4-005已补齐新提交与成功Diagnosis的实际PG受控浏览器闭环，但真实模型新调查尚未成功。大量Observation仍逐条呈现，没有过滤/分页，不把数值优化称为完整大规模阅读方案。
 2. 一次授权的 Synthetic 真实 SDK 调查返回 `InternalServerError`，没有工具结果；真实模型成功 gate 未通过。该次调用授权已用完，不能在未获得新授权时重试。
 3. 用户可准备Shopify开发店，但店/应用/只读权限尚未提供；无可用业务PostgreSQL。最小准备清单见data-source-selection.md第6节；不要在聊天中提供凭据。
 4. 开发店真实API/刷新不等于真实经营数据。最终live来源仍需授权与实际capability验收，不以sandbox更名过关。
 
 ## 下一步具体工作
 
-按 Roadmap 推进，先让已经实现的 UI 读到真实隔离数据库记录：
+本阶段按用户要求收尾供查看，不再启动新功能。下一轮按 Roadmap 优先验证真正阻碍交付的资源gate：
 
-1. 下一低风险切片：隔离PG下浏览器提交→任务API→受控Worker→成功Diagnosis回读及刷新；只在专用测试来源写入，不将受控Runner放进产品Runtime或冒充真实模型。
+1. R4-005受控接线已验证，不继续扩展Worker/调度；下一步确认模型端点/模型可用性及单次调用授权，复用现有SDK/API/Worker验收真实成功调查。
 2. R1-004a已完成，R1-004b probe离线准备已完成；下一真实调用依赖用户店/权限。R4-004已改善真实记录的显示格式/分层阅读，没有实际API数据前不扩大同步模块。
 3. 保留真实 SDK 成功 gate，待端点/模型可用性确认及新的明确授权后再执行。来源比较已完成，先验证Shopify开发店；业务PostgreSQL只在有授权资源时再启用，不并行建设两套连接器。
 
@@ -235,7 +236,8 @@ MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL �
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
 | R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
 | R2-005a task-service 专项 | 11/11 PASS | Fake/Spy coordinator；事务外 Runner、失败分类与输入隔离；未执行 SQL |
-| 后端全量 unittest（2026-10-10，最新回归） | Ran 630 tests / OK (skipped=3) | 含Shopify probe离线守卫；未配置专用 DB 变量，三个数据库测试类跳过；该命令无真实模型/Shopify调用 |
+| 后端全量 unittest（2026-10-10，最新回归） | Ran 637 tests / OK (skipped=3) | 含验收脚本离线守卫；未配置专用 DB 变量，三个数据库测试类跳过；该命令无真实模型/Shopify调用 |
+| R4-005新提交与成功页面 | POST1后实际SQL成功；只读resume PASS、POST0；服务重启/页面刷新读回1/1/1/1 | 首次脚本两次断言失败如artifact记载；稳定Synthetic+受控Runner，不验证模型/异常归因/外部源，测试进程已停 |
 | R1-004b探测器专项 | 18/18 PASS | MockTransport/patch，仅离线守卫；实际平台API与持续同步未验收 |
 | R4-004格式/客户端/界面 | 格式10/10、客户端18/18、lint/类型/build PASS；受控HTTP Edge PASS | 精度/大整数/null、原生键盘明细、任务行为；无真实模型或外部来源 |
 | R4-004真实PG历史页面复验 | PASS；4Tool Call/27Observation/0Diagnosis；0写请求 | 同一既有Olist记录，前后计数一致，进程已停止；未新建调查 |

@@ -337,10 +337,12 @@
 - 实现：字符串精确数值格式化（最多4位小数、千分位、非零舍入标明≈），原始数值/区间/筛选/维度/Observation与Tool Call引用保留在原生details；第一条默认展开，其他按需展开，全部Observation仍呈现。相对变化保留原始比率，不添加推测币种/百分比。
 - 主线程验收：格式10/10、客户端18/18、lint/类型/build通过；真实Edge受控HTTP验证键盘展开/长小数/大整数/null与既有任务行为PASS。既有Olist实际PG→API→Edge重新读取27Observation通过，数据库计数未变、0写请求，测试进程已停止。见 [`investigation-readability-acceptance-2026-10-10.md`](evaluation-artifacts/investigation-readability-acceptance-2026-10-10.md)。没有新模型、商店调用或成功Diagnosis验收。
 
-### 下一接线切片（待开展）
+### R4-005 — 浏览器新提交与成功持久结果（受控验收完成）
 
-- 在隔离PostgreSQL/Synthetic环境验证浏览器提交→实际任务API→受控Worker→成功Diagnosis回读与刷新；复用现有Worker，不建立新执行机制。受控Runner只放验收工具，不作为产品模型替身。
-- 实际商店Orders gate继续等用户资源；真实模型成功gate另需新授权。上述接线不替代这两个gate。
+- 目标/依赖：R4-004后，验证浏览器提交→实际任务API→现有Worker→Analytics SQL→成功Diagnosis回读及刷新；独立专用PG库，受控Runner只在验收工具注入，不作为产品模型替身，不建立新执行机制。
+- 实现/验收：既有迁移001–004与warehouse schema；稳定Synthetic八天sales100，浏览器实际POST一次成功，1/1/1/1事实与no_material_anomaly保存。API进程重启、新连接及浏览器刷新复读通过；桌面/移动端无横向溢出。首次脚本断言两处错误记录并修正，只读resume完成，无重复提交或删除数据。见 [`browser-task-roundtrip-acceptance-2026-10-10.md`](evaluation-artifacts/browser-task-roundtrip-acceptance-2026-10-10.md)。
+- 边界：不验证真实模型动态选择、异常Driver/Scope、持续来源或不可变快照。实际商店Orders gate等待用户资源；真实模型成功gate需新的授权。R4仍进行中，不借受控验收宣布MVP完成。
+- 下一阶段：按用户要求本切片收尾供查看；下一轮优先模型成功gate与开发店Orders实际能力验证，有资源后才设计最小数据版本发布/更新，不扩展调度框架。
 
 ### 目标
 
@@ -349,7 +351,7 @@
 ### 当前阻碍
 
 - 原型已提供并冻结；原型的固定进度、追问、取消及实验注入不等于已有后端能力。
-- 默认 React 调查工作区已接入 task API，R4-003已通过真实 PostgreSQL → HTTP → 浏览器的既有失败历史读取；新的完整模型调查与成功Diagnosis页面仍未验收。
+- 默认 React 调查工作区已接入 task API，R4-003已验证既有失败历史读取、R4-005已验证新提交与成功Diagnosis页面的受控实际SQL闭环；新的完整模型调查仍未验收。
 - 概览异常指标/真实趋势、外部数据源连接与刷新 API、可执行 Sandbox Lab 尚未实现；任务应用仍需显式环境配置，默认旧 `app` 不自动注入任务服务。
 
 ### 技术方案
