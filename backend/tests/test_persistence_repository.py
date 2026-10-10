@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from decimal import Decimal
 import json
@@ -170,10 +171,37 @@ class ApplicationStateRepositoryTests(unittest.TestCase):
         self.assertEqual(returned, descriptor)
         sql, params = connection.calls[-1]
         self.assertIn("ON CONFLICT (source_id)", sql)
+        self.assertIn(
+            "WHERE app_state.data_sources.provider = EXCLUDED.provider", sql
+        )
+        self.assertIn(
+            "AND app_state.data_sources.environment = EXCLUDED.environment", sql
+        )
+        update_clause = sql.split("DO UPDATE SET", 1)[1].split("WHERE", 1)[0]
+        self.assertNotIn("provider =", update_clause)
+        self.assertNotIn("environment =", update_clause)
         self.assertIn("%s", sql)
         self.assertIn("sandbox", params)
         self.assertIn("snapshot-1", params)
         self.assertNotIn("shopify-dev", sql)
+
+    def test_upsert_rejects_source_identity_conflict(self) -> None:
+        repository, connection = _repository()
+        connection.next_rowcount = 0
+        descriptor = DataSourceDescriptor(
+            source_id="shopify-dev",
+            display_name="Shopify Dev Store",
+            provider=SourceProvider.SHOPIFY,
+            environment=SourceEnvironment.SANDBOX,
+        )
+
+        with self.assertRaisesRegex(
+            PersistenceRepositoryError,
+            "Data source identity conflicts with the existing record",
+        ):
+            repository.upsert_data_source(descriptor)
+
+        self.assertEqual(len(connection.calls), 1)
 
     def test_sensitive_keys_are_rejected_recursively_before_sql(self) -> None:
         repository, connection = _repository()
@@ -222,6 +250,20 @@ class ApplicationStateRepositoryTests(unittest.TestCase):
         connection.next_rowcount = 0
         with self.assertRaises(PersistenceRepositoryError):
             repository.transition_investigation_run("run-1", RunStatus.SUCCEEDED)
+
+    def test_queued_run_can_transition_to_failed(self) -> None:
+        repository, connection = _repository()
+
+        self.assertEqual(
+            repository.transition_investigation_run("run-queued", RunStatus.FAILED),
+            RunStatus.FAILED,
+        )
+        sql, params = connection.calls[-1]
+        self.assertIn("status IN", sql)
+        self.assertEqual(
+            params[-3:],
+            ("run-queued", RunStatus.QUEUED.value, RunStatus.RUNNING.value),
+        )
 
     def test_failure_update_is_parameterized_and_stores_only_controlled_code(self) -> None:
         repository, connection = _repository()
@@ -356,6 +398,101 @@ class ApplicationStateRepositoryTests(unittest.TestCase):
                 self.assertIn("source-1", params)
                 self.assertIn("validation", params)
         self.assertEqual(connection.calls[-1][1][-3:], ("diagnosis-1", "run-1", "evidence:obs-1:supporting"))
+
+    def test_observation_persistence_discards_error_text_and_sanitizes_code(self) -> None:
+        repository, connection = _repository()
+        failed = replace(
+            _observation(),
+            status=ObservationStatus.FAILED,
+            source_status="failed",
+            current_value=None,
+            baseline_value=None,
+            relative_change=None,
+            sample_size=None,
+            error_code="DatabaseError: password=hunter2",
+            error_message="postgres://user:secret@example.invalid/db",
+        )
+
+        repository.record_observation(
+            failed,
+            "run-1",
+            "source-1",
+            SourceEnvironment.VALIDATION,
+        )
+
+        params = connection.calls[-1][1]
+        self.assertEqual(params[-3], "tool_error")
+        self.assertIsNone(params[-2])
+        self.assertNotIn("hunter2", params)
+        self.assertNotIn("secret@example", params)
+
+    def test_evidence_default_payload_discards_error_text_and_sanitizes_code(self) -> None:
+        repository, connection = _repository()
+        failed = replace(
+            _evidence(),
+            evidence_id="evidence:obs-1:limitation",
+            role=EvidenceRole.LIMITATION,
+            observation_status=ObservationStatus.FAILED,
+            source_status="failed",
+            current_value=None,
+            baseline_value=None,
+            relative_change=None,
+            sample_size=None,
+            error_code="DatabaseError: password=hunter2",
+            error_message="postgres://user:secret@example.invalid/db",
+        )
+
+        repository.record_evidence(
+            failed,
+            "run-1",
+            "source-1",
+            SourceEnvironment.VALIDATION,
+        )
+
+        payload = json.loads(connection.calls[-1][1][-1])
+        self.assertEqual(payload["error_code"], "tool_error")
+        self.assertIsNone(payload["error_message"])
+        self.assertNotIn("hunter2", connection.calls[-1][1][-1])
+        self.assertNotIn("secret@example", connection.calls[-1][1][-1])
+
+    def test_evidence_payload_rejects_nested_error_message_before_sql(self) -> None:
+        repository, connection = _repository()
+
+        for unsafe_payload in (
+            {"error_message": "password=hunter2"},
+            {"nested": [{"ERROR_MESSAGE": "postgres://user:secret@host/db"}]},
+            {"nested": {"errorMessage": "untrusted service response"}},
+        ):
+            with self.subTest(payload=unsafe_payload):
+                with self.assertRaisesRegex(
+                    PersistenceValidationError,
+                    "must not include 'error_message'",
+                ):
+                    repository.record_evidence(
+                        _evidence(),
+                        "run-1",
+                        "source-1",
+                        SourceEnvironment.VALIDATION,
+                        payload=unsafe_payload,
+                    )
+
+        self.assertEqual(connection.calls, [])
+
+    def test_evidence_payload_sanitizes_nested_error_codes(self) -> None:
+        repository, connection = _repository()
+
+        repository.record_evidence(
+            _evidence(),
+            "run-1",
+            "source-1",
+            SourceEnvironment.VALIDATION,
+            payload={"details": [{"error_code": "database password=hunter2"}]},
+        )
+
+        payload_json = connection.calls[-1][1][-1]
+        payload = json.loads(payload_json)
+        self.assertEqual(payload["details"][0]["error_code"], "tool_error")
+        self.assertNotIn("hunter2", payload_json)
 
     def test_payload_must_be_json_serializable(self) -> None:
         repository, connection = _repository()

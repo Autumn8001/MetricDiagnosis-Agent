@@ -1,11 +1,12 @@
 # MetricSleuth Project Status
 
 > 状态：动态接管摘要
-> 快照日期：2026-10-09
+> 快照日期：2026-10-10
 > Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-005a 已提交）
 > 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器；R2-005a 单任务执行服务
 > 当前阶段：R2 持久化应用基础（进行中）
-> 当前任务：R2-005b 任务服务与 API/worker 接线设计；R1-004 仍需等待外部接入资源
+> 最近新增验收：R2-PG 数据源身份保护、状态规则统一与真实 PostgreSQL 持久化验收（本次提交）
+> 当前任务：R2-005b 最小 Worker、失败前事实保存与中断恢复；R1-004 仍需等待外部接入资源
 
 ## 当前结论
 
@@ -29,8 +30,21 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 ## 已实现但当前未真实复验
 
 - Analytics Tools 的真实 PostgreSQL 执行路径：本轮自动测试使用 Fake/Mock connection。
-- 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录，本轮无凭据和数据库，未复现逐 Run 结果。
-- 前端 production build：历史文档记录通过；本轮因文档任务不生成 `dist`，仅运行 lint 和无输出类型检查。
+- 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录；当前没有模型凭据，未复现逐 Run 结果。
+- 前端 production build：历史文档记录通过；R0 运行过 lint 和无输出类型检查，本次后端验收未重新运行前端检查。
+
+## R2-PG：真实 PostgreSQL 持久化验收已通过
+
+- PostgreSQL 17.11 隔离本机测试库已执行 `001`、`002`、`003` migrations，并重复执行成功；没有连接生产库或读取应用连接配置。
+- `upsert_data_source()` 拒绝同 ID 不同 provider/environment；`003_immutable_data_source_identity.sql` 触发器进一步禁止直接 SQL 修改 source_id/provider/environment。相同身份的元数据更新仍允许。
+- 领域模型与 Repository 均允许 `queued → failed`；已验证实际 SQL 状态写入。
+- 受控 Runner 执行参数化 `SELECT 80/100`，成功保存 Trace、Observation、Evidence、Diagnosis 与来源版本/查询引用；失败只落受控 code，不生成 Diagnosis。
+- 实际数据库验证来源组合外键、Diagnosis 冲突后的整批回滚、Observation 原始错误文本不落库，以及全新连接读取。数据库进程重启后再次读回同一成功调查和 Diagnosis。
+- 主线程终验：真实 PostgreSQL **7/7 PASS**；离线回归原始输出 **Ran 535 tests / OK (skipped=1)**，数据库测试类因未配置专用变量跳过。二者分别运行，不混算模型效果。
+- 记录与复现命令：[`postgres-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md)。测试实例已停止，测试数据保留在仓库外。
+- 尚未完成 Worker/API 接线、失败前工具事实增量保存、任务恢复、外部业务同步与真实模型验收。
+
+以下 R2-001 至 R2-005a 条目保留各切片当时的历史验证边界；其中“未执行迁移/未验证数据库”已由上述 R2-PG 验收更新，不代表当前仍未执行。
 
 ## R2-001：已完成并由主线程验收
 
@@ -128,9 +142,9 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 - 能力契约与 API、Agent Runtime、数据库来源发现及外部连接器的产品级接入（当前仅完成 Registry/AnalyticsTools 的纯内存适配，以及 Olist 验证合同表达）。
 - Shopify 或用户外部 PostgreSQL 的产品级接入、连接器实现、数据同步和水位（当前绝对未接入真实外部库或 Shopify API）。
-- 数据库迁移执行、repository/API 接线、Run 并发/重试/取消、重启恢复和持久化
+- repository/API 接线、Run 并发/重试/取消、任务中断恢复和持久化
   后的多 grain 查询支持。
-- Investigation/Tool Call/Observation/Evidence/Diagnosis 持久化与历史恢复。
+- 面向用户的调查历史读取 API、运行中与失败前事实保存（成功结果数据库持久化已验收）。
 - 数据接入、工作概览、独立指标页和实验室的真实 API。
 - 用户认证、生产安全、后台任务恢复和服务器部署资产。
 - 独立 Holdout、真实外部数据评测、Next Action/Stop Condition 评分。
@@ -138,7 +152,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 ## 当前阻碍与待提供资源
 
 1. 认可的 HTML 交互原型文件不在仓库中，已记录为待补产品资产；需要用户提供后才能按冻结设计接线，但不阻塞 R1 数据契约与数据层开发。
-2. 当前环境未配置 `DATABASE_URL` 或模型凭据，不能做真实端到端复验。
+2. 已有可复用隔离本机 PostgreSQL 验收环境；产品数据源与模型凭据仍未配置，不能做真实 Agent/业务端到端复验。
 3. Shopify Development Store/应用权限尚未提供；外部 PostgreSQL 目标库也未确定。
 4. 首个真实源最终选择需经过 R1 capability gate，不能仅按候选名称决定。
 
@@ -146,9 +160,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 继续推进 Roadmap R2：
 
-1. R2-005b：设计并实现最小单 worker/任务服务与 API 接线；先明确任务创建、查询、
-   失败、取消以及重启边界，保持模型调用在短事务之外。未获授权前不执行 migration
-   或连接生产数据库。
+1. R2-005b：先实现最小单 Worker 的原子任务领取、中断终结和失败前 Trace/Observation 保存；复用已验收数据库，不扩展成通用调度器。不自动重放可能重复收费的模型任务，不伪造缺失 Diagnosis。随后接任务创建/历史读取 API。全程使用隔离测试库，不操作生产。
 2. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
@@ -163,12 +175,14 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
 | R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
 | R2-005a task-service 专项 | 11/11 PASS | Fake/Spy coordinator；事务外 Runner、失败分类与输入隔离；未执行 SQL |
-| 后端全量 unittest | 528/528 PASS | Hermetic；包含 R2-001 至 R2-005a；未访问真实模型或数据库 |
+| 后端全量 unittest（2026-10-10） | Ran 535 tests / OK (skipped=1) | 未配置专用 DB 变量；数据库测试类跳过；无真实模型调用 |
+| R2-PG 真实数据库专项（2026-10-10） | 7/7 PASS | PostgreSQL 17.11；迁移、约束、受控 Runner、成功/失败、回滚、重连、安全错误文本 |
+| PostgreSQL 进程重启读取（2026-10-10） | PASS | 同一成功 Run、Diagnosis、data_version/query_reference；不是 Worker 恢复 |
 | Olist 验证能力专项 | 5/5 PASS | Registry grain/dimensions、漏斗指标 unavailable、非法维度与错误来源身份；Fake connection 未执行 SQL |
 | FastAPI 专项 | 24/24 PASS | Live 分支使用 patch，只证明契约/wiring |
 | 前端 lint | PASS | 静态检查 |
 | TypeScript `--noEmit` | PASS | 不生成构建产物 |
-| Git 工作树（本切片验收） | R2-005a 已由主线程验收并随本次提交落库 | 未执行真实数据库迁移 |
+| Git 审查快照 | `eba3d1846d08876df42c9730289009875dd73dc0` | 原 11 个提交与审查分支保留；R2-PG 在本地 main 新增提交，不推送/合并 |
 
 ## 当前关键技术决策
 

@@ -75,6 +75,8 @@ Pop-Location
 
 真实 PostgreSQL、真实模型、外部数据同步和部署验收必须使用明确配置的非生产或受控环境，并在结果中单独标注。
 
+R2 PostgreSQL 专项：在 `backend` 中配置专用 `METRICSLEUTH_TEST_DATABASE_URL` 后执行 `python -B -m unittest tests.test_postgres_persistence_integration -v`。仅允许本机 `metricsleuth_r2_acceptance`，会执行应用状态迁移；完整环境、启动/停止和验证边界见 [`docs/evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md`](docs/evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md)。未配置时跳过不是数据库验收通过。
+
 ## 6. 工作方式
 
 - 开始任务前检查 `git status --short --branch`，保护用户现有修改。

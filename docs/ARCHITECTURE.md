@@ -1,8 +1,8 @@
 # MetricSleuth 架构说明
 
 > **Status：Current + Planned boundary**
-> 审计日期：2026-10-09
-> 审计代码版本：`main`（R1-001 已提交；R1-002 已由主线程验收，随本次提交落库）
+> 更新日期：2026-10-10
+> 审查基线：`main` / `eba3d18`；包含本次 R2-PG 修复与本地数据库验收
 > 证据范围：仓库源码、测试、Schema、配置和版本化脱敏 artifact。本文没有连接生产数据库，也没有检查已部署服务。
 
 本文是给后续开发者和接管 Agent 使用的**现状架构参考**。`Current` 只描述源码能够支持的行为；`Planned` 只描述已经确认的责任边界，不代表已经存在的表、接口或部署；`Unknown` 表示现有证据不足。历史任务书中的目标不能覆盖当前实现事实。
@@ -450,9 +450,8 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   Run、Tool Call、Observation、Evidence、Diagnosis 及其多 Evidence 链接表。
 - Run→ToolCall→Observation→Evidence→Diagnosis 通过外键和复合唯一键保持同一
   `investigation_run_id` 的可追溯关系；来源对象和各事实保存 `source_id`、
-  `environment`，并由复合外键验证每条记录引用的是一个有效来源环境。当前尚未
-  用跨记录约束保证该来源环境一定等同于所属 Investigation Run；R2-003 的应用
-  服务边界必须先执行该一致性检查，后续真实迁移再评估是否追加数据库约束。
+  `environment`。`002` migration 进一步把事实三元来源外键绑定到所属 Run；
+  已在隔离 PostgreSQL 17.11 验证不匹配来源/环境会被数据库拒绝。
 - `backend/app/persistence/models.py` 提供不可变 `RunState`、`RunStatus`、
   合法生命周期迁移和 `SourceReference`；`SourceEnvironment` 复用数据源能力
   合同中的 `live`、`sandbox`、`benchmark`、`validation` 枚举。
@@ -461,22 +460,22 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
   参数化 `ApplicationStateRepository`，负责应用状态写入和最小 run 摘要读取。
   Repository 不建立连接、不保存 `DATABASE_URL`、不自动提交事务，也不执行
   migration。`tests/test_persistence_repository.py` 的 Fake connection 只证明
-  repository 合同，不代表 PostgreSQL 迁移、真实写入或重启恢复已成功。
+  repository 合同；真实数据库证据另见下述 R2-PG 记录。
 - `EvidenceDrivenRunSummary` 在 Runtime 结果上保留经过验证的完整
   `observation_catalog`。`backend/app/persistence/investigation_writer.py` 以单一
   `DataSourceDescriptor` 把该 Runtime Trace、Observation、Evidence 和 Diagnosis
   映射到 Repository，避免每条事实从独立调用参数取得来源身份。写入顺序和所有
   交叉引用先由 Hermetic Spy 测试验证；该 Writer 尚未连接 FastAPI/worker，不能
-  当作运行中任务进度、实际事务提交或重启恢复的证据。
-- `backend/migrations/002_enforce_investigation_provenance.sql` 是尚未执行的后续
+  当作运行中任务进度或 Worker 恢复的证据；受控调用的事务提交另由 R2-PG 验证。
+- `backend/migrations/002_enforce_investigation_provenance.sql` 是已在隔离测试库执行的
   migration：它把 Tool Call、Observation、Evidence、Diagnosis 的三元来源身份
   外键绑定到 Investigation Run，而不是只验证其单独指向一个存在的 Data Source。
   `pg_constraint` guards 让同一 schema 重复运行时避免重复加约束。文本测试和有限
-  SQL parser 读取不能证明 PostgreSQL 已执行此 migration 或其中约束已经生效。
+  SQL parser 本身不能证明执行成功；独立 PostgreSQL 集成测试已验证约束生效与重复执行。
 - Repository 还提供条件化 `fail_investigation_run()`，只将受控 failure code 写入
   `failure_details`；Writer 的 `start()`、`complete()` 和 `fail()` 可分别由未来的
   短事务调用。它们不拥有 connection/commit/rollback，也未被 FastAPI 或 worker
-  调用，因此当前没有任务领取、重试、运行中进度或真实事务边界。
+  调用，因此当前没有任务领取、重试或运行中进度；实际事务边界由 Coordinator 提供并已验收。
 - `backend/app/persistence/transaction_coordinator.py` 是当前唯一的 transaction
   owner：它通过注入的 factory 对 start/complete/fail 分别创建短连接事务，并返回绑定
   来源身份的 immutable handle。它不读取 `DATABASE_URL`、不保留 connection，也不
@@ -484,7 +483,15 @@ README/任务书中的历史测试计数与 `docs/agent-state.md` 的较新计�
 - `backend/app/persistence/task_execution_service.py` 把一次已注入的 Agent runner
   放在 `start` 与 `complete/fail` 两个 coordinator 调用之间。其输入和 failure code
   都是深度校验、来源绑定和脱敏的；它不是后台 worker、HTTP endpoint 或模型实现，
-  因而没有真实调用、队列/取消或重启恢复证据。
+  受控 Runner 与数据库持久化已验收，但没有真实模型、后台队列/取消或任务中断恢复证据。
+
+### Current：R2-PG 验证与安全边界
+
+- `003_immutable_data_source_identity.sql` 在数据库层禁止修改 source_id/provider/environment；Repository upsert 拒绝身份冲突，仅更新同身份元数据。
+- `RunState` 和 Repository 一致允许 queued→failed。Coordinator factory 必须提供事务连接（psycopg `autocommit=False`），每次生命周期操作独立 commit/rollback，不跨 Runner 持有事务。
+- Repository 不保存 Observation 原始 error_message；非格式合规 error_code 降级为 `tool_error`。Evidence 默认 payload 同样去除错误文本，自定义 payload 拒绝嵌套 error_message（含大小写/分隔符变体）。这不是任意文本通用脱敏器；API/日志和外部接入边界仍需单独保护。
+- `tests/test_postgres_persistence_integration.py` 仅显式接入本机专用 `metricsleuth_r2_acceptance`，不会读取应用 `.env`/DATABASE_URL。迁移重复执行，受控 SELECT/Runner 完整持久化、失败、安全文本、身份与来源隔离、真实事务回滚和重新连接：7/7 PASS。
+- PostgreSQL 进程重启后成功结果仍可读取；尚无后台 Worker 或失败前事实增量写入。验收记录：[`postgres-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md)。
 
 ### Planned：应用状态与运行时接线（R2-005b）
 

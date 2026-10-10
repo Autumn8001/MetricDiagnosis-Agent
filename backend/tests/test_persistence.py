@@ -32,11 +32,14 @@ class RunStateTests(unittest.TestCase):
         queued = RunState.queued()
         running = queued.transition_to(RunStatus.RUNNING)
         succeeded = running.transition(RunStatus.SUCCEEDED)
+        failed_before_start = queued.transition_to(RunStatus.FAILED)
 
         self.assertEqual(queued.status, RunStatus.QUEUED)
         self.assertEqual(running.status, RunStatus.RUNNING)
         self.assertEqual(succeeded.status, RunStatus.SUCCEEDED)
+        self.assertEqual(failed_before_start.status, RunStatus.FAILED)
         self.assertTrue(succeeded.is_terminal)
+        self.assertTrue(failed_before_start.is_terminal)
 
     def test_cancel_is_legal_from_queued_or_running(self) -> None:
         self.assertEqual(
@@ -54,7 +57,6 @@ class RunStateTests(unittest.TestCase):
     def test_illegal_and_terminal_transitions_fail_closed(self) -> None:
         illegal = (
             (RunStatus.QUEUED, RunStatus.SUCCEEDED),
-            (RunStatus.QUEUED, RunStatus.FAILED),
             (RunStatus.RUNNING, RunStatus.QUEUED),
             (RunStatus.SUCCEEDED, RunStatus.RUNNING),
             (RunStatus.FAILED, RunStatus.CANCELLED),
@@ -227,6 +229,25 @@ class MigrationContractTests(unittest.TestCase):
         # safely repeatable for the same schema.
         self.assertGreaterEqual(sql.count("if not exists"), 6)
         self.assertNotIn("drop constraint", sql)
+
+    def test_source_identity_migration_is_discoverable_and_guarded(self) -> None:
+        migration_name = "003_immutable_data_source_identity.sql"
+        self.assertIn(migration_name, available_migrations())
+        sql = " ".join(load_migration(migration_name).lower().split())
+
+        self.assertIn("begin;", sql)
+        self.assertIn("commit;", sql)
+        self.assertIn(
+            "create or replace function app_state.reject_data_source_identity_change()",
+            sql,
+        )
+        self.assertIn("before update on app_state.data_sources", sql)
+        self.assertIn("old.source_id is distinct from new.source_id", sql)
+        self.assertIn("old.provider is distinct from new.provider", sql)
+        self.assertIn("old.environment is distinct from new.environment", sql)
+        self.assertIn("pg_trigger", sql)
+        self.assertIn("if not exists", sql)
+        self.assertNotIn("drop ", sql)
 
     def test_loader_rejects_path_traversal_and_non_sql_names(self) -> None:
         with self.assertRaises(Exception):

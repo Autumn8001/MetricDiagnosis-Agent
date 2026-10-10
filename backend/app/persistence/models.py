@@ -75,7 +75,9 @@ DataSourceStatus = DataSourceState
 
 
 ALLOWED_RUN_TRANSITIONS: Final[dict[RunStatus, frozenset[RunStatus]]] = {
-    RunStatus.QUEUED: frozenset({RunStatus.RUNNING, RunStatus.CANCELLED}),
+    RunStatus.QUEUED: frozenset(
+        {RunStatus.RUNNING, RunStatus.FAILED, RunStatus.CANCELLED}
+    ),
     RunStatus.RUNNING: frozenset(
         {RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED}
     ),

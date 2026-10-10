@@ -1,8 +1,8 @@
 # MetricSleuth MVP Roadmap
 
 > 状态：当前长期实施计划
-> 更新日期：2026-10-09
-> 基线：`main` / `a0a912a29addaddf02c14486f85c0a7392f32aa4`
+> 更新日期：2026-10-10
+> 审查基线：`main` / `eba3d1846d08876df42c9730289009875dd73dc0`；R2-PG 在其后新增独立提交
 > 目标来源：[`PRODUCT.md`](PRODUCT.md)
 > 架构边界：[`ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -99,7 +99,7 @@
 
 ## 5. R2 — 持久化应用基础
 
-**状态：进行中（R2-001 已由主线程验收）**
+**状态：进行中（R2-001 至 R2-005a、R2-PG 已验收；Worker/API 未完成）**
 
 ### 目标
 
@@ -108,7 +108,7 @@
 ### 当前阻碍
 
 - 现有 API 和 React 状态均为进程/页面内存态。
-- Observation/Evidence 只保存内存引用，不能独立复算查询。
+- 产品 Runtime/API 的 Observation/Evidence 仍为内存态；独立持久化服务已验收，尚未接线。
 - 没有任务并发、幂等、重启恢复或失败重试语义。
 
 ### 技术方案
@@ -231,7 +231,18 @@
 - start 失败不调用 Runner，complete 失败不覆盖为 failed。Fake/Spy 测试只证明服务
   调度边界，不能证明真实 Agent、Worker、PostgreSQL 或 API 的任务执行。
 
-### 下一切片：R2-005b — 任务服务与 API/worker 接线
+### R2-PG：审查修复与真实 PostgreSQL 持久化验收
+
+**状态：已完成并由主线程真实数据库验收（2026-10-10）**
+
+- 目标：在继续 Worker 前证明现有持久化代码能够执行，而非继续依赖 Fake/Spy。
+- 修复：数据源身份不可变（Repository 条件 upsert + `003` 触发器），统一 `queued → failed`，Observation/Evidence 错误文本保护。
+- 依赖与模块：既有 migrations/Repository/Writer/Coordinator/Task Service；新增 opt-in PostgreSQL 集成测试，不更换 Runtime。
+- 验收：隔离 PostgreSQL 17.11 上 migrations 001–003 重复执行；真实 SQL 七项测试通过，包含完整受控调查、来源隔离、状态、回滚、重连和错误文本；进程重启后结果读取成功。
+- 边界：不是外部业务数据同步、真实模型或 Worker 验收。此前切片中的“未执行 migration”是其历史完成时状态。
+- 记录：[`postgres-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-persistence-acceptance-2026-10-10.md)。
+
+### 下一切片：R2-005b — 最小 Worker、失败前事实与恢复，再接 API
 
 **状态：待开展**
 
@@ -240,6 +251,10 @@
 - 接线前必须明确迁移执行的受控环境与 connection factory 的配置归属。失败必须保留
   已发生的状态与安全的失败分类，但不得保存凭据、完整连接串或模型原始敏感输出。
 - 当前不自动执行 migration、启动 worker 或连接部署数据库。
+- 依赖：R2-PG 已通过；后续开发继续使用隔离数据库，不扩展通用调度平台。
+- 先实现原子领取与单 Worker；中断任务明确标记失败，保留已保存事实，不默认重新执行可能重复收费的模型调用。
+- 增量保存已发生的 Tool Trace/Observation；Runner 失败仍可查看前序步骤，未产生 Diagnosis 时不得补造。
+- 验收必须包含真实 PostgreSQL 的重复领取防护、中断恢复、失败前事实保留和成功调查；Fake 测试不替代这些场景。随后再完成最小任务创建/状态/历史 API。
 
 ## 6. R3 — 首个持续真实数据闭环
 

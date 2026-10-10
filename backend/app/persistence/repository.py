@@ -126,6 +126,47 @@ def _failure_code(value: object) -> str:
     return value
 
 
+def _safe_observation_error_code(value: object) -> str | None:
+    """Keep only controlled observation error codes at the persistence edge."""
+
+    if value is None:
+        return None
+    if isinstance(value, str) and _FAILURE_CODE_RE.fullmatch(value):
+        return value
+    return "tool_error"
+
+
+def _contains_error_message_key(value: object) -> bool:
+    """Detect free-text error fields at any depth before JSON normalization."""
+
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if isinstance(key, str) and _SENSITIVE_KEY_SEPARATOR_RE.sub("", key.lower()) == "errormessage":
+                return True
+            if _contains_error_message_key(nested):
+                return True
+    elif isinstance(value, (list, tuple)):
+        return any(_contains_error_message_key(item) for item in value)
+    return False
+
+
+def _sanitize_error_codes(value: object) -> object:
+    """Replace untrusted error-code values throughout a JSON payload."""
+
+    if isinstance(value, Mapping):
+        return {
+            key: (
+                _safe_observation_error_code(nested)
+                if isinstance(key, str) and _SENSITIVE_KEY_SEPARATOR_RE.sub("", key.lower()) == "errorcode"
+                else _sanitize_error_codes(nested)
+            )
+            for key, nested in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_error_codes(item) for item in value]
+    return value
+
+
 def _sensitive_key(key: str) -> bool:
     """Recognize credential-like key spellings, including camelCase names."""
 
@@ -402,26 +443,35 @@ class ApplicationStateRepository:
                 capabilities, data_version
             ) VALUES (%s, %s, %s, %s, %s, CAST(%s AS jsonb), %s)
             ON CONFLICT (source_id) DO UPDATE SET
-                provider = EXCLUDED.provider,
-                environment = EXCLUDED.environment,
                 display_name = EXCLUDED.display_name,
                 state = EXCLUDED.state,
                 capabilities = EXCLUDED.capabilities,
                 data_version = EXCLUDED.data_version,
                 updated_at = now()
+            WHERE app_state.data_sources.provider = EXCLUDED.provider
+              AND app_state.data_sources.environment = EXCLUDED.environment
         """
-        self._execute(
-            sql,
-            (
-                descriptor.source_id,
-                provider_value,
-                environment_value,
-                descriptor.display_name,
-                state_value,
-                capabilities_json,
-                data_version_value,
-            ),
-        )
+        cursor = self._connection.cursor()  # type: ignore[attr-defined]
+        try:
+            cursor.execute(  # type: ignore[attr-defined]
+                sql,
+                (
+                    descriptor.source_id,
+                    provider_value,
+                    environment_value,
+                    descriptor.display_name,
+                    state_value,
+                    capabilities_json,
+                    data_version_value,
+                ),
+            )
+            rowcount = getattr(cursor, "rowcount", None)
+        finally:
+            self._close_cursor(cursor)
+        if rowcount == 0:
+            raise PersistenceRepositoryError(
+                "Data source identity conflicts with the existing record."
+            )
         return descriptor
 
     def create_investigation_run(
@@ -719,8 +769,8 @@ class ApplicationStateRepository:
                 observation.sample_size,
                 data_version_value,
                 observation.query_or_result_reference,
-                observation.error_code,
-                observation.error_message,
+                _safe_observation_error_code(observation.error_code),
+                None,
                 observation.created_at,
             ),
         )
@@ -755,9 +805,15 @@ class ApplicationStateRepository:
                 "unit": evidence.unit,
                 "sample_size": evidence.sample_size,
                 "source_status": evidence.source_status,
-                "error_code": evidence.error_code,
-                "error_message": evidence.error_message,
+                "error_code": _safe_observation_error_code(evidence.error_code),
+                "error_message": None,
             }
+        elif _contains_error_message_key(payload):
+            raise PersistenceValidationError(
+                "Field 'evidence.payload' must not include 'error_message'."
+            )
+        else:
+            payload = _sanitize_error_codes(payload)
 
         sql = """
             INSERT INTO app_state.evidence (
