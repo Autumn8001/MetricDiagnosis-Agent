@@ -119,11 +119,13 @@ date × asin × marketplace × traffic_source
 
 ### Current：隔离的 Olist 验证 Schema
 
-`warehouse/olist_validation_schema.sql` 和 `backend/scripts/load_olist_validation.py` 使用独立的 `olist_validation` Schema，包含订单、订单明细和按日订单价值的验证对象。`configs/olist_validation_metrics.yaml` 只用于 Olist 工具兼容性验证；该 Profile 不被 `backend/app/api/service.py` 的默认 Runtime/API 加载，也不替换 Synthetic Profile。
+`warehouse/olist_validation_schema.sql` 和 `backend/scripts/load_olist_validation.py` 使用独立的 `olist_validation` Schema，包含订单、订单明细和按日订单价值的验证对象。`configs/olist_validation_metrics.yaml` 用于 Olist 受控指标验证，并可由显式 `task_application.py` 的 `olist_validation` Profile 加载；它不被 `backend/app/api/service.py` 的默认 Runtime/API 加载，也不替换 Synthetic Profile。
 
 Olist 证据只说明部分真实公开订单数据可以映射到受控指标工具。它不能证明当前系统已经支持任意外部 PostgreSQL，也不能提供当前 Amazon Profile 缺失的 `sessions`、`traffic_source` 或 `asin` 语义。
 
 R1-003 新增的 `build_olist_validation_capabilities()`（`backend/app/data_sources/olist_validation.py`）把该 Profile 表达为 `OLIST + VALIDATION` 的纯内存能力合同：三个指标的 grain/dimensions 由 Olist Registry 适配而来，`sessions` 与 `conversion_rate` 被显式声明为 unavailable。`backend/scripts/verify_olist_tool_compatibility.py` 将这份合同传给 `AnalyticsTools`，因此支持指标的非法维度会在 SQL 前失败；这项能力只由本地 Hermetic 测试证明，不代表已完成 Olist 数据库连接、同步或持续外部接入。
+
+上述是 R1-003 切片当时的验证边界。2026-10-10 主线程补验：真实公共 CSV → 隔离 PostgreSQL → Analytics SQL → 四步受控 Runner → 27 Observation/checkpoint → 预期失败 → 新应用读回已通过。`verify_olist_task_progress.py` 不调用 LLM、不制造 Evidence/Diagnosis；数据版本标签不是快照，未完成持续外部同步。可复现证据见 [`olist-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md)。
 
 ### Current：指标语义层
 
@@ -168,7 +170,7 @@ R1-003 新增的 `build_olist_validation_capabilities()`（`backend/app/data_sou
 - `build_olist_validation_capabilities()`：在共享 Registry 适配器基础上，创建固定为 `SourceProvider.OLIST + SourceEnvironment.VALIDATION` 的 Olist 验证合同，并对缺失的漏斗指标显式 fail-closed；源码：`backend/app/data_sources/olist_validation.py`，测试：`backend/tests/test_olist_validation_capabilities.py`。
 - `AnalyticsTools(..., capabilities=...)`：能力契约为可选参数。传入时，`query_metric()` 在实际 SQL 前执行 `validate_query()`，并将能力合同错误转换为 `MetricQueryError`；不传时保持历史查询路径。
 
-**当前边界明确：** 能力契约与语义 Registry/AnalyticsTools 已完成纯内存适配；Olist 当前仅完成基于既有验证资产的合同表达和本地 Hermetic 验证，仍未接入 API、数据库来源发现、外部连接器、同步水位或持续真实外部数据验证。适配器也不证明传入 descriptor 对应的物理来源已经连接或同步。
+**当前边界明确：** 能力契约与语义 Registry/AnalyticsTools 已完成适配；Olist 显式本地 Profile 的数据库查询和任务 API 步骤保存已受控验收，仍未实现数据库来源发现、外部连接器、同步水位或持续真实外部数据验证。适配器本身不证明任意传入 descriptor 对应的物理来源已经连接或同步。
 
 ### Planned：数据模型责任边界
 

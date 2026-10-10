@@ -90,7 +90,7 @@ Agent 调用受治理工具，按 Observation 动态下钻
 | Synthetic Benchmark | Current / Confirmed 保留 | 用于回归、已知异常案例和离线评测；不得冒充真实外部业务数据。仓库相关资产位于 `warehouse/`。 |
 | Sandbox Data | Confirmed | 用于隔离实验和可控异常注入；必须有独立来源/环境标识，不写入真实数据环境。 |
 | 真实外部数据 | Confirmed 目标 / Unknown 来源 | 至少选择一个可持续刷新且权限明确的来源完成纵向闭环。外部 PostgreSQL、Shopify 和 Olist 都不能在未完成运行验证前宣称为已接入产品。 |
-| Olist 公开数据 | Current | `docs/phase-9-olist-real-world-validation.md` 与 `configs/olist_validation_metrics.yaml` 记录的是隔离映射/工具兼容性验证，不是当前产品 Runtime 的数据源。 |
+| Olist 公开数据 | Current | 显式本地任务应用已有 `olist_validation` Profile。隔离 PostgreSQL 上实际导入/查询公开静态订单数据，并验收失败前步骤留存和新应用读取；行动由受控 Runner 选择，无 Olist 模型验收。不是默认产品数据源或持续连接器；见 `docs/evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md`。 |
 
 所有调查结果至少需要知道 `source_id`、来源类型、环境、数据时间范围和数据快照/刷新信息。指标是否支持某个维度，必须由来源能力和粒度验证决定；不能仅凭字段名称拼接跨粒度指标。
 

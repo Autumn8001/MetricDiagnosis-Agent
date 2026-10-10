@@ -5,7 +5,7 @@
 > Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-005a 已提交）
 > 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器；R2-005a 单任务执行服务
 > 当前阶段：R2 持久化应用基础（进行中）
-> 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b 显式应用/SQL 接线（本次提交，受控验收）
+> 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b（`c8ea746`，受控验收）
 > 当前任务：真实 SDK/模型的持久调查验收；R1-004 仍需等待明确外部接入资源
 
 ## 当前结论
@@ -17,6 +17,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - 数据源能力契约（R1-001）：最小、领域无关、真正深层不可变契约模型，支持 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（frozen dataclass，嵌套内部容器使用 MappingProxyType，防范 Sequence 字符串混淆），具备指标独立 grain/维度、跨 grain 组合保护与 fail-closed 校验（`backend/app/data_sources/capabilities.py`；单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS）。
 - 指标能力矩阵与语义适配（R1-002）：当前 Synthetic Profile 的五个核心指标在 `configs/metrics.yaml` 显式声明 `date × asin × marketplace × traffic_source` atomic grain；`MetricRegistry` 严格校验显式 grain 并为旧配置提供明确 fallback；`build_capabilities_from_registry()` 保留 Registry 中的 metric dimensions/grain；`AnalyticsTools` 传入 capabilities 时在执行 SQL 前校验查询能力（主线程专项测试 51/51 PASS）。
 - Olist 能力降级表达（R1-003）：`configs/olist_validation_metrics.yaml` 的三个支持指标显式使用 `date × customer_state` grain；`build_olist_validation_capabilities()` 复用 Registry grain/dimensions，显式拒绝 `sessions`、`conversion_rate` 及 `marketplace`/`traffic_source`/`asin`；Olist 工具兼容性脚本已绑定该合同。已验证绑定合同后，漏斗指标与非法维度都在 SQL 前失败。证据限于本地 Hermetic 测试，不代表数据库连接、同步或持续真实数据接入。
+- Olist 后续真实数据库验收（2026-10-10）：本机已存在的公开 CSV 导入隔离 PostgreSQL，真实 Analytics 查询和四步受控调查保存/失败留存/新应用读取通过。这更新上述 R1-003 当时的数据库验证边界，但仍不是持续外部源或 Olist 真实模型验收；详见下节。
 - PostgreSQL Synthetic Warehouse、10 个 Benchmark 场景和 Ground Truth 隔离。
 - YAML Metric Semantic Layer 与指标依赖/driver 元数据。
 - 受控 Analytics Tools、Observation、Evidence、Structured Diagnosis。
@@ -30,7 +31,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 ## 已实现但当前未真实复验
 
 - 旧同步 Live API 的完整模型执行路径尚未复验；新应用 Runner 的 AnalyticsTools 聚合 SQL 已由 R2-005b2b 在真实 PostgreSQL 验证，不是外部数据同步。
-- 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录；当前没有模型凭据，未复现逐 Run 结果。
+- 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录。当前进程环境未配置，但被忽略的 `.env` 实际有凭据/模型/自定义端点；只做了存在性检查，未输出值，尚未验证有效性或授权本次计费调用。此前“没有模型凭据”的说法仅基于进程环境，现予纠正。
 - 前端 production build：历史文档记录通过；R0 运行过 lint 和无输出类型检查，本次后端验收未重新运行前端检查。
 
 ## R2-PG：真实 PostgreSQL 持久化验收已通过
@@ -65,6 +66,14 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - 新 PostgreSQL 专项4/4 PASS，含实际Analytics聚合与Observation mapper、UPDATE只读拒绝、元数据保留、独立API子进程HTTP读取。最终合并回归见下表。Runner为受控，真实模型未调用。
 - `data_version`仍为标签，不是数据库snapshot；单源配置不提供混合来源队列路由。下一步先真实模型验收与真实源capability gate，不继续扩展编排。
 - 证据/安全启动说明：[`task-application-acceptance-2026-10-10.md`](evaluation-artifacts/task-application-acceptance-2026-10-10.md)。
+
+## Olist 静态公开数据：真实 SQL 与失败步骤持久化已验收
+
+- 本机原有公开 CSV 已实际导入专用测试库，不是 Synthetic：99,441 orders / 112,650 items；delivered 96,478，merchandise GMV 13,221,498.11。未下载、提交原始记录或使用 `--replace`。
+- 原有 loader/映射/工具资产复用；显式任务 Profile 查询 GMV、orders、AOV 和按 customer_state 的 GMV，保存4个步骤/27 Observation。受控 Runner 主动中止后固定 code `execution_failed`，Evidence/Diagnosis 都为0，新应用实例重连读回一致。
+- 不支持的 sessions/marketplace 请求在任务创建前拒绝。版本 `olist-public-raw-files-20261010` 是标签，不是快照；公开静态历史数据不等于持续业务接入，也未使用真实模型。
+- 新脚本 `backend/scripts/verify_olist_task_progress.py` 与6个离线守卫测试；主线程验收 run `102bea3f-cc93-400a-a871-6ef90238972f`。记录：[`olist-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md)。
+- 既有 PostgreSQL 持久化/Worker/API/应用回归重新执行23/23 PASS；离线全回归591 tests / OK (skipped=3)，均不作为模型成功证据。
 
 ## R2-005b2a：任务 API 与持久历史已验收
 
@@ -181,7 +190,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 ## 当前阻碍与待提供资源
 
 1. 认可的 HTML 交互原型文件不在仓库中，已记录为待补产品资产；需要用户提供后才能按冻结设计接线，但不阻塞 R1 数据契约与数据层开发。
-2. 已有可复用隔离本机 PostgreSQL 验收环境；本轮仅检查变量是否存在（未读取输出值），OPENAI_API_KEY、TASK_MODEL、STATE/ANALYTICS_DATABASE_URL 均未设置。真实模型需用户在本机安全配置并明确模型与调用预算，不能在聊天或仓库中提供密钥。
+2. 已有可复用隔离本机 PostgreSQL 环境。进程中的模型/任务配置未设置，但 `.env` 有现存模型凭据、METRICSLEUTH_AGENT_MODEL、API模式和自定义端点（只报告是否存在）。用户已明确授权一次隔离 Synthetic 真实调查、最多8工具/10轮；次数限制不等于金额硬上限。凭据只在显式授权的验收进程内使用，不输出或提交；真实执行结果需单独记录，不将存在凭据等同于模型可用。
 3. Shopify Development Store/应用权限尚未提供；外部 PostgreSQL 目标库也未确定。
 4. 首个真实源最终选择需经过 R1 capability gate，不能仅按候选名称决定。
 
@@ -204,7 +213,8 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
 | R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
 | R2-005a task-service 专项 | 11/11 PASS | Fake/Spy coordinator；事务外 Runner、失败分类与输入隔离；未执行 SQL |
-| 后端全量 unittest（2026-10-10） | Ran 585 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；无真实模型调用 |
+| 后端全量 unittest（2026-10-10） | Ran 591 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；无真实模型调用 |
+| Olist SQL/持久步骤专项（2026-10-10） | PASS | 实际公开 CSV / PostgreSQL / Analytics；受控4步27Observation，预期失败留存与新应用读回；不调用模型 |
 | R2-005b2b PostgreSQL 应用接线 | 4/4 PASS；含全部持久化/Worker/API 回归23/23 PASS | 实际Analytics SQL/Observation、只读拒写、元数据保留、独立本地API进程；受控Runner |
 | R2-005b2a PostgreSQL API | 4/4 PASS；含持久化/Worker 回归 19/19 PASS | 真实 PostgreSQL 17.11 + TestClient + 受控 SQL Runner；无模型/外部业务数据 |
 | 新 API/reader + 旧 API | 40/40 PASS | Hermetic；主线程执行，含安全输入错误响应 |

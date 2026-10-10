@@ -66,6 +66,7 @@
 - **R1-001｜Data Source Capability Contract**：已完成并由主线程验收。实现了最小纯领域契约 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（对象级与嵌套容器级不可变，支持指标独立 grain/维度快照、跨 grain 组合保护和严格 fail-closed 校验；源码：`backend/app/data_sources/capabilities.py`，单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS；全量回归 461/461 PASS）。明确尚未接入真实外部 PostgreSQL 或 Shopify，尚未接入现有 Runtime/API/DB。
 - **R1-002｜电商核心指标 metric × dimension × grain 矩阵定义与适配**：已完成并由主线程验收。`configs/metrics.yaml` 的五个 Synthetic 核心指标显式声明 `date × asin × marketplace × traffic_source` atomic grain；`MetricRegistry` 严格校验显式 grain 并为旧配置提供明确 fallback；`backend/app/data_sources/semantic_adapter.py` 保留 Registry 中的 dimensions/grain；`AnalyticsTools` 可选接收能力契约并在 SQL 前 fail-closed 校验。主线程专项测试 51/51、全量回归 466/466 PASS；未接入真实数据库、Shopify 或 API。
 - **R1-003｜Olist 隔离资产能力契约验证与降级表达**：已完成并由主线程验收。`configs/olist_validation_metrics.yaml` 的三个指标显式声明 `date × customer_state` grain；`build_olist_validation_capabilities()` 复用 Registry 适配器，并将 `sessions`/`conversion_rate` 显式标为 unavailable；Olist 工具兼容性脚本绑定该合同。主线程确认绑定合同后，漏斗指标和非法维度均在 SQL 前 fail-closed；新增 5 个本地 Hermetic 测试。未验证 Olist 数据库连接、同步或持续外部接入。
+- **R1-003 后续数据库验收（2026-10-10）**：现有公共 CSV 在隔离 PostgreSQL 导入、映射及 Analytics 查询已实际通过；四步受控调查保存 27 Observation，失败后新应用读回，未伪造 Diagnosis。证据见 [`olist-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md)。这更新了 R1-003 当时未验证数据库的边界，不代表持续同步或 Olist 模型验收。
 - **R1-004｜Shopify Development Store 只读 capability spike 与连接器选择门**：待开展。
 
 ### 目标
@@ -75,7 +76,7 @@
 ### 当前阻碍
 
 - 当前默认 Registry 仍绑定单一 Synthetic 宽表；R1-002 已为该表显式表达 atomic grain，但 Shopify 的订单、销售和会话数据可能具有不同 grain，尚未据此声明支持。
-- 当前产品没有 `source_id`、来源类型、环境或数据版本边界。
+- 来源身份/环境/版本标签和持久任务边界已实现并在隔离数据库验证；仍缺真实持续源和可复算数据快照。
 - Shopify 原型店、权限和访问凭据尚未提供；外部 PostgreSQL 目标也未确认。
 
 ### 技术方案
@@ -99,7 +100,7 @@
 
 ## 5. R2 — 持久化应用基础
 
-**状态：进行中（R2-001 至 R2-005a、R2-PG、R2-005b1、R2-005b2a 已验收；应用 Runner 与启动配置未完成）**
+**状态：进行中（R2-001 至 R2-005a、R2-PG、R2-005b1、R2-005b2a 已验收；R2-005b2b 应用 Runner 与启动配置已受控验收，真实模型待验收）**
 
 ### 目标
 

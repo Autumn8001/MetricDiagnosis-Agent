@@ -81,8 +81,9 @@ python backend/scripts/verify_olist_tool_compatibility.py `
 ```
 
 Re-loading an already populated validation schema is fail-closed. `--replace`
-must be supplied explicitly and truncates only `olist_validation.olist_orders`
-and `olist_validation.olist_order_items`.
+must be supplied explicitly and truncates only `olist_validation.fact_daily_order_value`,
+`olist_validation.olist_order_items`, and `olist_validation.olist_orders`. No replacement
+was performed in the 2026-10-10 acceptance run.
 
 ## Phase 9 validation boundary
 
@@ -96,9 +97,17 @@ exposes only `merchandise_gmv`, `orders`, `olist_aov` and the order-safe
 real-data semantic choice; the Amazon registry continues to default to
 `sessions`.
 
-No Agent Runtime, product API, Benchmark case, or Amazon Stage 1 metric config
-loads this temporary registry. Phase 9 therefore demonstrates controlled tool
+The original Phase 9 did not load this registry into the Agent Runtime or
+product API. Since R2-005b2b (`c8ea746`), the explicitly configured local task
+application supports an `olist_validation` profile; the default legacy API,
+Benchmark cases, and Amazon Stage 1 config are unchanged. This still does not
+establish continuous ingestion or real-model acceptance. Phase 9 demonstrates controlled tool
 compatibility and local capability degradation, not a production multi-domain
-implementation. R1-003 has passed main-thread review and Hermetic regression;
-this still does not replace a fresh, explicitly authorized Olist database
-validation run.
+implementation. R1-003 passed Hermetic regression; the 2026-10-10 isolated
+database revalidation reuses these assets without claiming a continuous connector.
+
+The 2026-10-10 actual SQL and persisted-progress results, input fingerprints,
+and explicit isolated-database reproduction commands are recorded in
+[`olist-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md).
+That run deliberately fails after four completed steps and verifies that the
+27 observations survive; it does not create a Diagnosis or call an LLM.
