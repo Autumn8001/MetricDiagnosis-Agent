@@ -90,7 +90,7 @@ FastAPI JSON → React Diagnosis Workspace
 
 ### Unknown：验证口径
 
-当前阶段实际运行过隔离本机 PostgreSQL 验收，未调用真实模型或操作线上服务。`README.md`、`任务书.md` 和 `docs/agent-state.md` 的测试数量/Live 描述来自不同时间；最新结果见 `PROJECT_STATUS.md` 与验收 artifact，不能混算历史和本轮证据。
+当前阶段实际运行过隔离本机 PostgreSQL 验收；2026-10-10 授权的一次真实 SDK 模型请求返回 `InternalServerError`，没有完成工具或 Diagnosis，模型成功验收仍未通过。未操作线上服务。`README.md`、`任务书.md` 和 `docs/agent-state.md` 的测试数量/Live 描述来自不同时间；最新结果见 `PROJECT_STATUS.md` 与验收 artifact，不能混算历史和本轮证据。
 
 ## 3. 当前数据模型
 
@@ -435,6 +435,8 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 
 仓库包含一份 2026-09-22 的脱敏聚合 Live Evaluation 记录（`docs/evaluation-artifacts/live-evaluation-2026-09-22.md`），记录的是受控 Synthetic Benchmark 上一次兼容 Provider 的聚合结果；原始 Provider 文本、完整 Tool 值和凭据没有版本化。Runtime 代码具备真实 Provider 调用路径，但本次架构审计没有重新配置或执行它。
 
+以上为初始审计时状态。2026-10-10 新任务应用已做一次授权实际SDK尝试，但 `InternalServerError` 导致无完成工具/Diagnosis；不能用历史聚合结果填补新持久调查成功证据，详见本次尝试 artifact。
+
 ### Unknown：测试数量和部署级验收
 
 README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶段。最新实际测试结果统一查看 `PROJECT_STATUS.md` 和对应 acceptance artifact；离线/Hermetic、真实数据库、真实模型必须分别报告，前端静态结果不能替代浏览器或部署验收。
@@ -537,6 +539,8 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 - 版本标签不是数据库snapshot，不同短事务可能看见并发更新；单源Runner不自动路由混合来源队列。真实数据接入前必须落实这两项边界。
 
 ### Planned：真实 SDK/模型与数据版本验收
+
+一次实际授权尝试已执行但未通过：`InternalServerError`，0工具/0Observation/0Diagnosis，失败状态及新应用重读正常；详见 [`live-task-persistence-attempt-2026-10-10.md`](evaluation-artifacts/live-task-persistence-attempt-2026-10-10.md)。不应把 SDK 接线已实现或错误请求已发出解释为真实模型成功。
 
 - Run boundary 负责任务状态、并发/重试/取消和重启恢复。
 - 写入服务必须从 Investigation Run 的已持久化来源身份派生 Tool Call、Observation、

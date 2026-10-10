@@ -84,6 +84,8 @@ R2 任务 API 数据库专项：在相同专用环境运行 `python -B -m unitte
 
 显式本地应用入口为 `python -B -m app.task_application api` / `worker --once`（backend cwd），必须先按 `docs/evaluation-artifacts/task-application-acceptance-2026-10-10.md` 配置；不会自动迁移或注入数据。新增真实 SQL/进程专项 `tests.test_postgres_task_application`；真实模型验收仍需明确凭据与预算。
 
+Olist 静态公开数据的实际 SQL/步骤留存证据见 `docs/evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md`。一次授权的真实SDK调查返回 `InternalServerError`，成功 gate 尚未通过；见 `docs/evaluation-artifacts/live-task-persistence-attempt-2026-10-10.md`。`verify_live_task_persistence.py` 是显式计费验收脚本，不是自动回归；本次一次性授权已使用，不得未经新的授权重跑。
+
 - 开始任务前检查 `git status --short --branch`，保护用户现有修改。
 - 先读取当前阶段代码和测试，再确定最小改动。
 - 一般低风险实现可按 Roadmap 自主推进；重大产品方向、不可逆数据操作、生产部署、密钥和权限变更必须先获得用户确认。

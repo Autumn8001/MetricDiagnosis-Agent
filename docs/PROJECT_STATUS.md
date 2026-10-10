@@ -5,8 +5,8 @@
 > Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-005a 已提交）
 > 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器；R2-005a 单任务执行服务
 > 当前阶段：R2 持久化应用基础（进行中）
-> 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b（`c8ea746`，受控验收）
-> 当前任务：真实 SDK/模型的持久调查验收；R1-004 仍需等待明确外部接入资源
+> 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b（`c8ea746`，受控验收）；Olist真实SQL/持久步骤（`15f2bae`）
+> 当前任务：真实 SDK 持久调查首次授权尝试失败；需确认现有端点/模型可用性再安排授权复验；R1-004 仍需明确外部接入资源
 
 ## 当前结论
 
@@ -31,7 +31,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 ## 已实现但当前未真实复验
 
 - 旧同步 Live API 的完整模型执行路径尚未复验；新应用 Runner 的 AnalyticsTools 聚合 SQL 已由 R2-005b2b 在真实 PostgreSQL 验证，不是外部数据同步。
-- 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录。当前进程环境未配置，但被忽略的 `.env` 实际有凭据/模型/自定义端点；只做了存在性检查，未输出值，尚未验证有效性或授权本次计费调用。此前“没有模型凭据”的说法仅基于进程环境，现予纠正。
+- 真实模型动态调查：仓库保存了 2026-09-22 的 Synthetic Live 聚合记录。此前“没有模型凭据”的说法仅检查进程环境，已纠正；被忽略的 `.env` 实际有现存配置。2026-10-10 经一次性授权已尝试SDK持久调查，返回 `InternalServerError`，未得到完成工具结果；新的真实模型成功 gate 仍未通过，详见本次尝试记录。
 - 前端 production build：历史文档记录通过；R0 运行过 lint 和无输出类型检查，本次后端验收未重新运行前端检查。
 
 ## R2-PG：真实 PostgreSQL 持久化验收已通过
@@ -74,6 +74,13 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - 不支持的 sessions/marketplace 请求在任务创建前拒绝。版本 `olist-public-raw-files-20261010` 是标签，不是快照；公开静态历史数据不等于持续业务接入，也未使用真实模型。
 - 新脚本 `backend/scripts/verify_olist_task_progress.py` 与6个离线守卫测试；主线程验收 run `102bea3f-cc93-400a-a871-6ef90238972f`。记录：[`olist-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md)。
 - 既有 PostgreSQL 持久化/Worker/API/应用回归重新执行23/23 PASS；离线全回归591 tests / OK (skipped=3)，均不作为模型成功证据。
+
+## 真实 SDK 持久调查：已尝试，未通过
+
+- 用户授权一次隔离 Synthetic 模型调查、最多8工具/10轮；主线程沿用本机既有端点/模型与SDK，禁用重试/远程追踪。只插入一个新测试产品八行数据，不使用生产/Olist原始数据。
+- 实际 `InternalServerError`，完成工具0/Observation0/Evidence0/Diagnosis0。任务持久化为 `failed / execution_failed`，新应用重连读取一致；脚本 exit1，不当作模型通过。
+- 本次一次性授权已使用，不自动追加请求或换模型。需确认端点/模型可用性后另行授权验证完整成功链路，不扩展编排框架。
+- 证据与复现边界：[`live-task-persistence-attempt-2026-10-10.md`](evaluation-artifacts/live-task-persistence-attempt-2026-10-10.md)。模型客户端返回错误不能证明动态调查、调用成本或通用模型可靠性。
 
 ## R2-005b2a：任务 API 与持久历史已验收
 
@@ -190,7 +197,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 ## 当前阻碍与待提供资源
 
 1. 认可的 HTML 交互原型文件不在仓库中，已记录为待补产品资产；需要用户提供后才能按冻结设计接线，但不阻塞 R1 数据契约与数据层开发。
-2. 已有可复用隔离本机 PostgreSQL 环境。进程中的模型/任务配置未设置，但 `.env` 有现存模型凭据、METRICSLEUTH_AGENT_MODEL、API模式和自定义端点（只报告是否存在）。用户已明确授权一次隔离 Synthetic 真实调查、最多8工具/10轮；次数限制不等于金额硬上限。凭据只在显式授权的验收进程内使用，不输出或提交；真实执行结果需单独记录，不将存在凭据等同于模型可用。
+2. 本机已有隔离 PostgreSQL 和被Git忽略的模型配置；此前“没有凭据”的说法仅检查进程环境，已纠正。用户授权的一次8工具/10轮 Synthetic 调查已运行并返回 `InternalServerError`，没有工具结果。一次性授权已使用；重试前需确认端点/模型可用性及新的调用授权。凭据不输出或提交，次数限制不等于金额硬上限。
 3. Shopify Development Store/应用权限尚未提供；外部 PostgreSQL 目标库也未确定。
 4. 首个真实源最终选择需经过 R1 capability gate，不能仅按候选名称决定。
 
@@ -198,7 +205,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 继续推进 Roadmap R2：
 
-1. 使用现有任务应用，在明确非生产模型配置、凭据与预算后进行一次真实SDK调查持久化验收，保留脱敏逐Run证据。确认稳定数据版本和分析只读角色；data_version标签不等于快照，单源配置不可假设混合队列路由。不再新增编排框架。
+1. 现有端点的首次授权真实SDK尝试失败，先确认可用性，再经新授权完成模型成功与Diagnosis持久化 gate。期间只推进可离线/隔离数据库验证的数据版本、只读角色和单源队列边界；data_version标签不等于快照，不再新增编排框架。
 2. R1-004：在用户提供 Shopify Development Store 或明确的只读外部 PostgreSQL 目标后，执行只读 capability spike，并决定首个持续连接器。
 
 ## 最新验证结果
@@ -213,8 +220,10 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | R2-004b lifecycle 专项 | 23/23 PASS | Fake/Spy repository；失败代码、start/complete/fail、无成功漂移；未执行 SQL |
 | R2-004c transaction 专项 | 11/11 PASS | Fake connection；短事务、回滚、关闭与来源句柄；未执行 SQL |
 | R2-005a task-service 专项 | 11/11 PASS | Fake/Spy coordinator；事务外 Runner、失败分类与输入隔离；未执行 SQL |
-| 后端全量 unittest（2026-10-10） | Ran 591 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；无真实模型调用 |
+| 后端全量 unittest（2026-10-10，最终回归） | Ran 598 tests / OK (skipped=3) | 未配置专用 DB 变量；三个数据库测试类跳过；该命令无真实模型调用 |
+| Olist/真实调用验收脚本守卫 | 13/13 PASS | 主线程离线终验；不是模型或数据库调查运行 |
 | Olist SQL/持久步骤专项（2026-10-10） | PASS | 实际公开 CSV / PostgreSQL / Analytics；受控4步27Observation，预期失败留存与新应用读回；不调用模型 |
+| 真实SDK持久调查尝试（2026-10-10） | FAIL / InternalServerError | 仅一次授权；0工具/0Observation/0Diagnosis；失败状态和新应用读取通过，模型调查未验收 |
 | R2-005b2b PostgreSQL 应用接线 | 4/4 PASS；含全部持久化/Worker/API 回归23/23 PASS | 实际Analytics SQL/Observation、只读拒写、元数据保留、独立本地API进程；受控Runner |
 | R2-005b2a PostgreSQL API | 4/4 PASS；含持久化/Worker 回归 19/19 PASS | 真实 PostgreSQL 17.11 + TestClient + 受控 SQL Runner；无模型/外部业务数据 |
 | 新 API/reader + 旧 API | 40/40 PASS | Hermetic；主线程执行，含安全输入错误响应 |
