@@ -2,7 +2,7 @@
 
 > **Status：Current + Planned boundary**
 > 更新日期：2026-10-10
-> 审查基线：`main` / `eba3d18` 后续本地提交；已包含 R2-PG、R2-005b1 与 R2-005b2a 验收
+> 审查基线：`main`，R4-002 独立本地提交（用 git log 查询）；包含 R2-PG、R2-005b Worker/API 与 R4-001/002 受控验收
 > 证据范围：仓库源码、测试、Schema、配置和版本化脱敏 artifact。本文没有连接生产数据库，也没有检查已部署服务。
 
 本文是给后续开发者和接管 Agent 使用的**现状架构参考**。`Current` 只描述源码能够支持的行为；`Planned` 只描述已经确认的责任边界，不代表已经存在的表、接口或部署；`Unknown` 表示现有证据不足。历史任务书中的目标不能覆盖当前实现事实。
@@ -24,10 +24,10 @@ OpenAI Agents SDK Runner（模型决定下一工具动作）
         ↓
 Observation → Evidence → Structured Diagnosis
         ↓
-FastAPI JSON → React Diagnosis Workspace
+旧同步 FastAPI JSON（旧 Benchmark API 路径保留）
 ```
 
-上图为原有调查内核与旧前端路径。它已经具备一条可测试的“指标查询—动态调查—证据校验—结构化诊断”内核，但默认 API/前端仍围绕 Synthetic Benchmark 场景组织。另已完成并验收持久任务 API/Worker 路径：
+调查内核已具备可测试的“指标查询—动态调查—证据校验—结构化诊断”链路。旧同步 Benchmark API 仍保留；默认 React App 已切换到持久任务工作区，具体边界见第8节。另已完成并验收持久任务 API/Worker 路径：
 
 ```text
 显式配置的任务 API → PostgreSQL app_state queued
@@ -56,7 +56,7 @@ FastAPI JSON → React Diagnosis Workspace
 ### Unknown
 
 - 当前个人服务器上是否已经存在可连接的 PostgreSQL 实例、其中实际有哪些表和数据，本次未连接验证。
-- 已认可的独立 HTML 产品原型已由产品方提供，文件、哈希与页面/API 边界见 `PRODUCT.md` 第4节；它尚未接入 React 或后端，不代表完整产品已实现。
+- 已认可的独立 HTML 产品原型已由产品方提供，文件、哈希与页面/API 边界见 `PRODUCT.md` 第4节；R4-002 已按其导航和视觉基线接入 React，但静态原型及当前受控 UI 均不代表完整产品已实现。
 - Shopify、外部用户 PostgreSQL、Webhook 和 Jev 尚未进入当前 Runtime/API。
 - 生产反向代理、TLS、认证、密钥管理和进程监管方案尚未落地。
 
@@ -78,7 +78,7 @@ FastAPI JSON → React Diagnosis Workspace
 | Agent Runtime | Agents SDK 工具桥、Trace 审计、结构化诊断意图 | `backend/app/agent_runtime/investigation_runtime.py`；`backend/app/agent_runtime/diagnosis_runtime.py` |
 | API 服务 | 旧同步调查 + 显式注入的持久任务/历史 API | `backend/app/api/routes.py`；`backend/app/api/task_routes.py`；`backend/app/api/task_service.py` |
 | 应用状态 | 短事务事实保存、最小 Worker、作用域读取 | `backend/migrations/`；`backend/app/persistence/`；`backend/tests/test_postgres_persistence_integration.py`；`backend/tests/test_postgres_task_api_integration.py` |
-| 前端 | React + TypeScript + Vite 单页工作台 | `frontend/src/App.tsx`；`frontend/src/api.ts`；`frontend/vite.config.ts` |
+| 前端 | React + TypeScript + Vite；默认调查区已消费持久任务 API，旧 Benchmark 工作台与其 API 客户端保留为历史路径 | `frontend/src/App.tsx`；`frontend/src/product/InvestigationWorkspace.tsx`；`frontend/src/tasks/client.ts`；`frontend/src/api.ts`；`frontend/vite.config.ts` |
 | Evaluation | 纯评分、操作状态、Evidence/Unsupported Claim 评分和评测脚本 | `backend/app/evaluation/`；`backend/scripts/run_benchmark_evaluation.py` |
 
 ### Current：实际技术栈
@@ -178,7 +178,7 @@ R1-003 新增的 `build_olist_validation_capabilities()`（`backend/app/data_sou
 
 ### Unknown：当前模型不能表达的内容
 
-- 当前 Registry/source table 已可通过纯内存适配器生成 capability contract，但默认 API 尚未注入 source descriptor/capabilities，运行时查询仍受限于旧版单表假设。
+- 当前 Registry/source table 已可通过纯内存适配器生成 capability contract；持久任务 API 的服务器绑定会注入来源身份与能力。旧同步 API/Analytics 主链仍受限于旧版单表假设，不能由新任务 API 的能力合同推导为多来源分析支持。
 - 当前 `app_state` 与新任务 API 已持久化 source_id/environment、Run与事实、data_version标签及query reference，真实数据库验收见第8节；尚无可靠数据快照和持续同步水位。
 - 应用 Run/Observation/Evidence/Diagnosis 的 Schema 和 migrations 001–004 已实现并在隔离 PostgreSQL 执行；尚无产品级 Analysis Session 或持续连接器。
 
@@ -224,7 +224,7 @@ Evidence selection → Diagnosis builder/composition
 FastAPI InvestigationResponse
               │
               ▼
-React App 内存状态与工作台组件
+旧 React Benchmark App 内存状态与工作台组件
 ```
 
 当前 API 还有两条旁路：
@@ -396,13 +396,21 @@ API 的 `_build_live_trace_items()` 只使用 `InvestigationRunSummary.tool_trac
 
 旧请求/响应结构在 `backend/app/api/schemas.py`。新 `task_routes.py` 提供 POST `/api/investigations`（202）以及 GET 列表/详情；契约在 `task_schemas.py`。默认 `app` 未注入任务服务时返回 503。尚无数据源 CRUD、连接测试、Schema 探索或用户取消/显式重试接口。
 
-R4-001 新增 GET `/api/investigation-sources`：`InvestigationTasksService.list_sources()` 只投影配置的来源身份、版本标签和每项metric/grain/dimensions/supported能力，不开连接或提交任务；不是数据源CRUD、连接健康、刷新状态或日期覆盖接口。默认服务未配置仍503。
+R4-001 新增 GET `/api/investigation-sources`：`InvestigationTasksService.list_sources()` 只投影配置的来源身份、版本标签和每项metric/grain/dimensions/supported能力，不开连接或提交任务；不是数据源CRUD、连接健康、刷新状态或日期覆盖接口。默认旧 `app` 未配置任务服务仍503。
 
 `backend/app/main.py:16-29` 配置了开发端口的 CORS，并包含 `allow_origins=[..., "*"]`、全方法和全请求头；当前没有认证/授权中间件，也没有证据表明它托管 Vite 生产静态文件。
 
-### Current：前端
+### Current：默认 React 产品工作区（R4-002）
 
-`frontend/src/App.tsx:144-379` 是无 Router 的单页 Diagnosis Workspace，包含：
+`frontend/src/App.tsx` 默认只渲染 `product/InvestigationWorkspace.tsx`。该工作区保留认可原型的五导航区域，调用 `tasks/client.ts::createTaskClient` 的来源目录、任务提交、列表与详情接口。列表分页大小为20；概览状态计数只基于当前来源已加载的本页记录。指标页展示来源目录的 metric/grain/dimensions 声明，数据页展示配置元数据，均不探测连接、刷新或趋势数值。实验室页面明确显示未接入。
+
+新提交的 queued 任务及所选 queued/running 历史详情每2秒读取详情，终态不继续轮询；API读取错误显示安全错误代码并停止该轮轮询。详情按服务端记录展示 Tool Call、Observation、Evidence、Diagnosis 与失败状态；空 Diagnosis 不会被前端合成。来源切换清理所选详情和显式日期。该 UI 没有取消/重试/追问、固定进度条或 Synthetic 注入操作。
+
+R4-002 主线程最终真实 Edge + 受控 HTTP fixture 验收 PASS，记录见 `evaluation-artifacts/task-workspace-acceptance-2026-10-10.md`。此验证不连接 PostgreSQL、外部来源或模型；真实 PostgreSQL API→浏览器历史读取仍是下一验收门。
+
+### Historical：旧同步 Benchmark 工作台
+
+旧工作台组件和 API 客户端仍保留在仓库，旧 App 编排可由 Git 历史读取，不再由默认 `App.tsx` 渲染。旧路径曾包含：
 
 - 指标关系图 `MetricGraph`；
 - 诊断卡片 `StructuredDiagnosisCard`；
@@ -411,9 +419,9 @@ R4-001 新增 GET `/api/investigation-sources`：`InvestigationTasksService.list
 - 追问组件 `ContinueInquiry`；
 - Manual Daily Scan 和 Synthetic 场景控制栏。
 
-前端仅通过 `frontend/src/api.ts:33-75` 调用上述 6 个端点，状态使用 React 内存 state；没有历史导航、持久化缓存、来源管理、实验室页面或独立工作概览页面。应用启动时会自动请求一个 `mock_mode: true` 的 Fixture Preview（`frontend/src/App.tsx:203-220`），该结果是静态展示契约，不代表真实 Agent Run。
+旧实现通过 `frontend/src/api.ts` 调用同步 Benchmark 端点，使用 React 内存状态，并在启动时自动请求 Fixture Preview。R4-002 已将它从默认 React 路径移除；`api.ts`、旧工作台组件、场景注入与 Fixture Preview 代码仍是仓库历史资产，不是当前默认 UI 的能力。旧同步 Live 路径此前会注入 Synthetic 场景，不能当作外部数据调查。
 
-R4-001 已新增独立 `frontend/src/tasks/contracts.ts` 与 `client.ts::createTaskClient`，支持来源目录、任务创建/列表/详情；JSON经过字段/来源身份校验，Decimal保留字符串或数值，错误只暴露安全code，POST不自动重试。旧App尚未消费此客户端，不能称为页面已接线。`npm run test:tasks` 使用唯一OS临时编译目录和Fake Fetch，无新增测试依赖。验收边界见 `evaluation-artifacts/task-frontend-contract-acceptance-2026-10-10.md`。
+R4-001 实现的 `frontend/src/tasks/contracts.ts` 与 `client.ts::createTaskClient` 已由 R4-002 默认页面消费，支持来源目录、任务创建/列表/详情；响应经字段/来源身份校验，Decimal保留字符串或数值，错误只暴露安全 code，POST不自动重试。`npm run test:tasks` 使用唯一OS临时编译目录和 Fake Fetch，无新增测试依赖；测试通过只证明客户端合同，不证明真实服务端连接。
 
 ### Planned：产品 API/前端的架构责任
 
@@ -593,10 +601,10 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 
 1. 默认 Registry 仍绑定一个宽表和一套 Synthetic/Amazon 维度；虽已有可选 capability contract 适配，不同真实数据源/粒度仍未完成来源验证和连接器接入。
 2. Live API 会先注入 Synthetic 场景，真实外部数据闭环尚不存在。
-3. 新任务服务能重连读取历史，显式本地Runner/启动入口已实现；默认旧app和前端仍使用内存路径，真实模型尚未验收。
+3. 新任务服务能重连读取历史，显式本地Runner/启动入口已实现；默认 React 前端现消费新任务 API，但 PostgreSQL → HTTP → 浏览器闭环和真实模型尚未验收。
 4. SQL 安全组件与 Analytics 主链脱节，数据库只读角色也没有由 API 自动保证。
 5. CORS、认证、错误暴露和生产部署配置仍是开发环境状态。
-6. 前端是单页调查工作台，不是已接线的五页面完整产品。
+6. 前端已保留五个原型导航区并接入持久任务读取/提交；指标趋势、数据连接/刷新和实验操作未接线。当前浏览器验收使用受控 HTTP fixture，实际 PostgreSQL 与默认服务配置的浏览器闭环仍待完成。
 
 ### Planned
 

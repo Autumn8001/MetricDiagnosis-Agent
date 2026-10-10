@@ -1,12 +1,39 @@
 # MetricSleuth
 
-MetricSleuth 是一个 Evidence-driven 业务指标异常调查 Agent。当前 Stage 1 Domain Profile 仅实现 Amazon / 电商运营；`Sales`、`Orders`、`Sessions`、`ASIN`、`Marketplace`、`Traffic Source` 是当前验证场景，不是永久产品定义。
+MetricSleuth 是一个 AI 自主数据调查与诊断系统。电商是首个验证领域；当前 Synthetic 与 Olist Profile 提供受控调查数据，不代表产品永久限定于电商。
 
-> **当前权威入口（2026-10-09）：** 产品目标见 [docs/PRODUCT.md](docs/PRODUCT.md)，实际/规划架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，长期计划与动态状态见 [docs/ROADMAP.md](docs/ROADMAP.md) 和 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)。旧任务书和 Stage 1 状态记录保留为历史证据。
+> **当前权威入口（2026-10-10）：** 产品目标见 [docs/PRODUCT.md](docs/PRODUCT.md)，实际/规划架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，长期计划与动态状态见 [docs/ROADMAP.md](docs/ROADMAP.md) 和 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)。旧任务书和下方 Phase 记录保留为历史实现说明；它们不再定义默认前端或当前产品状态。
+
+## 当前 React 产品工作区（R4-002）
+
+默认 React 页面消费持久调查来源目录和任务 API，保留认可原型的五个导航区域。主线程真实 Edge 浏览器使用受控 HTTP fixture 最终验收通过；尚未通过真实 PostgreSQL 浏览器读取、真实模型调查或外部持续数据源验收。各页面当前展示范围见 [产品定义](docs/PRODUCT.md#4-认可的产品原型与界面边界) 和 [项目状态](docs/PROJECT_STATUS.md)。
+
+Vite 默认将 `/api` 与 `/health` 代理到 `http://127.0.0.1:8001`，与显式 task application API 默认端口一致。只有需要调试旧同步 Benchmark API 时，才显式设置 `METRICSLEUTH_DEV_API_TARGET` 覆盖代理目标。
+
+启动当前本地任务应用时，先准备 `backend/app/task_application.py` 定义的本地 PostgreSQL、Profile、来源、版本和模型环境配置，并确认所需迁移已在隔离数据库中执行。应用不会自动读取 `.env`、执行迁移或连接非 loopback 数据库。分别启动 API、Worker 和 Vite：
+
+```powershell
+# 终端 1：从 backend 目录运行持久任务 API（默认 127.0.0.1:8001）
+Push-Location backend
+python -m app.task_application api
+Pop-Location
+
+# 终端 2：同一环境配置下运行 Worker
+Push-Location backend
+python -m app.task_application worker
+Pop-Location
+
+# 终端 3：运行 React/Vite（浏览器访问 http://localhost:5173）
+Push-Location frontend
+npm run dev
+Pop-Location
+```
+
+这只是本地已实现的运行入口，不代表生产部署配置已完成。模型 Worker 会调用配置的 Provider；真实模型成功验收状态见项目状态文档。不要将敏感配置提交到仓库。
 
 ## 当前状态
 
-* **当前阶段**：Stage 1 Synthetic Benchmark 调查内核和 Diagnosis Workspace 已完成；面向真实外部数据、持久化、五页面体验和服务器部署的产品 MVP 尚未完成，下一阶段为 Data Source Contract 与真实数据能力验证。历史 Gemini/真实 PostgreSQL 验收属于受控 Synthetic Profile 的本地运行记录，不等同于当前可复验的真实业务产品闭环。
+* **当前阶段（下方为历史快照）**：R4-002 默认 React 工作区已接线，持久化与 Worker 已通过隔离 PostgreSQL 受控验收；真实 PostgreSQL → API → 浏览器链路、真实模型成功调查、外部持续数据、可操作 Lab 与生产部署仍未验收。旧 Stage 1 状态及测试/Live 描述不应当作当前结果。
 * **当前范围**：
   - 基础 Python 3.12+ 脚手架与元数据（当前验证解释器：Python 3.13.5）；
   - Phase 0 人工调查契约规格（[docs/phase-0-manual-investigation.md](docs/phase-0-manual-investigation.md)）；
@@ -761,7 +788,9 @@ python -m unittest discover -s tests -p "test_*.py" -v
 Pop-Location
 ```
 
-### 31. Phase 10 FastAPI 服务与 RESTful 接口指南 (MS-P10-001)
+### 31. Legacy：Phase 10 FastAPI 同步 Benchmark API 指南（MS-P10-001）
+
+> **历史说明：** 本节描述旧同步/场景演示 API，监听端口示例为 `8000`。它不再是默认 React 产品工作区使用的任务 API。当前默认 Vite 代理目标为 `127.0.0.1:8001`；使用覆盖变量前请确认目标服务确为所需的旧接口。
 
 `MS-P10-001` 构建了轻量、零侵入的 FastAPI 后端服务（`backend/app/api/` 与 `backend/app/main.py`），将核心指标依赖拓扑图、演示场景切换/注入、受控 Agent 异常排查会话执行以及结构化诊断输出封装为标准的 RESTful HTTP 接口，为前端 React Diagnosis Workspace 提供稳定、类型完备的 API 支持。
 
@@ -811,7 +840,9 @@ Pop-Location
 python -c "from app.main import app; from fastapi.testclient import TestClient; client = TestClient(app); res = client.get('/health'); assert res.status_code == 200; print('API Self-check: PASS')"
 ```
 
-### 32. Phase 10 React Diagnosis Workspace 前端工作台指南 (MS-P10-002)
+### 32. Legacy：Phase 10 React Diagnosis Workspace 工作台指南（MS-P10-002）
+
+> **历史说明：** 本节保留旧 Benchmark UI 的场景注入、Fixture Preview、扫描和追问说明。`frontend/src/App.tsx` 已不再渲染该工作台；默认 UI 是上方所述 R4-002 持久任务工作区。以下转发到 `8000` 的联调方式仅适用于旧 UI/API，不是当前默认接线。
 
 `MS-P10-002` 构建了基于 **React + TypeScript + Vite + 原生 Vanilla CSS** 的现代化 **Diagnosis Workspace（诊断工作台）** 单页应用，实现了指标拓扑可视化、10 个 Benchmark 场景一键切换注入、Agent 逐步调查轨迹回放、证据链卡片分类展示、结构化诊断卡以及底部自然语言继续追问交互。
 

@@ -1,7 +1,7 @@
 # MetricSleuth 产品定义
 
 > 文档性质：稳定产品方向与 MVP 验收口径。
-> 更新基线：2026-10-10（产品边界不变；更新持久化状态及认可原型资产）。
+> 更新基线：2026-10-10（R4-002 React 接线与受控 HTTP 浏览器验收完成）。
 > 状态词：**Confirmed** 表示已经确认的产品决策；**Current** 表示源码当前事实；**Deferred** 表示明确延后；**Unknown** 表示尚未通过仓库或运行证据确认。
 
 ## 1. 产品定位
@@ -15,7 +15,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 - **Confirmed：** 电商是第一个验证领域，不是产品的永久定义。
 - **Confirmed：** 首个领域继续沿用仓库已有的 Amazon/电商指标、数据和评测资产，以尽快证明完整、真实、可运行的调查闭环。
 - **Confirmed：** 产品最终应是可部署、可持续运行、可由浏览器操作的完整软件，而不只是预制结果 Demo。
-- **Current：** 仓库当前主要实现的是受控 Synthetic Benchmark 上的 Amazon/电商调查内核与 Diagnosis Workspace；这不等同于最终产品已经完成。
+- **Current：** 仓库已有受控 Synthetic/Olist PostgreSQL 调查内核、持久任务 API/Worker 和 R4-002 React 工作区。React 已使用持久任务 API，但实际浏览器验收目前由本机真实 Edge 配合受控 HTTP fixture 完成；这不等同于真实数据库、真实模型或最终产品闭环。
 
 ## 2. 目标用户与主要场景
 
@@ -39,15 +39,15 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 
 | 能力 | 状态 | MVP 要求与边界 |
 | --- | --- | --- |
-| 工作概览 | Confirmed | 展示数据源、指标状态、近期调查和任务状态；页面为体验基线，后端能力需补齐。 |
-| 业务指标 | Confirmed | 展示有语义定义、计算口径、支持维度和异常状态的指标；不承诺所有指标共享同一粒度。 |
-| AI 调查工作区 | Confirmed / Current | 保留现有调查工作区；最终需展示实时进度、工具调用、Observation、Evidence、Diagnosis 和失败原因。当前工作区主要连接现有调查 API。 |
-| 数据接入 | Confirmed | 至少打通一个经过验证的真实外部数据源，并具备刷新状态、只读边界和来源标识。具体采用 Shopify、外部 PostgreSQL 或其他方案，在真实接口验证前为 **Unknown**。 |
-| 数据实验室 | Confirmed | 提供隔离的 Sandbox 数据和可控变化；实验数据与真实外部数据、Synthetic Benchmark 分环境/来源存储。 |
+| 工作概览 | Confirmed / Current | 展示来源及当前来源最多 20 条任务的状态计数与历史；计数不是全库总量，指标数值/异常扫描尚未接入。 |
+| 业务指标 | Confirmed / Current | 展示来源目录所声明的指标、粒度和维度能力；当前是能力目录，不展示实时趋势或计算口径明细。 |
+| AI 调查工作区 | Confirmed / Current | React 已提交调查并读取持久任务列表/详情，展示真实返回的状态、Tool Call、Observation、Evidence、Diagnosis 和失败代码。受控浏览器验证通过；真实数据库浏览器链路、真实模型仍未验收。 |
+| 数据接入 | Confirmed / Current | 页面读取服务器配置来源目录及能力声明；该目录不表示连接成功、健康、刷新或日期覆盖。外部源连接器尚未实现。 |
+| 数据实验室 | Confirmed / Current | 五导航区域已保留；实验区明确显示未接入且不写数据。Sandbox 操作尚未实现。 |
 | 异常发现 | Confirmed | 支持指标刷新后的异常检测，并能由用户启动调查；自动 Webhook 触发不是 MVP 必需条件。 |
 | 动态 Agent 调查 | Confirmed / Current | Agent 必须根据 Observation 选择下一工具动作并可停止；当前 Agents SDK Runtime 和工具链已存在，但真实外部数据上的端到端验证尚未完成。 |
 | 证据与可追溯性 | Confirmed / Current | 结论只能引用本次工具调用产生的 Observation，并能回到工具参数、数据来源和查询快照；当前 Observation/Evidence/Diagnosis 校验与持久化来源外键已通过受控数据库验收，数据版本仍是标签，可靠查询快照尚未实现。 |
-| 任务与历史 | Confirmed / Current | Run、状态、失败、工具轨迹、证据和诊断结果必须持久保存，服务重启后可查看；持久化、Worker、步骤、任务 API 和显式本地启动入口已在真实 PostgreSQL 受控验收。默认旧 app 尚未配置服务，前端未接线；新 Runner 已实现，真实模型待验收。 |
+| 任务与历史 | Confirmed / Current | Run、状态、失败、工具轨迹、证据和诊断结果必须持久保存，服务重启后可查看；持久化、Worker、步骤、任务 API 和显式本地启动入口已在真实 PostgreSQL 受控验收，默认 React 工作区已消费任务 API。默认旧 `app` 仍不自动注入任务服务；新 Runner 已实现，真实模型待验收。 |
 | 评测 | Confirmed / Current | 保留 Synthetic Benchmark 和真实模型评测，区分 Hermetic、Mock、真实模型和真实数据；需要可重复保存每次 Run 的结果与停止条件。 |
 | 部署 | Confirmed | 可在个人服务器上长期运行，包含最小安全配置、数据备份/恢复和健康检查；当前没有完整生产部署闭环。 |
 
@@ -63,18 +63,19 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 
 - **Confirmed：** 已认可的产品体验包含五个页面/区域：工作概览、业务指标、AI 调查工作区、数据接入、实验室。它是 MVP 的用户体验基线，后续实现应优先补齐数据和状态，不重新发起大幅 UI 改版。
 - **Current / Confirmed：** 产品方于 2026-10-10 提供仓库根目录的 `MetricSleuth_%E4%BA%A4%E4%BA%92%E4%BA%A7%E5%93%81%E5%8E%9F%E5%9E%8B.html`，作为冻结的体验基线，保留原文件，不擅自重新设计。文件 SHA-256：`ae62216b9871c4cf2ee3651ea5e4d1c87a10d499beca2897db69dc80823fe76c`。
-- **Current：** `frontend/src/` 与 `backend/app/api/routes.py` 已提供部分调查工作区、指标图、场景和调查接口，但不代表五个页面都已实现。
-- **Current（R4-001）：** 持久调查客户端与配置来源目录已实现并通过离线合同验收；React App 尚未消费它们。配置目录不等于外部来源已连接或数据已刷新。
+- **Current（R4-002）：** `frontend/src/App.tsx` 将默认 React App 接到 `InvestigationWorkspace`；五个原型导航区域保留。工作概览显示当前来源列表页（每页最多20条）的调查计数；业务指标页展示目录能力；数据页展示配置来源及限制；实验室明确未接入。只有调查任务/历史详情及来源/指标能力目录通过 task API 提供数据，其他页面不宣称实时指标或连接状态。
+- **Current：** `frontend/src/tasks/client.ts` 的 `createTaskClient` 供 React 读取来源、提交任务、分页列举和读取详情。`InvestigationWorkspace` 对 queued/running 任务每2秒轮询，终态或读取错误时停止/展示安全错误；页面不实现取消、自动重试、追问、固定进度或实验数据注入。失败记录仅展示已保存事实，不构造缺失 Diagnosis。
+- **Current（验证边界）：** R4-002 已由主线程在真实本机 Edge 配合受控 HTTP fixture 验收，覆盖翻页、提交/轮询停止、失败与成功历史事实、来源切换和未配置服务错误；它没有连接 PostgreSQL 或模型。记录见 [`task-workspace-acceptance-2026-10-10.md`](evaluation-artifacts/task-workspace-acceptance-2026-10-10.md)。视觉规则事实提取见根目录 `DESIGN.md`，原 HTML 仍为设计权威。
 
 原型为自包含静态交互文件，不是已接入后端的产品。其硬编码指标、固定步骤/定时进度、预设追问回答、示例历史与前端场景切换只说明体验，不能作为真实运行证据。
 
 | 原型区域 | 可复用资产 | 真实接线边界 |
 | --- | --- | --- |
-| 工作概览 | 持久调查列表/状态 API、指标 Registry | 指标数值、异常、刷新状态仍需真实查询；不沿用示例数字。 |
-| 经营指标 | Semantic Layer、AnalyticsTools、Manual Scan | 尚无完整趋势页面 API；只显示来源实际支持的指标/维度，缺失不补造。 |
-| AI 调查 | POST/GET `/api/investigations`、已保存步骤与结果 | React 尚未接入；进度显示实际状态/步骤，不模拟完成百分比；取消、追问尚无对应持久接口。示例 `analytics.compare_metric` 不是现有工具合同。 |
-| 数据接入 | 来源能力合同、显式单源应用配置 | 无持续外部连接器/刷新 API；未接入不能显示已连接。 |
-| 体验实验室 | Synthetic Benchmark 与隔离测试资产 | 场景切换必须最终由真实隔离数据事件驱动；Jev/Webhook 预留不进入主线。 |
+| 工作概览 | 持久调查列表/状态 API | 当前计数只涵盖所选来源当前页最多20条；指标异常数值与刷新状态仍需真实查询。 |
+| 经营指标 | `/api/investigation-sources` 来源能力目录 | 目前展示指标/粒度/维度声明，不是趋势图、数值计算或来源在线检查。 |
+| AI 调查 | POST/GET `/api/investigations` 与来源目录 | React 已接入；显示服务端实际状态和持久化事实。取消、自动重试、追问尚无持久接口。示例 `analytics.compare_metric` 不是现有工具合同。 |
+| 数据接入 | 来源能力合同、显式单源应用配置 | 目录不探测连接或数据新鲜度；持续外部连接器/刷新 API 未实现。 |
+| 体验实验室 | Synthetic Benchmark 与隔离测试资产 | 当前页面是未接线说明；尚无可操作的隔离数据变化流程。 |
 
 产品最终体验应形成以下闭环：
 

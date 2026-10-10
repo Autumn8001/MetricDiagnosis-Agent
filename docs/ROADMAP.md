@@ -108,8 +108,8 @@
 
 ### 当前阻碍
 
-- 旧同步 API 和 React 状态仍为进程/页面内存态；新任务 API 在显式配置下可读写持久状态。
-- 默认应用没有持久服务/真实 Runner 配置，前端尚未使用新 API。
+- 旧同步 API 和旧 React Benchmark 状态仍为进程/页面内存态；新任务 API 在显式配置下可读写持久状态，R4-002 默认 React 页面已使用新 API。
+- 默认旧 `app` 没有自动注入持久服务；显式 task application 本地 Runner 已配置可用，但真实模型成功 gate 未通过。
 - 单 Worker 领取与中断终结已验收；用户取消/显式重试及服务器进程生命周期未实现。
 
 ### 技术方案
@@ -306,7 +306,7 @@
 
 ## 7. R4 — 产品 API 与冻结原型接线
 
-**状态：进行中；原型已提供，R4-001任务客户端与配置目录已完成；React页面尚未接线**
+**状态：进行中；R4-001、R4-002 UI切片已实现；真实 PostgreSQL → API → 浏览器验收待进行**
 
 ### R4-001 — 任务客户端与配置来源目录（已完成）
 
@@ -314,7 +314,14 @@
 - 方案/模块：`frontend/src/tasks/` 提供 sources/submit/list/detail及响应校验；`GET /api/investigation-sources` 投影现有 TaskSourceBinding，纯读内存，不探测连接、不查询日期、不执行模型。
 - 依赖：既有R2任务API、来源能力合同；不依赖外部凭据，不更改迁移/Worker/Runtime。
 - 主线程验收：客户端18/18、后端目录/API/应用24/24、离线612 tests / OK(skipped=3)、前端lint/类型/build通过。记录见 [`task-frontend-contract-acceptance-2026-10-10.md`](evaluation-artifacts/task-frontend-contract-acceptance-2026-10-10.md)。不是浏览器、真实数据库或模型验收。
-- 下一切片R4-002：保持原型设计，实际页面消费目录与任务API，展示已保存步骤/状态/历史；不新增取消、自动重放或通用调度。
+
+### R4-002 — 原型调查工作区接线（受控 HTTP 浏览器验收完成）
+
+- 目标：保留原型五个导航区域，将默认 React 页面接入来源目录和持久调查任务 API。
+- 实现：`frontend/src/App.tsx` 渲染 `InvestigationWorkspace`；页面读取来源、提交任务、分页读取列表及详情；queued/running 详情每2秒轮询，终态或详情读取错误后不继续轮询。结果来自服务端持久事实；无取消、自动重试、追问、固定进度或页面实验注入。
+- 页面语义：概览计数只涵盖所选来源当前一页（最多20条）；指标页显示服务端配置能力目录而非趋势/计算值；数据页显示来源配置而非连通性、健康或同步状态；实验室已明确显示尚未接线。
+- 验证边界：主线程最终真实 Edge + 受控 HTTP fixture PASS，覆盖来源/能力渲染、历史翻页、成功与失败历史事实、失败不伪造 Diagnosis、单次提交/轮询和终态停止、来源切换及服务不可用错误。客户端18/18、API/应用24/24、lint/类型/build通过。无 PostgreSQL、外部数据或模型参与。记录：[`task-workspace-acceptance-2026-10-10.md`](evaluation-artifacts/task-workspace-acceptance-2026-10-10.md)。
+- 下一切片：优先启动隔离 PostgreSQL 中的受控任务应用，经真实 task API 由浏览器读取已持久的 Olist/Synthetic 任务历史；该验收不调用模型。另行保留真实 SDK 成功持久化 gate，不能以受控 Runner 替代。
 
 ### 目标
 
@@ -323,15 +330,15 @@
 ### 当前阻碍
 
 - 原型已提供并冻结；原型的固定进度、追问、取消及实验注入不等于已有后端能力。
-- 当前只有无 Router 的单页 Benchmark Workspace。
-- 缺少数据源/同步 API；任务状态/历史 API 已有显式配置实现，但前端与默认应用尚未接线。
+- 默认 React 调查工作区已接入 task API，但还没有真实 PostgreSQL → HTTP → 浏览器的端到端读取验收。
+- 概览异常指标/真实趋势、外部数据源连接与刷新 API、可执行 Sandbox Lab 尚未实现；任务应用仍需显式环境配置，默认旧 `app` 不自动注入任务服务。
 
 ### 技术方案
 
 - 按已提供原型与 PRODUCT.md 第4节映射实施，保持设计风格和交互结构，不凭描述重画 UI。
-- 复用现有 Metric Graph、Timeline、Evidence Portfolio、Diagnosis Card 和 Manual Scan 组件。
-- 调查改为持久任务 API；前端显示进度、错误、重试边界和历史结果。
-- Fixture Preview 只保留为清楚标记的产品预览；Sandbox 行为由实验室承载。
+- 调查使用持久任务 API；页面显示服务端实际状态、事实、错误与历史，不用进度动画代替执行记录。
+- 保持未接线功能明确标注；来源目录能力不能解释为连接状态，实验行为不能通过前端数字模拟。
+- 保留旧 Benchmark API/组件作为历史资产，但默认 UI 不依赖它们。
 
 ### 验收标准
 
@@ -339,6 +346,8 @@
 - 刷新浏览器或重启服务后历史调查仍存在。
 - UI 不把 fallback/mock 内容表现为真实业务结果。
 - 真实调查不再暴露 Benchmark 场景选择器或注入动作。
+
+R4-002 的 UI 和受控 HTTP 浏览器验收不代表以上完整 R4 条件已满足；真实 PostgreSQL 浏览器历史读取、真实模型调查、持续外部来源、指标异常数据和 Lab 仍是未通过的产品验收项。
 
 ## 8. R5 — 隔离实验室
 

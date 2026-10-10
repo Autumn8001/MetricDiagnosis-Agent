@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-10T00:00:00+08:00",
+  "title": "Design System: MetricSleuth",
+  "extensions": {
+    "shadows": [{ "name": "surface", "value": "0 3px 14px rgb(32 59 98 / 3%)", "purpose": "认可原型的轻量内容表面" }],
+    "motion": [{ "name": "control", "value": "background .15s ease, border .15s ease, transform .15s ease", "purpose": "按钮状态响应，不播放调查进度" }],
+    "breakpoints": [{ "name": "compact", "value": "1080px" }, { "name": "mobile", "value": "760px" }]
+  },
+  "components": [
+    {
+      "name": "开始调查", "kind": "button", "refersTo": "button-primary", "description": "唯一明确提交动作",
+      "html": "<button class=\"ds-primary\">开始调查</button>",
+      "css": ".ds-primary{background:var(--blue,#4768e8);color:white;min-height:39px;padding:0 15px;border:0;border-radius:8px;font-size:12px;font-weight:650;cursor:pointer}.ds-primary:hover{background:var(--blue-dark,#3658d5)}.ds-primary:focus-visible{outline:3px solid #8db5ff;outline-offset:2px}.ds-primary:disabled{opacity:.55;cursor:not-allowed}"
+    },
+    {
+      "name": "翻页", "kind": "button", "description": "次级历史导航",
+      "html": "<button class=\"ds-secondary\">下一页</button>",
+      "css": ".ds-secondary{background:white;color:#536781;border:1px solid #e1e8f1;border-radius:8px;min-height:32px;padding:0 11px;font-size:12px;cursor:pointer}.ds-secondary:hover{background:#f8faff;border-color:#b7c9e4}.ds-secondary:focus-visible{outline:3px solid #8db5ff;outline-offset:2px}.ds-secondary:disabled{opacity:.55;cursor:not-allowed}"
+    },
+    {
+      "name": "目标日期", "kind": "input", "description": "必须明确选择调查日期",
+      "html": "<label class=\"ds-field\">目标日期<input type=\"date\" /></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:7px;color:#506680;font-size:12px}.ds-field input{min-height:39px;padding:0 10px;border:1px solid #dfe7f1;border-radius:7px;background:white;color:#344c69;font:inherit}.ds-field input:hover{border-color:#b7c9e4}.ds-field input:focus-visible{outline:3px solid #8db5ff;outline-offset:2px}"
+    },
+    {
+      "name": "调查状态", "kind": "chip", "description": "只表达持久任务状态",
+      "html": "<span class=\"ds-status\">已完成</span>",
+      "css": ".ds-status{display:inline-flex;border-radius:20px;padding:5px 8px;background:#eaf7f3;color:#11664f;font-size:12px;font-weight:650}"
+    },
+    {
+      "name": "调查表面", "kind": "card", "description": "持久事实阅读区",
+      "html": "<section class=\"ds-surface\"><h2>调查结果</h2><p>来自已保存的 Observation</p></section>",
+      "css": ".ds-surface{padding:21px 23px;border:1px solid #e7edf5;border-radius:11px;background:white;box-shadow:0 3px 14px rgb(32 59 98 / 3%);color:#1c2839}.ds-surface h2{margin:0;font-size:14px;font-weight:700}.ds-surface p{color:#526176;font-size:12px}"
+    },
+    {
+      "name": "主导航", "kind": "nav", "description": "深色导航中的当前入口",
+      "html": "<nav class=\"ds-nav\"><button aria-current=\"page\">AI 调查工作区</button></nav>",
+      "css": ".ds-nav{padding:17px;background:#151f32}.ds-nav button{width:100%;min-height:44px;border:0;border-radius:9px;padding:0 12px;background:#263d5f;color:white;text-align:left;font-size:13px;cursor:pointer}.ds-nav button:hover{background:#1d324f}.ds-nav button:focus-visible{outline:3px solid #8db5ff;outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "overview": "深色导航承载入口，浅色画布承载白色调查内容；蓝色用于操作和选中状态。紧凑的信息界面优先让用户看懂调查事实和证据引用，不能用示例数字、预设进度或装饰替代内容。",
+    "keyCharacteristics": ["保留原型整体风格与五区域导航。", "系统字体、明确标题、可读的记录正文。", "桌面并列阅读结果与过程，手机按内容重排。"],
+    "rules": [],
+    "dos": ["Do 保持认可原型的导航、配色和整体交互结构。", "Do 验证桌面、手机、键盘焦点与加载、错误、空状态。"],
+    "donts": ["Don't 用硬编码业务值或固定进度冒充真实调查。", "Don't 未经产品确认更换整体设计语言。"]
+  }
+}

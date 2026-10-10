@@ -2,19 +2,20 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-10
-> Git 基线：`main`（R0、R1-001 至 R1-003、R2-001 至 R2-005a 已提交）
-> 最近完成：R0 认知与权威基线；R1 数据契约/语义适配/Olist 降级表达；R2-001 应用状态 Schema/状态机；R2-002 参数化 Repository；R2-003 审计结果持久化编排；R2-004a provenance 迁移合同；R2-004b 生命周期原语；R2-004c 短事务协调器；R2-005a 单任务执行服务
-> 当前阶段：R2真实模型成功gate未通过；R4产品接线进行中（R4-001合同基础完成）
-> 最近新增验收：R2-PG（`71e284f`）；R2-005b1（`1b2b334`）；R2-005b2a（`86ac086`）；R2-005b2b（`c8ea746`，受控验收）；Olist真实SQL/持久步骤（`15f2bae`）；模型失败尝试（`58d7c70`）；本次单源Worker领取/恢复隔离补验
-> 当前任务：R4-001任务客户端与配置来源目录已验收；下一切片R4-002为冻结原型调查页面接线。真实SDK首次尝试失败，新的调用授权尚未取得；R1-004先做不依赖凭据的来源比较
+> Git 快照：`main`；R4-002 形成独立本地提交，提交号用 `git log -1` 查询；未推送。实现起点 `7269f53c5a59ba189cc56ec95e82229a9bb8a185`
+> 最近完成：R4-002 默认 React 持久调查工作区；主线程最终真实 Edge + 受控 HTTP fixture 验收通过
+> 当前阶段：R4 产品接线进行中；真实 PostgreSQL → API → 浏览器历史读取为下一切片。R2 真实模型成功 gate 仍未通过
+> 最近数据库验收：R2-PG、R2-005b1、R2-005b2a/b2b 和 Olist 受控 PostgreSQL 历史记录，详见下文与各 acceptance artifact
+> 当前任务：下一切片使用隔离 PostgreSQL 与既有记录完成真实数据库 → API → 浏览器历史读取，不调用模型
 
 ## 当前结论
 
-MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不是完整的真实数据产品。当前已完成最小数据源能力契约纯领域模型（R1-001）、当前 Semantic Layer 到能力契约的纯内存适配和 AnalyticsTools 可选的 SQL 前能力校验（R1-002），以及基于既有 Olist 资产的纯内存能力降级表达（R1-003，均已由主线程验收）。本项目明确**尚未接入**真实外部 PostgreSQL 或 Shopify（二者当前仅作为平台枚举定义，未实现连接器或网络调用）；Olist 也未宣称持续同步或产品级接入。R1-004 需等待受控接入资源；期间可按 Roadmap 推进不依赖外部授权的 R2 持久化应用基础设计与实现。
+MetricSleuth 已具备 Synthetic/Olist 受控数据调查内核、持久 PostgreSQL 任务 API/Worker，以及正在接线的默认 React 产品工作区；仍未形成真实外部持续数据闭环或真实模型成功调查。Olist 是隔离 PostgreSQL 上的公开静态数据验证，不是持续连接器。Shopify 和用户外部 PostgreSQL 尚无连接实现。R4-002 首轮 UI 由真实 Edge 配合受控 HTTP fixture 验收，不能说明浏览器已读真实数据库；下一步优先完成隔离 PostgreSQL → task API → 浏览器历史读取。
 
 ## 已完成且本轮有源码/测试证据
 
-- R4-001：`frontend/src/tasks/` 持久调查 sources/submit/list/detail 客户端、完整响应校验、安全错误与取消请求；后端 GET `/api/investigation-sources` 只投影配置来源能力，不连接数据库或运行任务。主线程客户端18/18、后端目录/API/应用24/24、lint/类型/build通过；React页面仍未接线。记录：[`task-frontend-contract-acceptance-2026-10-10.md`](evaluation-artifacts/task-frontend-contract-acceptance-2026-10-10.md)。
+- R4-002：默认 React 页面消费来源目录及持久任务 submit/list/detail API，保留原型五导航。概览只统计当前来源当前页最多20条；指标页只展示能力目录，数据页不冒充连接健康/刷新，Lab 未接线。queued/running 每2秒轮询，终态/错误停止；失败不合成 Diagnosis。主线程最终真实 Edge + 受控 HTTP fixture PASS（含翻页、单次POST、来源切换、失败/成功详情、安全503），无真实数据库/模型。客户端18/18、API/应用24/24、lint/类型/build通过；记录：[`task-workspace-acceptance-2026-10-10.md`](evaluation-artifacts/task-workspace-acceptance-2026-10-10.md)。原型哈希未变；视觉实现事实见根目录 `DESIGN.md`。
+- R4-001：`frontend/src/tasks/` 持久调查 sources/submit/list/detail 客户端和完整响应校验；后端 GET `/api/investigation-sources` 只投影配置来源能力，不连接数据库或运行任务。主线程客户端18/18、后端目录/API/应用24/24，证据见 [`task-frontend-contract-acceptance-2026-10-10.md`](evaluation-artifacts/task-frontend-contract-acceptance-2026-10-10.md)。
 - 数据源能力契约（R1-001）：最小、领域无关、真正深层不可变契约模型，支持 `SourceProvider`、`SourceEnvironment`、`DataSourceDescriptor`、`MetricCapability`、`DataSourceCapabilities`（frozen dataclass，嵌套内部容器使用 MappingProxyType，防范 Sequence 字符串混淆），具备指标独立 grain/维度、跨 grain 组合保护与 fail-closed 校验（`backend/app/data_sources/capabilities.py`；单测 `backend/tests/test_data_source_capabilities.py` 6/6 PASS）。
 - 指标能力矩阵与语义适配（R1-002）：当前 Synthetic Profile 的五个核心指标在 `configs/metrics.yaml` 显式声明 `date × asin × marketplace × traffic_source` atomic grain；`MetricRegistry` 严格校验显式 grain 并为旧配置提供明确 fallback；`build_capabilities_from_registry()` 保留 Registry 中的 metric dimensions/grain；`AnalyticsTools` 传入 capabilities 时在执行 SQL 前校验查询能力（主线程专项测试 51/51 PASS）。
 - Olist 能力降级表达（R1-003）：`configs/olist_validation_metrics.yaml` 的三个支持指标显式使用 `date × customer_state` grain；`build_olist_validation_capabilities()` 复用 Registry grain/dimensions，显式拒绝 `sessions`、`conversion_rate` 及 `marketplace`/`traffic_source`/`asin`；Olist 工具兼容性脚本已绑定该合同。已验证绑定合同后，漏斗指标与非法维度都在 SQL 前失败。证据限于本地 Hermetic 测试，不代表数据库连接、同步或持续真实数据接入。
@@ -25,7 +26,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 - OpenAI Agents SDK Runtime、Tool Trace、轮次和工具预算校验。
 - Driver + Scope 同一 Evidence、negative control 等 fail-closed 约束。
 - Evaluation 的 Driver、Scope、Evidence、Unsupported Claims 和 Tool/Budget 评分基础。
-- FastAPI 六个端点与 React 单页 Diagnosis Workspace。
+- FastAPI 旧同步 Benchmark API 与新显式持久任务 API；默认 React UI 已从旧同步工作台切换到 R4-002 持久任务工作区。
 - Manual Daily Scan。
 - Olist 隔离 Schema/Metric/Tool Compatibility 验证资产。
 
@@ -195,27 +196,26 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 
 - 能力契约与真实应用 Runner、数据库来源发现及外部连接器的产品级接入（新任务 API 已使用服务器能力合同校验；不代表真实源可用）。
 - Shopify 或用户外部 PostgreSQL 的产品级接入、连接器实现、数据同步和水位（当前绝对未接入真实外部库或 Shopify API）。
-- 默认应用配置、用户取消/显式重试、生产进程恢复和持久化
-  后的多 grain 查询支持。
-- 应用 Runner 的真实模型验收、前端调查历史/步骤接线（Runner/启动入口已有实现；API、步骤保存和最小 Worker 中断恢复已验收）。
-- 数据接入、工作概览、独立指标页和实验室的真实 API。
+- 用户取消/显式重试、生产进程恢复和持久化后的多 grain 查询支持。
+- 应用 Runner 的真实模型成功验收；R4-002 浏览器目前使用受控 HTTP fixture，尚未从隔离 PostgreSQL 通过实际 task API 读取历史。
+- 工作概览的异常指标/趋势 API、外部数据连接与刷新 API、实验室操作仍未实现；当前页面只有任务统计和来源能力目录。
 - 用户认证、生产安全、后台进程生命周期与服务器部署资产。
 - 独立 Holdout、真实外部数据评测、Next Action/Stop Condition 评分。
 
 ## 当前阻碍与待提供资源
 
-1. 认可的 HTML 交互原型已由用户提供，原文件保留，文件名/哈希及五页面 API 缺口见 PRODUCT.md 第4节；不再是待补资产。React 仍是旧同步工作区，尚未按冻结原型接入持久调查任务。
-2. 本机已有隔离 PostgreSQL 和被Git忽略的模型配置；此前“没有凭据”的说法仅检查进程环境，已纠正。用户授权的一次8工具/10轮 Synthetic 调查已运行并返回 `InternalServerError`，没有工具结果。一次性授权已使用；重试前需确认端点/模型可用性及新的调用授权。凭据不输出或提交，次数限制不等于金额硬上限。
+1. 默认 React 工作区已接入持久任务 API，但首轮浏览器测试仍是受控 HTTP fixture。下一步需在隔离 PostgreSQL 启动显式任务应用和受控 Worker，以真实 API 完成浏览器历史读取。
+2. 一次授权的 Synthetic 真实 SDK 调查返回 `InternalServerError`，没有工具结果；真实模型成功 gate 未通过。该次调用授权已用完，不能在未获得新授权时重试。
 3. Shopify Development Store/应用权限尚未提供；外部 PostgreSQL 目标库也未确定。
 4. 首个真实源最终选择需经过 R1 capability gate，不能仅按候选名称决定。
 
 ## 下一步具体工作
 
-按 Roadmap 推进不依赖外部凭据的切片，同时保留 R2 的真实模型成功 gate：
+按 Roadmap 推进，先让已经实现的 UI 读到真实隔离数据库记录：
 
-1. R4 最小切片：保持已提供原型设计，接入 POST/GET investigations，展示实际排队/运行/失败、已保存工具步骤和历史；拒绝固定进度与失败时伪造 Diagnosis。先进行前端契约/受控 API 验收，不将其称为模型成功或完整 R4 验收。
-2. R1-004：自主比较 Shopify 与受控只读 PostgreSQL 的权限、数据能力、成本和现有代码兼容性，再明确需要用户准备的资源；两者当前均未提供。实际连接前通过 capability spike 决定首个持续连接器，静态 Olist 不替代持续接入。
-3. 现有端点的首次授权真实 SDK 尝试失败，先确认可用性，再经新授权完成模型成功与 Diagnosis 持久化 gate。模型配置标识为 `gemini-3.8-flash-high`，本次只核对指纹，没有网络调用；用户询问模型不构成重试授权。data_version 标签不等于快照，分析最小权限/稳定版本仍未验收，不再新增编排框架。
+1. R4-002 已完成受控浏览器与静态验收，记录已保存，尚不等于完整 R4。
+2. 在隔离 PostgreSQL 上启动显式任务 API，让 React 浏览器读取已持久的 Olist/Synthetic 调查历史；优先只读已有记录，不启动模型 Worker，并清楚标记数据来源是静态公开数据或 Synthetic。
+3. 保留真实 SDK 成功 gate，待端点/模型可用性确认及新的明确授权后再执行。并行推进 Shopify 与只读 PostgreSQL 来源评估；具体外部连接仍需用户提供目标/权限。
 
 原型登记提交为 `313b7ae`；随后R4-001新增客户端与只读配置目录，并重跑离线回归和前端验证。未重跑真实数据库/模型，不将下列历史数据库结果表述为本次验收。
 
@@ -238,6 +238,7 @@ MetricSleuth 已具备较成熟的 Synthetic Benchmark 调查内核，但尚不�
 | Olist/真实调用验收脚本守卫 | 13/13 PASS | 主线程离线终验；不是模型或数据库调查运行 |
 | Olist SQL/持久步骤专项（2026-10-10） | PASS | 实际公开 CSV / PostgreSQL / Analytics；受控4步27Observation，预期失败留存与新应用读回；不调用模型 |
 | 真实SDK持久调查尝试（2026-10-10） | FAIL / InternalServerError | 仅一次授权；0工具/0Observation/0Diagnosis；失败状态和新应用读取通过，模型调查未验收 |
+| R4-002最终浏览器 UI | PASS；POST1 / detailReads2 | 本机真实 Edge + 受控 HTTP fixture；覆盖历史翻页、成功/失败详情、失败无伪Diagnosis、任务提交/轮询终止、来源切换和服务错误；未连接 PostgreSQL、外部源或模型 |
 | R2-005b2b PostgreSQL 应用接线 | 4/4 PASS；含全部持久化/Worker/API 回归23/23 PASS | 实际Analytics SQL/Observation、只读拒写、元数据保留、独立本地API进程；受控Runner |
 | R2-005b2a PostgreSQL API | 4/4 PASS；含持久化/Worker 回归 19/19 PASS | 真实 PostgreSQL 17.11 + TestClient + 受控 SQL Runner；无模型/外部业务数据 |
 | 新 API/reader + 旧 API | 40/40 PASS | Hermetic；主线程执行，含安全输入错误响应 |
