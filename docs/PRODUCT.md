@@ -110,7 +110,7 @@ Agent 调用受治理工具，按 Observation 动态下钻
 ### 数据源取舍
 
 - **Current：** `warehouse/` 与 `configs/metrics.yaml` 支撑单一 Synthetic Amazon Profile；`AnalyticsTools` 可以执行传入的 PostgreSQL 查询，但这不等于已经支持用户接入任意外部 PostgreSQL。
-- **Unknown：** Shopify 是否作为第一真实来源，需先验证权限、历史窗口、粒度、时区、退款/取消口径及各指标可用维度。
+- **Confirmed（2026-10-10资源选择）：** 用户暂无业务PostgreSQL、可准备Shopify开发店，下一外部接口验证优先Shopify订单域；开发店为sandbox，不称真实生产经营数据。实际权限、覆盖/粒度/币种/退款口径仍Unknown，未实现连接器。资料与准备清单见 [`data-source-selection.md`](data-source-selection.md)。最终MVP经营数据目标不因此降低。
 - **Deferred：** Webhook 自动触发、更多外部来源和第二行业，待一个真实来源闭环稳定后再做。
 
 ## 6. Agent、证据与运行约束

@@ -67,7 +67,8 @@
 - **R1-002｜电商核心指标 metric × dimension × grain 矩阵定义与适配**：已完成并由主线程验收。`configs/metrics.yaml` 的五个 Synthetic 核心指标显式声明 `date × asin × marketplace × traffic_source` atomic grain；`MetricRegistry` 严格校验显式 grain 并为旧配置提供明确 fallback；`backend/app/data_sources/semantic_adapter.py` 保留 Registry 中的 dimensions/grain；`AnalyticsTools` 可选接收能力契约并在 SQL 前 fail-closed 校验。主线程专项测试 51/51、全量回归 466/466 PASS；未接入真实数据库、Shopify 或 API。
 - **R1-003｜Olist 隔离资产能力契约验证与降级表达**：已完成并由主线程验收。`configs/olist_validation_metrics.yaml` 的三个指标显式声明 `date × customer_state` grain；`build_olist_validation_capabilities()` 复用 Registry 适配器，并将 `sessions`/`conversion_rate` 显式标为 unavailable；Olist 工具兼容性脚本绑定该合同。主线程确认绑定合同后，漏斗指标和非法维度均在 SQL 前 fail-closed；新增 5 个本地 Hermetic 测试。未验证 Olist 数据库连接、同步或持续外部接入。
 - **R1-003 后续数据库验收（2026-10-10）**：现有公共 CSV 在隔离 PostgreSQL 导入、映射及 Analytics 查询已实际通过；四步受控调查保存 27 Observation，失败后新应用读回，未伪造 Diagnosis。证据见 [`olist-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md)。这更新了 R1-003 当时未验证数据库的边界，不代表持续同步或 Olist 模型验收。
-- **R1-004｜Shopify Development Store 只读 capability spike 与连接器选择门**：待开展。
+- **R1-004a｜来源资料比较与选择门**：已完成（2026-10-10）。官方资料/源码和资源条件核对后，用户确认暂无业务PostgreSQL、可准备Shopify开发店；下一外部验证对象为 `shopify / sandbox`，不是生产经营数据。指标/权限/版本发布方案与资源清单见 [`data-source-selection.md`](data-source-selection.md)。没有外部API、模型或连接器验收。
+- **R1-004b｜Shopify只读 capability spike**：待开展。账号/专用开发店/应用只读权限尚待用户准备；先核对Orders分页/字段/覆盖和错误脱敏，Sales/AOV需口径确认，Sessions/Conversion默认不支持。通过实际API gate后才进入最小抓取→版本发布→SQL调查切片。
 
 ### 目标
 
@@ -77,15 +78,15 @@
 
 - 当前默认 Registry 仍绑定单一 Synthetic 宽表；R1-002 已为该表显式表达 atomic grain，但 Shopify 的订单、销售和会话数据可能具有不同 grain，尚未据此声明支持。
 - 来源身份/环境/版本标签和持久任务边界已实现并在隔离数据库验证；仍缺真实持续源和可复算数据快照。
-- Shopify 原型店、权限和访问凭据尚未提供；外部 PostgreSQL 目标也未确认。
+- 用户可准备Shopify开发店，但账号/店/应用权限尚未实际提供；暂无业务PostgreSQL。开发店不能等同live生产来源，最终经营数据验收仍需授权真实源。
 
 ### 技术方案
 
 1. 定义来源能力契约：来源身份、环境、时间范围、刷新方式、指标、维度、grain、延迟、币种和时区。
 2. 为当前 Synthetic Profile 的 Sales、Orders、AOV、Sessions、Conversion Rate 建立 metric × dimension × grain 矩阵；Country、Product、Traffic Source 等外部来源能力仍待真实接口验证。
 3. 用现有 Olist 资产验证契约可以表达“支持、缺失、不可推导”。
-4. 先比较 Shopify 与受控只读 PostgreSQL 的权限、指标粒度、刷新能力和实施成本；无需凭据的资料验证不阻塞产品接线。真实调用前再明确所需账号/权限/资源，不能假设已具备。
-5. 做连接器选择门：Shopify 保留重要候选地位，但不自动选定；以实际资源和 capability spike 结果决定首个持续源，不先建设通用映射平台。
+4. R1-004a资料比较已完成；据用户资源选择Shopify开发店先验证平台接口，保留PostgreSQL作为未来获授权业务来源。真实调用前明确账号/只读权限/测试订单覆盖，不假设具备。
+5. 先完成真实订单API gate，再建设一个最小版本发布与现有调查内核接线；不先做通用映射平台、漏斗拼接、重型同步调度或Webhook。
 
 ### 涉及模块
 
@@ -328,7 +329,7 @@
 - 目标/依赖：验证既有 R4-002 页面确实能从 R2 持久化和实际 API 读取历史；使用既有 Olist 静态验证记录，不新建业务能力。
 - 方案/模块：`frontend/scripts/verify-postgres-workspace.mjs` 启动真实 Edge 与只允许GET的本机静态/代理服务，读取显式 `task_application api`；没有 fixture、Worker、模型、迁移或数据写入。
 - 主线程验收：既有失败调查4个Tool Call / 27个Observation / 0Evidence / 0Diagnosis；页面事实与API一致，刷新复读通过；直接SQL与API首条GMV 16861.09/13355.61一致。浏览器写请求0、前后数据库计数相同，API和隔离PG验收后均停止。lint/脚本语法检查通过；见 [`postgres-browser-history-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-browser-history-acceptance-2026-10-10.md)。不是新的模型成功调查、实时外部源或完整R4。
-- 后续阻碍/顺序：继续R1-004官方接口/权限/能力比较，确定最小持续来源方案及资源请求；真实模型成功gate需新的授权。依据此次真实数据，后续UI切片改善Decimal显示和维度记录分层，同时保留原始值/引用；不扩展调度或重画原型。
+- 后续阻碍/顺序：R1-004a资料比较已完成，下一步R1-004b只读Orders probe，实际调用待专用开发店与应用权限；真实模型成功gate需新的授权。依据此次真实数据，后续UI切片改善Decimal显示和维度记录分层，同时保留原始值/引用；不扩展调度或重画原型。
 
 ### 目标
 

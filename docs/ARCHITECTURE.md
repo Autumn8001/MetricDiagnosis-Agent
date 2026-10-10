@@ -58,6 +58,7 @@ Observation → Evidence → Structured Diagnosis
 - 当前个人服务器上是否已经存在可连接的 PostgreSQL 实例、其中实际有哪些表和数据，本次未连接验证。
 - 已认可的独立 HTML 产品原型已由产品方提供，文件、哈希与页面/API 边界见 `PRODUCT.md` 第4节；R4-002 已按其导航和视觉基线接入 React，但静态原型及当前受控 UI 均不代表完整产品已实现。
 - Shopify、外部用户 PostgreSQL、Webhook 和 Jev 尚未进入当前 Runtime/API。
+- R1-004a已完成公开官方资料/源码比较，下一外部验证对象为Shopify开发店(sandbox)，只读订单API和不可变版本发布仍是Planned，不是已有模块。见 [`data-source-selection.md`](data-source-selection.md)。不把Synthetic订单/会话比率套用为Shopify会话转化率。
 - 生产反向代理、TLS、认证、密钥管理和进程监管方案尚未落地。
 
 ## 2. 证据边界与仓库地图

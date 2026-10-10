@@ -2,11 +2,11 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-10
-> Git 快照：`main`；R4-002提交 `423f8106880ecdbd6b162db0ed8998e0516cdd8f`，R4-003形成独立本地验收提交，用git log查询；本轮未推送
-> 最近完成：R4-003 真实 PostgreSQL → API → Edge 浏览器的既有 Olist 失败历史读取与页面刷新复读
+> Git 快照：`main`；R4-003提交 `eef65bd75ddeaf453524cfd5956c51e8308a7945`，本轮R1-004a资料/来源决策形成文档提交；未推送
+> 最近完成：R1-004a官方资料/源码比较；用户确认可准备Shopify开发店，下一外部验证来源为shopify/sandbox
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
 > 最近数据库验收：R2-PG、R2-005b1、R2-005b2a/b2b 和 Olist 受控 PostgreSQL 历史记录，详见下文与各 acceptance artifact
-> 当前任务：R1-004来源接口/权限/能力比较与最小持续数据方案；另外记录真实数据呈现的Decimal/维度记录可读性问题
+> 当前任务：准备R1-004b只读Orders probe与守卫；实际API验收待开发店/应用权限。并行推进不依赖凭据的Decimal/维度阅读改进，不重画原型
 
 ## 当前结论
 
@@ -14,6 +14,7 @@ MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL �
 
 ## 已完成且本轮有源码/测试证据
 
+- R1-004a：[`data-source-selection.md`](data-source-selection.md)记录官方权限、订单/会话粒度、开发店限制及最小版本发布方案。已选择Shopify开发店为下一外部验证对象；只是资料和资源决策，不是连接器或实际API测试。官方sessions转化率与Synthetic orders/sessions不同，不直接复用公式；开发店始终sandbox。
 - R4-003：真实PostgreSQL/API/Edge读取既有Olist失败调查4Tool Call/27Observation/0Evidence/0Diagnosis，SQL与API首条GMV16861.09/13355.61一致，页面与刷新重读PASS；0浏览器写请求、前后数据库计数一致。新只读脚本语法/lint通过；测试API和PG均已停止。见 [`postgres-browser-history-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-browser-history-acceptance-2026-10-10.md)。非真实模型/持续外部源。
 - R4-002：默认 React 页面消费来源目录及持久任务 submit/list/detail API，保留原型五导航。概览只统计当前来源当前页最多20条；指标页只展示能力目录，数据页不冒充连接健康/刷新，Lab 未接线。queued/running 每2秒轮询，终态/错误停止；失败不合成 Diagnosis。主线程最终真实 Edge + 受控 HTTP fixture PASS（含翻页、单次POST、来源切换、失败/成功详情、安全503），无真实数据库/模型。客户端18/18、API/应用24/24、lint/类型/build通过；记录：[`task-workspace-acceptance-2026-10-10.md`](evaluation-artifacts/task-workspace-acceptance-2026-10-10.md)。原型哈希未变；视觉实现事实见根目录 `DESIGN.md`。
 - R4-001：`frontend/src/tasks/` 持久调查 sources/submit/list/detail 客户端和完整响应校验；后端 GET `/api/investigation-sources` 只投影配置来源能力，不连接数据库或运行任务。主线程客户端18/18、后端目录/API/应用24/24，证据见 [`task-frontend-contract-acceptance-2026-10-10.md`](evaluation-artifacts/task-frontend-contract-acceptance-2026-10-10.md)。
@@ -207,16 +208,16 @@ MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL �
 
 1. R4-003已验收真实数据库既有失败历史到浏览器读取；成功Diagnosis与新调查模型闭环尚未验收。真实记录还暴露长Decimal和大量维度卡片的可读性问题，需要后续保留原始事实的格式/分层优化。
 2. 一次授权的 Synthetic 真实 SDK 调查返回 `InternalServerError`，没有工具结果；真实模型成功 gate 未通过。该次调用授权已用完，不能在未获得新授权时重试。
-3. Shopify Development Store/应用权限尚未提供；外部 PostgreSQL 目标库也未确定。
-4. 首个真实源最终选择需经过 R1 capability gate，不能仅按候选名称决定。
+3. 用户可准备Shopify开发店，但店/应用/只读权限尚未提供；无可用业务PostgreSQL。最小准备清单见data-source-selection.md第6节；不要在聊天中提供凭据。
+4. 开发店真实API/刷新不等于真实经营数据。最终live来源仍需授权与实际capability验收，不以sandbox更名过关。
 
 ## 下一步具体工作
 
 按 Roadmap 推进，先让已经实现的 UI 读到真实隔离数据库记录：
 
 1. R4-002 已完成受控浏览器与静态验收，记录已保存，尚不等于完整 R4。
-2. R4-003真实数据库历史读取已完成；下一切片优先R1-004来源比较和最小持续数据接入方案，明确真实连接需要用户提供的资源。UI依据真实记录补显示格式/分层阅读，不重画原型。
-3. 保留真实 SDK 成功 gate，待端点/模型可用性确认及新的明确授权后再执行。并行推进 Shopify 与只读 PostgreSQL 来源评估；具体外部连接仍需用户提供目标/权限。
+2. R1-004a已完成；下一切片R1-004b最小只读Orders probe，真实调用依赖用户店/权限。期间UI根据真实记录改善显示格式/分层阅读，不重画原型。没有实际API数据前不扩大同步模块。
+3. 保留真实 SDK 成功 gate，待端点/模型可用性确认及新的明确授权后再执行。来源比较已完成，先验证Shopify开发店；业务PostgreSQL只在有授权资源时再启用，不并行建设两套连接器。
 
 原型登记提交为 `313b7ae`；随后R4-001新增客户端与只读配置目录，并重跑离线回归和前端验证。未重跑真实数据库/模型，不将下列历史数据库结果表述为本次验收。
 
