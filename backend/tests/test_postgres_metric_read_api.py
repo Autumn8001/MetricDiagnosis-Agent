@@ -113,3 +113,59 @@ class PostgresMetricReadTests(unittest.TestCase):
                 "source_id": source, "target_metric": metric, "target_date": "2017-03-20"})
             self.assertEqual(response.status_code, status)
             self.assertEqual(response.json(), {"detail": {"code": code}})
+
+    def test_synthetic_scan_reads_five_actual_metrics_and_preserves_source_scope(self):
+        client, source_id = self._client("synthetic")
+        response = client.get("/api/metrics/scan", params={
+            "source_id": source_id, "target_date": "2026-10-10"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual([item["target_metric"] for item in data["items"]], [
+            "sales", "orders", "sessions", "conversion_rate", "aov",
+        ])
+        sales = data["items"][0]
+        self.assertEqual((sales["observation"]["current_value"],
+                          sales["observation"]["baseline_value"]), ("100.00", "100.00"))
+        self.assertEqual(data["source_id"], source_id)
+        self.assertEqual(data["provider"], "synthetic")
+        self.assertEqual(data["environment"], "sandbox")
+        self.assertEqual(data["data_version"], "synthetic-eight-days-v1")
+        self.assertEqual(data["scope"], "source_global")
+        self.assertEqual(data["comparison"], "previous_7_days")
+        self.assertIs(data["persisted"], False)
+        self.assertIs(data["snapshot_consistent"], False)
+
+    def test_olist_scan_reads_three_real_metrics_and_excludes_unsupported_sessions(self):
+        client, source_id = self._client("olist_validation")
+        response = client.get("/api/metrics/scan", params={
+            "source_id": source_id, "target_date": "2017-03-20"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        metric_ids = [item["target_metric"] for item in data["items"]]
+        self.assertEqual(metric_ids, ["merchandise_gmv", "orders", "olist_aov"])
+        self.assertNotIn("sessions", metric_ids)
+        self.assertEqual(data["items"][0]["observation"]["current_value"], "16861.09")
+        self.assertEqual(data["items"][0]["observation"]["baseline_value"], "13355.61")
+        self.assertEqual(data["provider"], "olist")
+        self.assertEqual(data["environment"], "validation")
+
+    def test_scan_missing_data_is_not_zero_and_foreign_source_is_rejected(self):
+        client, source_id = self._client("synthetic")
+        response = client.get("/api/metrics/scan", params={
+            "source_id": source_id, "target_date": "2026-09-01"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(all(
+            item["observation"]["status"] == "insufficient_evidence"
+            and item["observation"]["current_value"] is None
+            and item["observation"]["baseline_value"] is None
+            and item["observation"]["relative_change"] is None
+            for item in data["items"]
+        ))
+        self.assertTrue(all(item["anomaly_candidate"] is None for item in data["items"]))
+        self.assertEqual(data["anomaly_candidate_metrics"], [])
+        foreign = client.get("/api/metrics/scan", params={
+            "source_id": "bbaf0fe3-c61a-4d03-acca-4e10b69d24b7",
+            "target_date": "2026-10-10"})
+        self.assertEqual(foreign.status_code, 404)
+        self.assertEqual(foreign.json(), {"detail": {"code": "source_not_found"}})

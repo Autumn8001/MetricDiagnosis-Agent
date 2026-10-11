@@ -1,4 +1,4 @@
-"""Strict response schemas for the source-bound metric observation endpoint."""
+"""Strict response schemas for source-bound metric reads and manual scans."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class MetricObservationView(BaseModel):
@@ -49,3 +49,21 @@ class MetricReadResponse(BaseModel):
     query_reference: str
     observation: MetricObservationView | None
     anomaly_candidate: bool | None
+
+
+class MetricScanResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    source_id: str
+    provider: Literal["postgresql", "shopify", "olist", "synthetic"]
+    environment: Literal["live", "sandbox", "benchmark", "validation"]
+    data_version: str
+    data_version_kind: Literal["label"]
+    persisted: Literal[False]
+    scope: Literal["source_global"]
+    target_date: date
+    comparison: Literal["previous_7_days"]
+    snapshot_consistent: Literal[False]
+    completed_at: AwareDatetime
+    items: list[MetricReadResponse] = Field(min_length=1, max_length=5)
+    anomaly_candidate_metrics: list[str]

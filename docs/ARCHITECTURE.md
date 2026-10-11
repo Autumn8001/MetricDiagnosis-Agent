@@ -418,6 +418,10 @@ GET `/api/metrics/observation` 经 `metric_read_routes.py` 验证恰好三个参
 
 实际隔离PG经TestClient→API→真实SQL专项4/4通过，状态记录计数未变；Synthetic及公开静态Olist均已验证，详见 `evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md`。随后前端 `metrics/client.ts` 严格验证GET响应身份、时期、Decimal字符串和状态/candidate一致性；`product/MetricObservationPanel.tsx` 提供显式查询、epoch/Abort清理与原生原始事实明细。目录provider/environment/版本标签冲突时拒绝展示；handoff只填写新调查目标，不POST。实际PG→独立API→生产build→Edge两profile均通过，受控503/延迟故障与实际查询分开记录于 `evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md`。没有模型调用、持续连接器、趋势扫描或新迁移。
 
+### Current：来源绑定手动指标扫描后端（R4-007，页面未接线）
+
+GET `/api/metrics/scan`只接受source_id/target_date，复用同一MetricReadService的单指标读取；服务器从Registry和来源能力选择最多5项，在任何SQL前验证整批能力。每项独立只读短事务，响应snapshot_consistent=false、persisted=false，版本仍为label；不是实时快照、已存Evidence或扫描历史。任一查询失败返回安全503，不返回半份成功结果。只把明确anomalous项列为候选；候选为空不等于其他项正常，保留inconclusive/null/insufficient_evidence。没有自动调查、后台扫描、调度模块或前端按钮。实际Synthetic5项/Olist3项读取及验证边界见 [`source-metric-scan-acceptance-2026-10-11.md`](evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md)。旧Benchmark Daily Scan未改。
+
 ### Historical：旧同步 Benchmark 工作台
 
 旧工作台组件和 API 客户端仍保留在仓库，旧 App 编排可由 Git 历史读取，不再由默认 `App.tsx` 渲染。旧路径曾包含：

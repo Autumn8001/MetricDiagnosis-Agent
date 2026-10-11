@@ -48,6 +48,7 @@ def _binding(registry: MetricRegistry, *, source_id: str = "source-test") -> Tas
 
 def _result(
     *,
+    metric_id: str = "sales",
     status: str = "ok",
     current: Decimal | None = Decimal("80.00"),
     baseline: Decimal | None = Decimal("100.00"),
@@ -70,7 +71,7 @@ def _result(
             ),
         )
     return MetricQueryResult(
-        metric_id="sales",
+        metric_id=metric_id,
         unit="usd",
         current_period=current_period,
         baseline_period=baseline_period,

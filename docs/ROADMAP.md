@@ -355,6 +355,14 @@
 - 页面已验收：沿用原型，显式选指标日期，值/基线/缺数据/安全失败展示；来源key、请求epoch/Abort清过期响应，响应与目录身份/版本不一致时拒绝。带入调查仅填写，不自动POST。主线程Synthetic/Olist实际PG→独立API→build→Edge两profile均PASS，各4真实读取、1受控503、1延迟旧响应、0写尝试；客户端31/31、任务18/18、格式10/10、lint/类型/build、后端专项31/31。独立视觉复核ship（仅修正旧产品文档）；见 [`metric-observation-ui-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md)。不是持续源、真实模型或趋势验收，整个R4仍进行中。
 - 外部依赖仍在：模型401鉴权与新的调用授权；Shopify开发店/read_orders实际gate。资源具备后优先验证，不继续增加同步底座。
 
+### R4-007 — 来源绑定手动指标扫描（后端已验收，页面待接线）
+
+- 目标/依赖：复用R4-006单指标读取，让所选来源支持的指标一次比较单日与前7日；不依赖模型/Shopify凭据，不新增计算器或调度框架。
+- 方案/模块：metric_read service/schema/routes与main安全校验。GET `/api/metrics/scan`只收source_id/target_date，最多5项、批次先验证能力，逐项使用既有只读短事务；失败返回安全错误而非部分结果。明确snapshot_consistent=false、persisted=false、版本为label；无扫描历史、自动调查或新迁移。
+- 已验收：主线程隔离PG7项及离线27项组合34/34；后端全量Ran668 / OK(skipped=4)。Synthetic5指标、Olist3指标，缺数为证据不足/null，异源拒绝，状态表计数未变；PG停止且数据保留。首次实际测试缺数断言错误已记录并修正，未改变产品语义。详见 [`source-metric-scan-acceptance-2026-10-11.md`](evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md)。不是持续数据或模型验收。
+- 待开展/验收标准：按冻结原型接显式手动扫描入口，保留每项状态与原值；候选为空不展示为全体健康，不自动POST调查。用实际PG→API→页面验证缺数、失败、来源切换和候选带入表单；本轮未改前端，不能称按钮可用。
+- 后续优先级：模型鉴权修复与新的授权、开发店Orders实际gate仍优先于扩大底座；资源未就绪时下一切片仅做上述页面接线。
+
 ### 目标
 
 在不重新设计产品的前提下，让工作概览、业务指标、AI 调查工作区、数据接入和实验室成为可操作页面。

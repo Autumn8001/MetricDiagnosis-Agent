@@ -2,11 +2,11 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-11
-> Git 快照：`main`；基线 `4b93866`（模型预检/持久证据链），Shopify资源操作指南形成后续独立本地文档提交（用git log查询）；未推送
-> 最近完成：Shopify账号/Dev店/同组织只读应用/短期Token/测试订单准备指南已按官网与脚本补齐，资源仍未提供。此前模型预检401，完整调查未执行；R4-006指标页已通过
+> Git 快照：`main`；基线 `e041cfe`（Shopify资源指南），本轮R4-007后端扫描形成后续独立本地提交（准确SHA用git log查询）；未推送
+> 最近完成：R4-007来源绑定手动指标扫描后端实际PG验收通过，页面尚未接线；此前R4-006指标页通过。模型预检401、完整调查未执行，Shopify资源仍未提供
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
-> 最近验证：本次文档专项Shopify probe守卫18/18（MockTransport/patch），无平台/模型/数据库调用。此前4b93866验收守卫18/18、全量Ran659 / OK(skipped=4)，实际PG旧成功/失败只读复验；模型探测401无usage。前端测试/build与实际Edge/PG是此前R4-006记录，本次未重做
-> 下一步：用户本机核对CPA客户端访问密钥与授权配置，修复后另行确认有限探测/调查；Shopify开发店/read_orders明确尚未准备。具备资源后先实际Orders gate再最小持续更新，不扩大同步/编排底座。不自动追加模型请求，不用静态数据替代最终MVP
+> 最近验证：本轮主线程扫描/读取/应用组合34/34，其中真实PG7项、离线27项；全量Ran668 / OK(skipped=4)，exit0。两个隔离库状态计数未变，PG已停止。首次缺数测试断言失败已纠正并记录；前端/build/真实Edge本轮未重做，无模型/Shopify请求
+> 下一步：资源未就绪时仅推进R4-007手动扫描页面接线与实际PG浏览器验收；CPA鉴权修复并新授权后优先有限探测/调查，开发店/read_orders具备后先实际Orders gate再最小持续更新。不扩大同步/编排底座，不自动追加模型请求，不用静态数据替代最终MVP
 
 ## 当前结论
 
@@ -14,6 +14,7 @@ MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 A
 
 ## 已完成且本轮有源码/测试证据
 
+- R4-007后端扫描（2026-10-11）：GET `/api/metrics/scan`复用MetricReadService.read/Analytics/Mapper，能力预校验、最多5项、安全参数和失败合同，无自动调查或数据写入。实际PG读取Synthetic5项、Olist3项；缺数null、异源拒绝，状态计数不变。组合34/34、全量668(skipped=4)，PG停止；[验收记录](evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md)保留首次错误与复现步骤。snapshot_consistent=false、版本仅label、扫描不持久化；页面未接线、实际SQL未制造异常，不是模型或持续外部源验证。
 - Shopify资源准备（2026-10-11）：用户明确开发店/read_orders尚未就绪，已按官方Dev Dashboard/同组织client credentials流程整理[操作指南](shopify-orders-probe.md)，说明约24小时Token、脚本无交换/刷新、草稿不等于Orders、首轮少量样本gate与后续8天指标分开。主线程离线守卫18/18；未创建账号、应用、店铺、凭据或订单，未访问Shopify/模型/数据库，不把指南当接入验收。
 - 2026-10-11新授权模型预检：正确读取根目录.env，显式SDK key/Base匹配、配置无重复/已知占位/内部空白；一次Chat Completions工具声明请求（配置标识gemini-3.8-flash-high、输出上限256、无重试/远程tracing）返回AuthenticationError/401。未获得usage/工具输出，未执行完整调查、不创建Run，未修改CPA；上游实际模型未确认。纯函数独立检查Diagnosis→Evidence→Observation→ToolCall、来源/版本/数量/引用，离线18/18；实际PG旧成功全项通过、旧401失败正确拒绝、内存断链拒绝。脚本明确SDK/持久化范围，不把passed作为Driver/Scope/停止准确率。详情见 [`live-model-preflight-and-provenance-2026-10-11.md`](evaluation-artifacts/live-model-preflight-and-provenance-2026-10-11.md)。
 - R4-006页面：实际PG→独立API→生产build→真实Edge两profilePASS，Synthetic100/100、Olist16861.09/13355.61；缺数据null、受控503安全手动重读、延迟旧响应清除、handoff不POST和刷新不自动查询通过。前端客户端31/31、任务18/18、格式10/10、lint/类型/build；后端专项31/31。独立视觉复核ship，原型hash不变，配置/设计体系未改。状态计数1/1/1/1/1与179/117/155/70/70前后一致，API/PG与验收Edge已停。首次验证工具误判Edge launcher退出已修，两个旧临时profile可能残留但无运行进程；细节/截图目录见 [`metric-observation-ui-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md)。没有模型调用或外部API，不宣称趋势、来源健康或持续更新。

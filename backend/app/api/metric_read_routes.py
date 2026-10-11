@@ -1,4 +1,4 @@
-"""Strict, safe HTTP contract for one source-bound metric observation."""
+"""Strict, safe HTTP contracts for source-bound metric reads and scans."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
-from .metric_read_schemas import MetricReadResponse
+from .metric_read_schemas import MetricReadResponse, MetricScanResponse
 from .metric_read_service import MetricReadService, MetricReadServiceError
 
 
@@ -16,6 +16,7 @@ metric_read_router = APIRouter(tags=["Metric Observations"])
 _EXPECTED_KEYS: Final[frozenset[str]] = frozenset(
     {"source_id", "target_metric", "target_date"}
 )
+_EXPECTED_SCAN_KEYS: Final[frozenset[str]] = frozenset({"source_id", "target_date"})
 _CANONICAL_DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
 
@@ -36,34 +37,22 @@ def get_metric_read_service(request: Request) -> MetricReadService:
     return service
 
 
-@metric_read_router.get("/api/metrics/observation", response_model=MetricReadResponse)
-def read_metric_observation(
-    request: Request,
-    source_id: Annotated[str, Query(min_length=1, max_length=128)],
-    target_metric: Annotated[str, Query(min_length=1, max_length=128)],
-    target_date: Annotated[str, Query(min_length=1, max_length=10)],
-) -> MetricReadResponse:
+def _exact_query(request: Request, expected: frozenset[str]) -> dict[str, str]:
     pairs = request.query_params.multi_items()
-    if len(pairs) != 3 or {key for key, _ in pairs} != _EXPECTED_KEYS:
+    if len(pairs) != len(expected) or {key for key, _ in pairs} != expected:
         raise _invalid_request()
     query: dict[str, str] = {}
     for key, value in pairs:
         if key in query:
             raise _invalid_request()
         query[key] = value
+    return query
 
-    # The typed arguments document the OpenAPI contract. Read the original
-    # multi-value query above so duplicates cannot be hidden by FastAPI.
-    del source_id, target_metric, target_date
 
-    source_id = query["source_id"]
-    target_metric = query["target_metric"]
-    raw_date = query["target_date"]
+def _canonical_source_and_date(source_id: str, raw_date: str) -> date:
     if (
         not source_id.strip()
         or len(source_id) > 128
-        or not target_metric.strip()
-        or len(target_metric) > 128
         or not _CANONICAL_DATE.fullmatch(raw_date)
     ):
         raise _invalid_request()
@@ -74,6 +63,31 @@ def read_metric_observation(
         target_date - timedelta(days=7)
     except (ValueError, OverflowError):
         raise _invalid_request() from None
+    return target_date
+
+
+@metric_read_router.get("/api/metrics/observation", response_model=MetricReadResponse)
+def read_metric_observation(
+    request: Request,
+    source_id: Annotated[str, Query(min_length=1, max_length=128)],
+    target_metric: Annotated[str, Query(min_length=1, max_length=128)],
+    target_date: Annotated[str, Query(min_length=1, max_length=10)],
+) -> MetricReadResponse:
+    query = _exact_query(request, _EXPECTED_KEYS)
+
+    # The typed arguments document the OpenAPI contract. Read the original
+    # multi-value query above so duplicates cannot be hidden by FastAPI.
+    del source_id, target_metric, target_date
+
+    source_id = query["source_id"]
+    target_metric = query["target_metric"]
+    raw_date = query["target_date"]
+    if (
+        not target_metric.strip()
+        or len(target_metric) > 128
+    ):
+        raise _invalid_request()
+    target_date = _canonical_source_and_date(source_id, raw_date)
 
     service = get_metric_read_service(request)
     try:
@@ -81,6 +95,31 @@ def read_metric_observation(
             source_id=source_id,
             target_metric=target_metric,
             target_date=target_date,
+        )
+    except MetricReadServiceError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code},
+        ) from None
+
+
+@metric_read_router.get("/api/metrics/scan", response_model=MetricScanResponse)
+def scan_metrics(
+    request: Request,
+    source_id: Annotated[str, Query(min_length=1, max_length=128)],
+    target_date: Annotated[str, Query(min_length=1, max_length=10)],
+) -> MetricScanResponse:
+    query = _exact_query(request, _EXPECTED_SCAN_KEYS)
+    del source_id, target_date
+    target_date_value = _canonical_source_and_date(
+        query["source_id"], query["target_date"]
+    )
+
+    service = get_metric_read_service(request)
+    try:
+        return service.scan(
+            source_id=query["source_id"],
+            target_date=target_date_value,
         )
     except MetricReadServiceError as exc:
         raise HTTPException(

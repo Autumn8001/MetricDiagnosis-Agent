@@ -1,4 +1,4 @@
-"""Server-bound, single-metric read service using the existing analytics layer."""
+"""Server-bound metric reads and bounded scans using the existing analytics layer."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from app.data_sources.capabilities import CapabilityContractError, UnknownMetric
 from app.metrics.registry import MetricRegistry
 from app.observations.mapper import observations_from_metric_query
 
-from .metric_read_schemas import MetricObservationView, MetricReadResponse
+from .metric_read_schemas import MetricObservationView, MetricReadResponse, MetricScanResponse
 from .task_service import TaskSourceBinding
 
 
@@ -26,6 +26,8 @@ class MetricReadServiceError(Exception):
 
 class MetricReadService:
     """Query only the one configured source, registry and analytics factory."""
+
+    MAX_SCAN_METRICS = 5
 
     def __init__(
         self,
@@ -44,26 +46,23 @@ class MetricReadService:
         self._registry = registry
         self._analytics_connection_factory = analytics_connection_factory
 
+    def _validate_global_metric(self, metric_id: str) -> None:
+        binding = self._binding
+        try:
+            capability = binding.capabilities.get_metric_capability(metric_id)
+            if not capability.supported or not self._registry.has_metric(metric_id):
+                raise MetricReadServiceError(400, "metric_not_supported")
+            binding.capabilities.validate_query(metric_id, group_by=[], filters={})
+        except (CapabilityContractError, UnknownMetricError):
+            raise MetricReadServiceError(400, "metric_not_supported") from None
+
     def read(self, *, source_id: str, target_metric: str, target_date: date) -> MetricReadResponse:
         binding = self._binding
         descriptor = binding.descriptor
         if source_id != descriptor.source_id:
             raise MetricReadServiceError(404, "source_not_found")
 
-        try:
-            capability = binding.capabilities.get_metric_capability(target_metric)
-        except (UnknownMetricError, ValueError):
-            raise MetricReadServiceError(400, "metric_not_supported") from None
-        if not capability.supported or not self._registry.has_metric(target_metric):
-            raise MetricReadServiceError(400, "metric_not_supported")
-        try:
-            binding.capabilities.validate_query(
-                target_metric,
-                group_by=[],
-                filters={},
-            )
-        except CapabilityContractError:
-            raise MetricReadServiceError(400, "metric_not_supported") from None
+        self._validate_global_metric(target_metric)
 
         query_id = str(uuid4())
         query_reference = f"metric-read:{query_id}"
@@ -130,6 +129,58 @@ class MetricReadService:
                 query_reference=query_reference,
                 observation=observation,
                 anomaly_candidate=anomaly_candidate,
+            )
+        except Exception:
+            raise MetricReadServiceError(503, "metric_query_unavailable") from None
+
+    def scan(self, *, source_id: str, target_date: date) -> MetricScanResponse:
+        """Read every supported global metric for one date, without persistence."""
+        binding = self._binding
+        descriptor = binding.descriptor
+        if source_id != descriptor.source_id:
+            raise MetricReadServiceError(404, "source_not_found")
+
+        selected = [
+            definition.metric_id
+            for definition in self._registry.list_metrics()
+            if definition.metric_id in binding.capabilities.metrics
+            and binding.capabilities.metrics[definition.metric_id].supported
+        ]
+        if not selected:
+            raise MetricReadServiceError(400, "no_supported_metrics")
+        if len(selected) > self.MAX_SCAN_METRICS:
+            raise MetricReadServiceError(400, "metric_scan_over_budget")
+
+        # Validate the complete batch before allowing its first SQL read.
+        for metric_id in selected:
+            self._validate_global_metric(metric_id)
+
+        items = [
+            self.read(
+                source_id=source_id,
+                target_metric=metric_id,
+                target_date=target_date,
+            )
+            for metric_id in selected
+        ]
+        try:
+            completed_at = datetime.now(timezone.utc)
+            return MetricScanResponse(
+                source_id=descriptor.source_id,
+                provider=descriptor.provider.value,
+                environment=descriptor.environment.value,
+                data_version=binding.data_version,
+                data_version_kind="label",
+                persisted=False,
+                scope="source_global",
+                target_date=target_date,
+                comparison="previous_7_days",
+                snapshot_consistent=False,
+                completed_at=completed_at,
+                items=items,
+                anomaly_candidate_metrics=[
+                    item.target_metric for item in items if item.anomaly_candidate is True
+                ],
             )
         except Exception:
             raise MetricReadServiceError(503, "metric_query_unavailable") from None

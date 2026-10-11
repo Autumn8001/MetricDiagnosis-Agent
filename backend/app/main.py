@@ -44,12 +44,16 @@ def create_app(
         # fields. Never echo a mistakenly submitted connection string/secret.
         if (
             request.url.path == "/api/metrics/observation"
+            or request.url.path == "/api/metrics/scan"
             or request.url.path == "/api/investigations"
             or request.url.path.startswith("/api/investigations/")
         ):
             code = (
                 "invalid_metric_request"
-                if request.url.path == "/api/metrics/observation"
+                if request.url.path in {
+                    "/api/metrics/observation",
+                    "/api/metrics/scan",
+                }
                 else "invalid_task_request"
             )
             return JSONResponse(status_code=422, content={"detail": {"code": code}})
