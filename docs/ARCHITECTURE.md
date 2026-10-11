@@ -410,6 +410,14 @@ R4-001 新增 GET `/api/investigation-sources`：`InvestigationTasksService.list
 
 R4-002 主线程最终真实 Edge + 受控 HTTP fixture 验收 PASS，记录见 `evaluation-artifacts/task-workspace-acceptance-2026-10-10.md`。随后R4-003用真实隔离PostgreSQL、独立任务API进程与Edge读回既有Olist失败调查并刷新复读，4工具/27Observation，无写请求/模型/Worker；见 `evaluation-artifacts/postgres-browser-history-acceptance-2026-10-10.md`。R4-005进一步验证浏览器实际POST一次经现有Worker执行Analytics SQL，保存成功的1/1/1/1事实及no_material_anomaly，在新API进程、浏览器刷新后读回；首次验收断言错误与只读resume修正均有记录，见 `evaluation-artifacts/browser-task-roundtrip-acceptance-2026-10-10.md`。Runner受控，不是模型动态调查、异常归因或持续外部数据验收；验收模式没有加入产品Runtime。
 
+### Current：单源指标 Observation 读取（R4-006）
+
+GET `/api/metrics/observation` 经 `metric_read_routes.py` 验证恰好三个参数 source_id/target_metric/target_date；`MetricReadService.read()` 绑定服务端 TaskSourceBinding/Registry/连接工厂，调用既有 AnalyticsTools.query_metric 和 Observation mapper。只读全来源聚合，单日对前七日，filters/group_by固定为空。异源/不支持指标在查询前拒绝；请求/数据库/映射错误返回固定代码，不回显原值。默认未注入服务时503，`task_application api` 显式注入，Worker不变。
+
+原Runner的短事务助手提取为 `analytics/read_connection.py::ShortReadConnection`，Runner继续复用同实现；每次独立只读事务、10秒statement timeout、关闭连接与安全错误。响应保留Decimal字符串/null、UTC查询时间、来源身份和版本标签。`persisted=false`，read-query引用不是已存Tool Trace/Evidence；异常候选仅沿用现有mapper的下降阈值，不是Agent诊断。配置来源绑定不等于分析表物理行隔离，版本标签不等于快照，查询时间不等于上游更新时间。
+
+实际隔离PG经TestClient→API→真实SQL专项4/4通过，状态记录计数未变；Synthetic及公开静态Olist均已验证，详见 `evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md`。页面仍未接线；没有模型调用、持续连接器、趋势扫描或新迁移。
+
 ### Historical：旧同步 Benchmark 工作台
 
 旧工作台组件和 API 客户端仍保留在仓库，旧 App 编排可由 Git 历史读取，不再由默认 `App.tsx` 渲染。旧路径曾包含：

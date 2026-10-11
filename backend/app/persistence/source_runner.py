@@ -13,8 +13,7 @@ snapshot or repeatable read across separate analytics queries.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 import datetime
 import json
 import unicodedata
@@ -23,6 +22,10 @@ from typing import Any
 from agents import RunConfig
 
 from app.agent_runtime.diagnosis_runtime import run_evidence_driven_diagnosis
+from app.analytics.read_connection import (
+    AnalyticsConnectionFactory,
+    ShortReadConnection as _ShortReadConnection,
+)
 from app.analytics.tools import AnalyticsTools
 from app.data_sources.capabilities import (
     CapabilityContractError,
@@ -34,7 +37,6 @@ from app.persistence.task_execution_service import InvestigationTaskRequest
 
 
 DiagnosisRunner = Callable[..., Any]
-AnalyticsConnectionFactory = Callable[[], Any]
 _TASK_PARAMETER_KEYS = frozenset({"target_date", "filters", "group_by"})
 _MAX_FILTER_VALUE_LENGTH = 256
 _MAX_PROMPT_LENGTH = 16_384
@@ -46,58 +48,6 @@ class SourceRunnerConfigurationError(ValueError):
 
 class SourceRunnerRequestError(ValueError):
     """Raised when a persisted task does not match this runner's source binding."""
-
-
-class _ShortReadConnection:
-    """AnalyticsTools connection facade opening one read-only transaction per query."""
-
-    __slots__ = ("_factory",)
-
-    def __init__(self, factory: AnalyticsConnectionFactory) -> None:
-        self._factory = factory
-
-    @contextmanager
-    def cursor(self) -> Iterator[Any]:
-        connection: Any | None = None
-        cursor: Any | None = None
-        committed = False
-        try:
-            connection = self._factory()
-            if getattr(connection, "autocommit", None) is not False:
-                raise RuntimeError("analytics connection must use autocommit=False")
-            cursor = connection.cursor()
-            cursor.execute("SET TRANSACTION READ ONLY")
-            cursor.execute("SET LOCAL statement_timeout = '10000ms'")
-            yield cursor
-            cursor.close()
-            cursor = None
-            connection.commit()
-            committed = True
-        except Exception:
-            if connection is not None and not committed:
-                try:
-                    connection.rollback()
-                except Exception:
-                    pass
-            # A connection or driver exception may include SQL, credentials, or
-            # server details.  Only this fixed classification leaves the adapter.
-            raise RuntimeError("analytics_query_failed") from None
-        finally:
-            if cursor is not None:
-                try:
-                    cursor.close()
-                except Exception:
-                    # Cleanup after a committed read must not turn a completed
-                    # query into an apparent retryable failure.
-                    pass
-            if connection is not None:
-                try:
-                    connection.close()
-                except Exception:
-                    pass
-
-    def __repr__(self) -> str:
-        return "_ShortReadConnection(factory=[configured])"
 
 
 class _BoundAnalyticsTools(AnalyticsTools):

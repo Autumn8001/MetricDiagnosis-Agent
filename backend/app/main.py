@@ -11,14 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import router as api_router
+from app.api.metric_read_routes import metric_read_router
 from app.api.task_routes import task_router
 
 if TYPE_CHECKING:
     from app.api.task_service import InvestigationTasksService
+    from app.api.metric_read_service import MetricReadService
 
 
 def create_app(
     *, investigation_tasks_service: InvestigationTasksService | None = None,
+    metric_read_service: MetricReadService | None = None,
     include_legacy_routes: bool = True,
 ) -> FastAPI:
     """Build the API without opening connections, starting workers or migrating.
@@ -33,13 +36,23 @@ def create_app(
         description="Evidence-driven Business Metric Investigation Agent REST API",
     )
     application.state.investigation_tasks_service = investigation_tasks_service
+    application.state.metric_read_service = metric_read_service
 
     @application.exception_handler(RequestValidationError)
     async def safe_task_validation(request: Request, exc: RequestValidationError):
         # Pydantic's default response echoes submitted values, including extra
         # fields. Never echo a mistakenly submitted connection string/secret.
-        if request.url.path == "/api/investigations" or request.url.path.startswith("/api/investigations/"):
-            return JSONResponse(status_code=422, content={"detail": {"code": "invalid_task_request"}})
+        if (
+            request.url.path == "/api/metrics/observation"
+            or request.url.path == "/api/investigations"
+            or request.url.path.startswith("/api/investigations/")
+        ):
+            code = (
+                "invalid_metric_request"
+                if request.url.path == "/api/metrics/observation"
+                else "invalid_task_request"
+            )
+            return JSONResponse(status_code=422, content={"detail": {"code": code}})
         return await request_validation_exception_handler(request, exc)
 
     application.add_middleware(
@@ -61,6 +74,7 @@ def create_app(
         def local_task_health():
             return {"status": "ok", "mode": "local_tasks"}
     application.include_router(task_router)
+    application.include_router(metric_read_router)
     return application
 
 

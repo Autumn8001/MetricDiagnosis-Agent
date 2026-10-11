@@ -345,6 +345,14 @@
 - 边界：不验证真实模型动态选择、异常Driver/Scope、持续来源或不可变快照。实际商店Orders gate等待用户资源；真实模型成功gate需新的授权。R4仍进行中，不借受控验收宣布MVP完成。
 - 下一阶段：按用户要求本切片收尾供查看；下一轮优先模型成功gate与开发店Orders实际能力验证，有资源后才设计最小数据版本发布/更新，不扩展调度框架。
 
+### R4-006 — 单源单指标读取（后端已验收，前端待开展）
+
+- 目标/依赖：复用R1能力合同、现有Analytics SQL/Observation与R2连接边界，让业务指标页获得可查询的实际值；不依赖模型/开发店凭据，不扩展任务编排。
+- 技术方案/模块：metric_read service/schema/routes、显式task_application API接线；原只读连接助手提取复用。GET仅source_id/target_metric/target_date，全来源单日对前7日；固定安全错误、Decimal/null与未持久化查询引用。
+- 已验收：主线程实际隔离PG4/4，Synthetic和Olist静态数据、无数据/异源/不支持指标与状态表计数不变；记录 [`metric-observation-api-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md)。不是模型、持续来源、趋势或Diagnosis验收。
+- 待开展/验收：沿用原型将此接口接业务指标页；显式选日期、值/基线/缺数据/安全失败展示，来源切换防过期响应；可将指标/日期带入调查表单但不能自动提交。以实际PG→API→浏览器验收，不用前端示例数字。页面完成前本切片不算全完成。
+- 外部依赖仍在：模型401鉴权与新的调用授权；Shopify开发店/read_orders实际gate。资源具备后优先验证，不继续增加同步底座。
+
 ### 目标
 
 在不重新设计产品的前提下，让工作概览、业务指标、AI 调查工作区、数据接入和实验室成为可操作页面。

@@ -1,12 +1,12 @@
 # MetricSleuth Project Status
 
 > 状态：动态接管摘要
-> 快照日期：2026-10-10
-> Git 快照：`main`；基线R4-005 `850aa23`，本次CLI安全修复/401验收形成独立本地提交（用git log查询）；未推送
-> 最近完成：R4-005浏览器单次提交、实际PG受控Worker成功保存及刷新复读；实际开发店API尚未验收
+> 快照日期：2026-10-11
+> Git 快照：`main`；基线 `0bae5c1`，R4-006形成独立本地提交（用git log查询）；未推送
+> 最近完成：R4-006单指标只读API及实际PostgreSQL验收；前端仍是能力目录，开发店API尚未验收
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
-> 最近数据库验收：R2-PG、R2-005b1、R2-005b2a/b2b 和 Olist 受控 PostgreSQL 历史记录，详见下文与各 acceptance artifact
-> 当前任务：用户已恢复推进并授权一次模型调查；本次401/AuthenticationError失败，授权已使用。等待本机鉴权/端点确认及新的调用授权；Shopify店/应用权限仍待确认，不扩大同步底座
+> 最近数据库验收：R4-006只读实际PG4/4，合并专项31/31；最终离线649 tests / OK(skipped=4)。测试PG已停止，数据保留；前端本轮未改
+> 当前任务：下一步把已验收的单指标读接口接入业务指标页，保持原型设计；模型401对应授权已使用，未重复调用。等待鉴权/端点确认及新的调用授权；Shopify店/应用权限仍待确认，不扩大同步底座
 
 ## 当前结论
 
@@ -14,6 +14,7 @@ MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL �
 
 ## 已完成且本轮有源码/测试证据
 
+- R4-006：GET `/api/metrics/observation` 绑定服务端单源，只接受source_id/target_metric/target_date，读取单日与前7日基线。主线程实际PG专项4/4 PASS，Synthetic100.00/100.00、Olist16861.09/13355.61；缺数据保留null，异源和不支持指标拒绝，状态表计数不变。复用原Analytics/mapper/10秒只读事务，无模型、任务写入、迁移、同步或UI改动。最终离线结果见专项记录 [`metric-observation-api-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md)。异常候选不是Diagnosis，query_reference未持久保存，版本仍为标签。
 - 第二次真实SDK尝试：一次新授权下沿用现有配置，实际返回AuthenticationError/401，0/0/0/0工具与事实；失败Run保存、新应用回读与实际SQL核对通过。CLI参数错误脱敏修复，26项离线守卫与638 tests/OK(skipped=3)通过。测试PG已停止、失败数据保留，没有重试/换模型/商店调用。模型成功gate仍未通过。见 [`live-task-authentication-attempt-2026-10-10.md`](evaluation-artifacts/live-task-authentication-attempt-2026-10-10.md)。
 - R4-005：新专用PG库迁移001–004、稳定Synthetic八天数据；浏览器POST一次→202 queued→既有Worker→实际Analytics SQL→succeeded，保存1/1/1/1 Tool/Observation/Evidence/Diagnosis；新API进程与浏览器刷新重开读回100.00/100.00/0及no_material_anomaly。首次两个脚本断言错误已记录并修正，仅只读resume复验PASS，未重提/清库。原库计数不变，测试API/PG已停止，原型哈希未变。受控规则不是模型、异常归因或持续来源验收。见 [`browser-task-roundtrip-acceptance-2026-10-10.md`](evaluation-artifacts/browser-task-roundtrip-acceptance-2026-10-10.md)。
 - R4-004：字符串精确格式化与原始事实disclosure；格式10/10、客户端18/18、lint/类型/build、受控HTTP真实Edge通过。实际PG/API/Edge重读既有Olist失败记录4/27/0/0，前后数据库计数178/117/155/70/70不变、0浏览器写请求，测试API/PG已停止。原型哈希不变；不是新模型/连续来源/成功诊断验收。见 [`investigation-readability-acceptance-2026-10-10.md`](evaluation-artifacts/investigation-readability-acceptance-2026-10-10.md)。

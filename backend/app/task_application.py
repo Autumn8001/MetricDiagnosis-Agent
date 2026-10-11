@@ -83,9 +83,8 @@ def _connection_factory(database_url):
     return connect
 
 
-def build_task_application(config: TaskApplicationConfig, *, diagnosis_runner=None):
-    """Build service/worker without connecting or performing any SQL/model call."""
-    from app.persistence.source_runner import SourceInvestigationRunner
+def _source_context(config: TaskApplicationConfig):
+    """Build the profile's server-owned semantic registry and source binding."""
     root = Path(__file__).resolve().parents[2]
     is_synthetic = config.profile == "synthetic"
     registry = MetricRegistry.from_yaml(root / "configs" / (
@@ -98,6 +97,13 @@ def build_task_application(config: TaskApplicationConfig, *, diagnosis_runner=No
         environment=SourceEnvironment.SANDBOX if is_synthetic else SourceEnvironment.VALIDATION,
     )
     binding = TaskSourceBinding(descriptor, build_capabilities_from_registry(registry, descriptor), config.data_version)
+    return registry, binding
+
+
+def build_task_application(config: TaskApplicationConfig, *, diagnosis_runner=None):
+    """Build service/worker without connecting or performing any SQL/model call."""
+    from app.persistence.source_runner import SourceInvestigationRunner
+    registry, binding = _source_context(config)
     state_factory = _connection_factory(config.state_database_url)
     kwargs = {} if diagnosis_runner is None else {"diagnosis_runner": diagnosis_runner}
     runner = SourceInvestigationRunner(
@@ -106,9 +112,21 @@ def build_task_application(config: TaskApplicationConfig, *, diagnosis_runner=No
         model=config.model, max_tool_calls=config.max_tool_calls,
         max_turns=config.max_turns, **kwargs,
     )
-    worker = InvestigationWorker(state_factory, runner, expected_source=descriptor)
+    worker = InvestigationWorker(state_factory, runner, expected_source=binding.descriptor)
     service = InvestigationTasksService(state_factory, worker, (binding,))
     return service, worker
+
+
+def build_metric_read_service(config: TaskApplicationConfig):
+    """Build the read-only metric service without connecting to PostgreSQL."""
+    from app.api.metric_read_service import MetricReadService
+
+    registry, binding = _source_context(config)
+    return MetricReadService(
+        binding=binding,
+        registry=registry,
+        analytics_connection_factory=_connection_factory(config.analytics_database_url),
+    )
 
 
 def main(argv=None):
@@ -127,7 +145,11 @@ def main(argv=None):
         if args.mode == "api":
             import uvicorn
             from app.main import create_app
-            app = create_app(investigation_tasks_service=service, include_legacy_routes=False)
+            app = create_app(
+                investigation_tasks_service=service,
+                metric_read_service=build_metric_read_service(config),
+                include_legacy_routes=False,
+            )
             uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False)
         else:
             while True:
