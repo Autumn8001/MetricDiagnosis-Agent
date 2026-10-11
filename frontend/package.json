@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:tasks": "node scripts/test-task-client.mjs",
+    "test:metrics": "node scripts/test-metric-client.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

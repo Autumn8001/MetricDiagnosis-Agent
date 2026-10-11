@@ -40,7 +40,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 | 能力 | 状态 | MVP 要求与边界 |
 | --- | --- | --- |
 | 工作概览 | Confirmed / Current | 展示来源及当前来源最多 20 条任务的状态计数与历史；计数不是全库总量，指标数值/异常扫描尚未接入。 |
-| 业务指标 | Confirmed / Current | 页面仍展示指标、粒度和维度能力目录。R4-006后端已有单源单日数值、前7日基线与异常候选读取接口并经实际PG验收，尚未接入页面；不是实时趋势或持续更新。 |
+| 业务指标 | Confirmed / Current | 页面已可显式读取单源单日值、前7日基线、异常候选/不足数据，并保留能力目录与原始数值/来源明细。Synthetic/Olist实际PG→API→Edge验收通过；可带入调查表单但不自动提交，不是趋势/自动扫描/持续更新。 |
 | AI 调查工作区 | Confirmed / Current | React 已提交调查并读取持久任务列表/详情，展示实际返回的状态和事实。受控HTTP交互、真实数据库既有失败历史读取、R4-005新提交与成功Diagnosis的受控真实SQL闭环已验收；新模型成功调查仍未验收。 |
 | 数据接入 | Confirmed / Current | 页面读取服务器配置来源目录及能力声明；该目录不表示连接成功、健康、刷新或日期覆盖。外部源连接器尚未实现。 |
 | 数据实验室 | Confirmed / Current | 五导航区域已保留；实验区明确显示未接入且不写数据。Sandbox 操作尚未实现。 |
@@ -63,7 +63,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 
 - **Confirmed：** 已认可的产品体验包含五个页面/区域：工作概览、业务指标、AI 调查工作区、数据接入、实验室。它是 MVP 的用户体验基线，后续实现应优先补齐数据和状态，不重新发起大幅 UI 改版。
 - **Current / Confirmed：** 产品方于 2026-10-10 提供仓库根目录的 `MetricSleuth_%E4%BA%A4%E4%BA%92%E4%BA%A7%E5%93%81%E5%8E%9F%E5%9E%8B.html`，作为冻结的体验基线，保留原文件，不擅自重新设计。文件 SHA-256：`ae62216b9871c4cf2ee3651ea5e4d1c87a10d499beca2897db69dc80823fe76c`。
-- **Current（R4-002）：** `frontend/src/App.tsx` 将默认 React App 接到 `InvestigationWorkspace`；五个原型导航区域保留。工作概览显示当前来源列表页（每页最多20条）的调查计数；业务指标页展示目录能力；数据页展示配置来源及限制；实验室明确未接入。只有调查任务/历史详情及来源/指标能力目录通过 task API 提供数据，其他页面不宣称实时指标或连接状态。
+- **Current（R4-002→R4-006）：** `frontend/src/App.tsx` 将默认 React App 接到 `InvestigationWorkspace`；五个原型导航区域保留。工作概览显示当前来源列表页（每页最多20条）的调查计数；业务指标页展示目录能力与显式单日/基线读取；数据页展示配置来源及限制；实验室明确未接入。任务/历史/来源目录通过task API、指标读取通过独立只读接口，不宣称实时趋势或连接健康。
 - **Current：** `frontend/src/tasks/client.ts` 的 `createTaskClient` 供 React 读取来源、提交任务、分页列举和读取详情。`InvestigationWorkspace` 对 queued/running 任务每2秒轮询，终态或读取错误时停止/展示安全错误；页面不实现取消、自动重试、追问、固定进度或实验数据注入。失败记录仅展示已保存事实，不构造缺失 Diagnosis。
 - **Current（验证边界）：** R4-002 已由主线程在真实本机 Edge 配合受控 HTTP fixture 验收，覆盖翻页、提交/轮询停止、失败与成功历史事实、来源切换和未配置服务错误；它没有连接 PostgreSQL 或模型。记录见 [`task-workspace-acceptance-2026-10-10.md`](evaluation-artifacts/task-workspace-acceptance-2026-10-10.md)。视觉规则事实提取见根目录 `DESIGN.md`，原 HTML 仍为设计权威。
 - **Current（R4-003）：** 真实PostgreSQL/独立任务API/Edge读取既有Olist失败调查4Tool Call/27Observation，刷新重读通过；没有新增任务或模型调用。见 [`postgres-browser-history-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-browser-history-acceptance-2026-10-10.md)。

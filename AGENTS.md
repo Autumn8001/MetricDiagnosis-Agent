@@ -63,6 +63,7 @@ exit $testExit
 ```powershell
 Push-Location frontend
 npm run test:tasks
+npm run test:metrics
 npm run lint
 .\node_modules\.bin\tsc.cmd --noEmit -p tsconfig.app.json
 Pop-Location
@@ -82,7 +83,7 @@ R2 PostgreSQL 专项：在 `backend` 中配置专用 `METRICSLEUTH_TEST_DATABASE
 
 ## 6. 工作方式
 
-R4-006指标读取专项：`tests.test_postgres_metric_read_api` 只读已有隔离Synthetic/Olist fixture，不迁移、不写数据、不运行模型；专用变量/固定数据库守卫与复现步骤见 `docs/evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md`。默认跳过不等于实际数据库通过；前端指标页尚未接线。
+R4-006指标读取专项：`tests.test_postgres_metric_read_api` 只读已有隔离Synthetic/Olist fixture，不迁移、不写数据、不运行模型；专用变量/固定数据库守卫与复现步骤见 `docs/evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md`。默认跳过不等于实际数据库通过。指标页已显式接线，真实Edge/PG验收见 `docs/evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md`，浏览器脚本只读、不自动提交调查。
 
 R2 任务 API 数据库专项：在相同专用环境运行 `python -B -m unittest tests.test_postgres_persistence_integration tests.test_postgres_task_api_integration -v`。HTTP 使用 TestClient、Runner 为受控 SQL，不是模型验收；详见 `docs/evaluation-artifacts/task-api-acceptance-2026-10-10.md`。默认 FastAPI app 未配置任务服务时返回 503。
 

@@ -404,7 +404,7 @@ R4-001 新增 GET `/api/investigation-sources`：`InvestigationTasksService.list
 
 ### Current：默认 React 产品工作区（R4-002）
 
-`frontend/src/App.tsx` 默认只渲染 `product/InvestigationWorkspace.tsx`。该工作区保留认可原型的五导航区域，调用 `tasks/client.ts::createTaskClient` 的来源目录、任务提交、列表与详情接口。列表分页大小为20；概览状态计数只基于当前来源已加载的本页记录。指标页展示来源目录的 metric/grain/dimensions 声明，数据页展示配置元数据，均不探测连接、刷新或趋势数值。实验室页面明确显示未接入。
+`frontend/src/App.tsx` 默认只渲染 `product/InvestigationWorkspace.tsx`。该工作区保留认可原型的五导航区域，调用 `tasks/client.ts::createTaskClient` 的来源目录、任务提交、列表与详情接口。列表分页大小为20；概览状态计数只基于当前来源已加载的本页记录。指标页保留metric/grain/dimensions声明，R4-006新增显式单日/基线读取；数据页仅配置元数据，不探测连接健康/刷新。实验室未接入。
 
 新提交的 queued 任务及所选 queued/running 历史详情每2秒读取详情，终态不继续轮询；API读取错误显示安全错误代码并停止该轮轮询。详情按服务端记录展示 Tool Call、Observation、Evidence、Diagnosis 与失败状态；空 Diagnosis 不会被前端合成。来源切换清理所选详情和显式日期。该 UI 没有取消/重试/追问、固定进度条或 Synthetic 注入操作。
 
@@ -416,7 +416,7 @@ GET `/api/metrics/observation` 经 `metric_read_routes.py` 验证恰好三个参
 
 原Runner的短事务助手提取为 `analytics/read_connection.py::ShortReadConnection`，Runner继续复用同实现；每次独立只读事务、10秒statement timeout、关闭连接与安全错误。响应保留Decimal字符串/null、UTC查询时间、来源身份和版本标签。`persisted=false`，read-query引用不是已存Tool Trace/Evidence；异常候选仅沿用现有mapper的下降阈值，不是Agent诊断。配置来源绑定不等于分析表物理行隔离，版本标签不等于快照，查询时间不等于上游更新时间。
 
-实际隔离PG经TestClient→API→真实SQL专项4/4通过，状态记录计数未变；Synthetic及公开静态Olist均已验证，详见 `evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md`。页面仍未接线；没有模型调用、持续连接器、趋势扫描或新迁移。
+实际隔离PG经TestClient→API→真实SQL专项4/4通过，状态记录计数未变；Synthetic及公开静态Olist均已验证，详见 `evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md`。随后前端 `metrics/client.ts` 严格验证GET响应身份、时期、Decimal字符串和状态/candidate一致性；`product/MetricObservationPanel.tsx` 提供显式查询、epoch/Abort清理与原生原始事实明细。目录provider/environment/版本标签冲突时拒绝展示；handoff只填写新调查目标，不POST。实际PG→独立API→生产build→Edge两profile均通过，受控503/延迟故障与实际查询分开记录于 `evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md`。没有模型调用、持续连接器、趋势扫描或新迁移。
 
 ### Historical：旧同步 Benchmark 工作台
 

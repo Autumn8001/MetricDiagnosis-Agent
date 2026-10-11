@@ -2,19 +2,20 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-11
-> Git 快照：`main`；基线 `0bae5c1`，R4-006形成独立本地提交（用git log查询）；未推送
-> 最近完成：R4-006单指标只读API及实际PostgreSQL验收；前端仍是能力目录，开发店API尚未验收
+> Git 快照：`main`；基线 `3b5078e`，R4-006页面接线形成独立本地提交（用git log查询）；未推送
+> 最近完成：R4-006指标页实际单日/基线读取与带入调查，真实PostgreSQL→API→Edge两profile通过；开发店API尚未验收
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
-> 最近数据库验收：R4-006只读实际PG4/4，合并专项31/31；最终离线649 tests / OK(skipped=4)。测试PG已停止，数据保留；前端本轮未改
-> 当前任务：下一步把已验收的单指标读接口接入业务指标页，保持原型设计；模型401对应授权已使用，未重复调用。等待鉴权/端点确认及新的调用授权；Shopify店/应用权限仍待确认，不扩大同步底座
+> 最近验证：客户端31/31、任务18/18、格式10/10、lint/类型/build；后端专项31/31含4实际PG读。两次Edge验收0写尝试，数据库计数不变；测试API/PG已停止，数据保留。全量离线649/skipped4为上一后端切片记录，本轮没有重跑全量
+> 下一步：优先确认模型鉴权/端点可用性与新的单次调用授权，以及Shopify开发店/read_orders资源；具备资源后先实际Orders gate再最小持续更新，不扩大同步/编排底座。不重试已消费授权，不用静态数据替代最终MVP
 
 ## 当前结论
 
-MetricSleuth 已具备 Synthetic/Olist 受控调查内核、持久 PostgreSQL 任务 API/Worker，以及默认 React 产品工作区。R4-005已验证浏览器新建任务经真实SQL保存成功结论，并在API进程重启后刷新复读；调查选择由受控Runner执行，没有新模型调用。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接与真实模型成功gate均未完成。
+MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 API/Worker、默认React工作区和实际单日/前7日指标读取。R4-005浏览器新建任务经受控Runner/真实SQL保存成功结论并刷新复读；R4-006指标页已可只读查询再带入表单，不自动调查。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接、真实模型成功、可执行Lab、生产安全部署及重复真实评测仍未完成，不能称MVP已交付。
 
 ## 已完成且本轮有源码/测试证据
 
-- R4-006：GET `/api/metrics/observation` 绑定服务端单源，只接受source_id/target_metric/target_date，读取单日与前7日基线。主线程实际PG专项4/4 PASS，Synthetic100.00/100.00、Olist16861.09/13355.61；缺数据保留null，异源和不支持指标拒绝，状态表计数不变。复用原Analytics/mapper/10秒只读事务，无模型、任务写入、迁移、同步或UI改动。最终离线结果见专项记录 [`metric-observation-api-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md)。异常候选不是Diagnosis，query_reference未持久保存，版本仍为标签。
+- R4-006页面：实际PG→独立API→生产build→真实Edge两profilePASS，Synthetic100/100、Olist16861.09/13355.61；缺数据null、受控503安全手动重读、延迟旧响应清除、handoff不POST和刷新不自动查询通过。前端客户端31/31、任务18/18、格式10/10、lint/类型/build；后端专项31/31。独立视觉复核ship，原型hash不变，配置/设计体系未改。状态计数1/1/1/1/1与179/117/155/70/70前后一致，API/PG与验收Edge已停。首次验证工具误判Edge launcher退出已修，两个旧临时profile可能残留但无运行进程；细节/截图目录见 [`metric-observation-ui-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md)。没有模型调用或外部API，不宣称趋势、来源健康或持续更新。
+- R4-006后端切片（此前验收）：GET `/api/metrics/observation` 绑定服务端单源，只接受source_id/target_metric/target_date，读取单日与前7日基线。主线程实际PG专项4/4 PASS，Synthetic100.00/100.00、Olist16861.09/13355.61；缺数据保留null，异源和不支持指标拒绝，状态表计数不变。复用原Analytics/mapper/10秒只读事务，无模型、任务写入、迁移、同步或UI改动。最终离线结果见专项记录 [`metric-observation-api-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md)。异常候选不是Diagnosis，query_reference未持久保存，版本仍为标签。
 - 第二次真实SDK尝试：一次新授权下沿用现有配置，实际返回AuthenticationError/401，0/0/0/0工具与事实；失败Run保存、新应用回读与实际SQL核对通过。CLI参数错误脱敏修复，26项离线守卫与638 tests/OK(skipped=3)通过。测试PG已停止、失败数据保留，没有重试/换模型/商店调用。模型成功gate仍未通过。见 [`live-task-authentication-attempt-2026-10-10.md`](evaluation-artifacts/live-task-authentication-attempt-2026-10-10.md)。
 - R4-005：新专用PG库迁移001–004、稳定Synthetic八天数据；浏览器POST一次→202 queued→既有Worker→实际Analytics SQL→succeeded，保存1/1/1/1 Tool/Observation/Evidence/Diagnosis；新API进程与浏览器刷新重开读回100.00/100.00/0及no_material_anomaly。首次两个脚本断言错误已记录并修正，仅只读resume复验PASS，未重提/清库。原库计数不变，测试API/PG已停止，原型哈希未变。受控规则不是模型、异常归因或持续来源验收。见 [`browser-task-roundtrip-acceptance-2026-10-10.md`](evaluation-artifacts/browser-task-roundtrip-acceptance-2026-10-10.md)。
 - R4-004：字符串精确格式化与原始事实disclosure；格式10/10、客户端18/18、lint/类型/build、受控HTTP真实Edge通过。实际PG/API/Edge重读既有Olist失败记录4/27/0/0，前后数据库计数178/117/155/70/70不变、0浏览器写请求，测试API/PG已停止。原型哈希不变；不是新模型/连续来源/成功诊断验收。见 [`investigation-readability-acceptance-2026-10-10.md`](evaluation-artifacts/investigation-readability-acceptance-2026-10-10.md)。

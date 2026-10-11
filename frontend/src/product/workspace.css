@@ -210,6 +210,31 @@
 .inline-error .text-button { margin-left: auto; }
 .error-mark { display: grid; width: 16px; height: 16px; place-items: center; border-radius: 50%; color: white; background: #cc6970; font-size: 10px; font-weight: 700; }
 .inline-notice { margin: 10px 0; color: #16816a; font-size: 10px; }
+.metric-observation-panel { margin-top: 17px; }
+.metric-read-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 15px; padding: 18px 0 13px; }
+.metric-read-submit { min-width: 112px; }
+.metric-read-boundary { margin-top: 0; }
+.metric-read-state { min-height: 72px; display: flex; align-items: center; gap: 10px; padding: 13px 2px; color: #526176; line-height: 1.55; }
+.metric-read-result { min-width: 0; padding-top: 14px; }
+.metric-read-status { display: grid; gap: 4px; border: 1px solid #dfe8f2; border-radius: 8px; padding: 12px 14px; color: #425975; background: #f7f9fc; line-height: 1.55; }
+.metric-read-status strong { color: #344d6b; }
+.metric-read-status small, .metric-read-unit, .metric-read-handoff-note { color: #526176; }
+.metric-read-normal { border-color: #cfe7df; background: #f3faf7; }
+.metric-read-normal strong { color: #17664f; }
+.metric-read-anomalous { border-color: #f0dfbd; background: #fffaf0; }
+.metric-read-anomalous strong { color: #805d1f; }
+.metric-read-inconclusive, .metric-read-insufficient_evidence, .metric-read-failed, .metric-read-insufficient { border-color: #e2e8f0; background: #f7f9fc; }
+.metric-read-values { margin-top: 12px; }
+.metric-read-unit { margin: 9px 0 0; font-size: 12px; }
+.metric-read-periods, .metric-read-meta { min-width: 0; display: flex; flex-wrap: wrap; gap: 7px 18px; margin-top: 11px; color: #526176; font-size: 12px; line-height: 1.5; }
+.metric-read-periods span, .metric-read-meta span { min-width: 0; overflow-wrap: anywhere; }
+.metric-read-handoff { margin-top: 14px; }
+.metric-read-handoff-note { display: inline-block; margin-left: 10px; font-size: 12px; }
+.metric-read-details { min-width: 0; margin-top: 14px; border-top: 1px solid #edf1f6; padding-top: 12px; }
+.metric-read-details > summary { width: fit-content; max-width: 100%; color: #526176; font-size: 12px; cursor: pointer; }
+.metric-read-query-ref { display: block; max-width: 100%; margin-top: 10px; color: #425975; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+.metric-read-uncertain { margin: 10px 0 0; color: #526176; font-size: 12px; line-height: 1.55; }
+.metric-observation-panel :is(button, select, input, summary):focus-visible { outline: 2px solid #4768e8; outline-offset: 3px; }
 .mobile-nav { display: none; }
 
 /* Bring compact record text up to the prototype's readable 11–12px scale. */
@@ -348,6 +373,9 @@
   .runs-table th, .runs-table td { padding: 10px 7px; font-size: 12px; }
   .runs-table th:nth-child(3), .runs-table td:nth-child(3) { display: none; }
   .form-grid { grid-template-columns: 1fr; gap: 13px; padding: 15px 0; }
+  .metric-read-form { grid-template-columns: 1fr; gap: 13px; padding: 15px 0; }
+  .metric-read-submit { width: 100%; }
+  .metric-read-handoff-note { display: block; margin: 8px 0 0; }
   .field { gap: 6px; }
   .source-detail-card { padding: 17px; }
   .source-facts { gap: 14px; }

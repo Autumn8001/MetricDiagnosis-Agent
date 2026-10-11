@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createTaskClient, TaskClientError } from '../tasks/client'
+import type { MetricReadResponse } from '../metrics/contracts'
+import { MetricObservationPanel } from './MetricObservationPanel'
 import { formatDecimal } from './formatDecimal'
 import type {
   InvestigationSourceView,
@@ -329,7 +331,17 @@ export function InvestigationWorkspace() {
 
           {currentSource && <>
             {page === 'overview' && <OverviewPage source={currentSource} runs={runs} counts={allCounts} loading={listLoading} error={listError} onRefresh={refresh} onOpen={openRun} onNew={() => selectPage('investigation')} />}
-            {page === 'metrics' && <MetricsPage source={currentSource} />}
+            {page === 'metrics' && <MetricsPage key={currentSource.source_id} source={currentSource} handoffDisabled={submitting} onHandoff={(result) => {
+              setMetric(result.target_metric)
+              setTargetDate(result.target_date)
+              setPage('investigation')
+              setSelectedRunId('')
+              setDetail(null)
+              setDetailLoading(false)
+              setDetailError('')
+              setSubmitError('')
+              setNotice('已带入指标与日期。请检查调查目标后手动开始调查。')
+            }} />}
             {page === 'investigation' && <InvestigationPage
               source={currentSource}
               sources={sources}
@@ -406,9 +418,11 @@ function StatusBadge({ status }: { status: TaskRunStatus }) {
   return <span className={`status-badge status-${status}`}><i aria-hidden="true" />{runStatus(status)}</span>
 }
 
-function MetricsPage({ source }: { source: InvestigationSourceView }) {
+function MetricsPage({ source, handoffDisabled, onHandoff }: { source: InvestigationSourceView; handoffDisabled: boolean; onHandoff: (result: MetricReadResponse) => void }) {
+  const supportedMetrics = source.metrics.filter((item) => item.supported)
   return <>
-    <PageHeading title="指标与数据能力" description="以下内容来自当前来源的服务端能力目录，不展示未查询的趋势或业务数值。" />
+    <PageHeading title="指标与数据能力" description="选择指标和日期读取实际数值；下方能力目录说明该来源支持的粒度与维度。" />
+    <MetricObservationPanel key={source.source_id} source={source} supportedMetrics={supportedMetrics} handoffDisabled={handoffDisabled} onHandoff={onHandoff} />
     <section className="surface-card">
       <SectionHeader title="可调查指标" subtitle={`${source.display_name} · ${profileLabel(source)}`} />
       {source.metrics.length === 0 ? <div className="empty-state"><strong>尚无指标能力信息</strong><span>来源目录没有返回指标配置。</span></div> : <div className="metric-list">{source.metrics.map((item) => <article className="metric-row" key={item.metric_id}><div className="metric-leading"><span className={`metric-state-dot ${item.supported ? 'available' : ''}`} /><div><h3>{item.metric_id}</h3><span>{item.supported ? '支持调查' : '当前不可用'}</span></div></div><div className="metric-properties"><div><small>数据粒度</small><span>{item.grain.length ? item.grain.join(' · ') : '目录未声明'}</span></div><div><small>可用维度</small><span>{item.dimensions.length ? item.dimensions.join(' · ') : '无可用维度'}</span></div></div>{item.unavailable_reason && <p className="metric-reason">{item.unavailable_reason}</p>}</article>)}</div>}
