@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr
 from decimal import Decimal
+from copy import deepcopy
 import io
 import unittest
 from unittest.mock import patch
@@ -19,9 +20,195 @@ ARGS = [
     "explicit-config.env",
     "--allow-model-call",
 ]
+SOURCE_ID = "synthetic-source"
+DATA_VERSION = "synthetic-version-v1"
+
+
+def _valid_persisted_detail() -> dict[str, object]:
+    return {
+        "run": {
+            "investigation_run_id": "run-1",
+            "source_id": SOURCE_ID,
+            "environment": "sandbox",
+            "provider": "synthetic",
+            "status": "succeeded",
+            "data_version": DATA_VERSION,
+            "tool_call_count": 1,
+            "observation_count": 1,
+            "evidence_count": 1,
+            "diagnosis_count": 1,
+        },
+        "tool_calls": [
+            {
+                "tool_call_id": "call-1",
+                "data_version": DATA_VERSION,
+                # ToolCall query references are nullable in the current writer.
+                "query_reference": None,
+            }
+        ],
+        "observations": [
+            {
+                "observation_id": "observation-1",
+                "tool_call_id": "call-1",
+                "query_reference": "query-1",
+                "data_version": DATA_VERSION,
+            }
+        ],
+        "evidence": [
+            {
+                "evidence_id": "evidence-1",
+                "observation_id": "observation-1",
+                "tool_call_id": "call-1",
+                "query_reference": "query-1",
+                "data_version": DATA_VERSION,
+            }
+        ],
+        "diagnoses": [
+            {
+                "diagnosis_id": "diagnosis-1",
+                "evidence_ids": ["evidence-1"],
+                "change": {"evidence_id": "evidence-1"},
+                "data_version": DATA_VERSION,
+            }
+        ],
+    }
 
 
 class LiveTaskAcceptanceGuardTests(unittest.TestCase):
+    def validate(self, detail: object) -> dict[str, object]:
+        return acceptance._validate_persisted_provenance(
+            detail,
+            source_id=SOURCE_ID,
+            data_version=DATA_VERSION,
+        )
+
+    def test_complete_persisted_chain_passes_without_tool_call_query_reference(self) -> None:
+        result = self.validate(_valid_persisted_detail())
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["failure_codes"], [])
+        self.assertTrue(all(result["checks"].values()))
+
+    def test_every_vector_requires_unique_nonblank_identifiers(self) -> None:
+        for vector, identifier in (
+            ("tool_calls", "tool_call_id"),
+            ("observations", "observation_id"),
+            ("evidence", "evidence_id"),
+            ("diagnoses", "diagnosis_id"),
+        ):
+            for invalid in ("  ", "duplicate"):
+                with self.subTest(vector=vector, invalid=invalid):
+                    detail = _valid_persisted_detail()
+                    detail[vector].append(deepcopy(detail[vector][0]))
+                    detail[vector][1][identifier] = (
+                        detail[vector][0][identifier] if invalid == "duplicate" else invalid
+                    )
+                    result = self.validate(detail)
+                    self.assertFalse(result["passed"])
+                    self.assertIn("unique_identifiers_invalid", result["failure_codes"])
+
+    def test_source_provider_environment_and_version_are_bound(self) -> None:
+        mutations = (
+            ("source_id", "other-source"),
+            ("provider", "shopify"),
+            ("environment", "live"),
+            ("data_version", "other-version"),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field):
+                detail = _valid_persisted_detail()
+                detail["run"][field] = value
+                result = self.validate(detail)
+                self.assertFalse(result["checks"]["run_metadata"])
+
+    def test_each_fact_vector_must_match_declared_count(self) -> None:
+        for count_field in (
+            "tool_call_count",
+            "observation_count",
+            "evidence_count",
+            "diagnosis_count",
+        ):
+            with self.subTest(count_field=count_field):
+                detail = _valid_persisted_detail()
+                detail["run"][count_field] += 1
+                result = self.validate(detail)
+                self.assertFalse(result["checks"]["declared_counts"])
+
+    def test_observation_must_link_to_a_persisted_tool_call(self) -> None:
+        detail = _valid_persisted_detail()
+        detail["observations"][0]["tool_call_id"] = "missing-call"
+        result = self.validate(detail)
+        self.assertFalse(result["checks"]["observation_tool_links"])
+
+    def test_evidence_must_link_observation_call_and_query_reference(self) -> None:
+        mutations = (
+            ("observation_id", "missing-observation"),
+            ("tool_call_id", "different-call"),
+            ("query_reference", "different-query"),
+            ("query_reference", "  "),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field, value=value):
+                detail = _valid_persisted_detail()
+                detail["evidence"][0][field] = value
+                result = self.validate(detail)
+                self.assertFalse(result["checks"]["evidence_links"])
+
+    def test_every_fact_version_must_match_the_expected_data_version(self) -> None:
+        for vector in ("tool_calls", "observations", "evidence", "diagnoses"):
+            with self.subTest(vector=vector):
+                detail = _valid_persisted_detail()
+                detail[vector][0]["data_version"] = "stale-version"
+                result = self.validate(detail)
+                self.assertFalse(result["checks"]["data_versions"])
+
+    def test_diagnosis_citations_must_exist_be_unique_and_include_change_evidence(self) -> None:
+        cases = (
+            ["missing-evidence"],
+            ["evidence-1", "evidence-1"],
+            None,
+            "evidence-1",
+            [["evidence-1"]],
+        )
+        for references in cases:
+            with self.subTest(references=repr(references)):
+                detail = _valid_persisted_detail()
+                detail["diagnoses"][0]["evidence_ids"] = references
+                result = self.validate(detail)
+                self.assertFalse(result["checks"]["diagnosis_references"])
+
+        for change in (
+            {"evidence_id": "uncited-evidence"},
+            {},
+            {"evidence_id": None},
+            {"evidence_id": "  "},
+        ):
+            with self.subTest(change=change):
+                detail = _valid_persisted_detail()
+                detail["diagnoses"][0]["change"] = change
+                result = self.validate(detail)
+                self.assertFalse(result["checks"]["diagnosis_references"])
+
+    def test_incomplete_or_failed_run_cannot_pass(self) -> None:
+        for mutation in ("no_diagnosis", "no_facts", "failed_run"):
+            with self.subTest(mutation=mutation):
+                detail = _valid_persisted_detail()
+                if mutation == "no_diagnosis":
+                    detail["diagnoses"] = []
+                    detail["run"]["diagnosis_count"] = 0
+                elif mutation == "no_facts":
+                    detail["observations"] = []
+                    detail["run"]["observation_count"] = 0
+                else:
+                    detail["run"]["status"] = "failed"
+                result = self.validate(detail)
+                self.assertFalse(result["passed"])
+
+    def test_malformed_failure_output_contains_no_raw_text(self) -> None:
+        result = self.validate({"private_payload": "must not appear"})
+        serialized = str(result)
+        self.assertNotIn("must not appear", serialized)
+        self.assertEqual(result["failure_codes"], ["detail_shape_invalid"])
+
     def test_model_call_opt_in_is_required_before_any_external_work(self) -> None:
         stderr = io.StringIO()
         with (

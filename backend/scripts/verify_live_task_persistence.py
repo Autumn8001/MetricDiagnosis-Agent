@@ -37,6 +37,160 @@ _ALLOWED_DIMENSIONS = frozenset({"asin", "marketplace", "traffic_source"})
 _ALLOWED_TOOLS = frozenset({"query_metric", "query_related_metrics", "get_metric_definition"})
 _OBSERVATION_STATUSES = frozenset({"anomalous", "normal", "inconclusive", "insufficient_evidence", "failed"})
 _DIAGNOSIS_STATUSES = frozenset({"diagnosed", "no_material_anomaly", "insufficient_evidence", "budget_exhausted", "tool_failure"})
+_EXPECTED_PROVIDER = "synthetic"
+_EXPECTED_ENVIRONMENT = "sandbox"
+
+
+def _nonblank_identifier(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _has_unique_ids(items: object, field: str) -> bool:
+    if not isinstance(items, list):
+        return False
+    values = [item.get(field) for item in items if isinstance(item, dict)]
+    return (
+        len(values) == len(items)
+        and all(_nonblank_identifier(value) for value in values)
+        and len(values) == len(set(values))
+    )
+
+
+def _validate_persisted_provenance(
+    detail: object, *, source_id: str, data_version: str
+) -> dict[str, object]:
+    """Validate persisted provenance links using fixed, non-sensitive outcomes."""
+    checks = {
+        "run_metadata": False,
+        "declared_counts": False,
+        "unique_identifiers": False,
+        "observation_tool_links": False,
+        "evidence_links": False,
+        "data_versions": False,
+        "diagnosis_references": False,
+        "nonempty_facts": False,
+        "successful_run": False,
+    }
+    if not isinstance(detail, dict):
+        return {"passed": False, "checks": checks, "failure_codes": ["detail_invalid"]}
+
+    run = detail.get("run")
+    calls = detail.get("tool_calls")
+    observations = detail.get("observations")
+    evidence = detail.get("evidence")
+    diagnoses = detail.get("diagnoses")
+    vectors = (calls, observations, evidence, diagnoses)
+    if not isinstance(run, dict) or any(not isinstance(items, list) for items in vectors):
+        return {"passed": False, "checks": checks, "failure_codes": ["detail_shape_invalid"]}
+
+    # TaskRunView.provider comes from the server-owned source binding. For this
+    # acceptance the configured binding is fixed to Synthetic sandbox.
+    checks["run_metadata"] = (
+        run.get("source_id") == source_id
+        and run.get("data_version") == data_version
+        and run.get("provider") == _EXPECTED_PROVIDER
+        and run.get("environment") == _EXPECTED_ENVIRONMENT
+    )
+    count_fields = (
+        ("tool_call_count", calls),
+        ("observation_count", observations),
+        ("evidence_count", evidence),
+        ("diagnosis_count", diagnoses),
+    )
+    checks["declared_counts"] = all(
+        type(run.get(field)) is int and run[field] == len(items)
+        for field, items in count_fields
+    )
+
+    id_vectors = (
+        (calls, "tool_call_id"),
+        (observations, "observation_id"),
+        (evidence, "evidence_id"),
+        (diagnoses, "diagnosis_id"),
+    )
+    checks["unique_identifiers"] = all(_has_unique_ids(items, field) for items, field in id_vectors)
+
+    call_ids = {
+        item.get("tool_call_id")
+        for item in calls
+        if isinstance(item, dict) and _nonblank_identifier(item.get("tool_call_id"))
+    }
+    observation_by_id = {
+        item.get("observation_id"): item
+        for item in observations
+        if isinstance(item, dict) and _nonblank_identifier(item.get("observation_id"))
+    }
+    evidence_ids = {
+        item.get("evidence_id")
+        for item in evidence
+        if isinstance(item, dict) and _nonblank_identifier(item.get("evidence_id"))
+    }
+    checks["observation_tool_links"] = bool(observations) and all(
+        isinstance(item, dict)
+        and _nonblank_identifier(item.get("tool_call_id"))
+        and item.get("tool_call_id") in call_ids
+        for item in observations
+    )
+    checks["evidence_links"] = bool(evidence) and all(
+        isinstance(item, dict)
+        and _nonblank_identifier(item.get("observation_id"))
+        and item.get("observation_id") in observation_by_id
+        and item.get("tool_call_id")
+        == observation_by_id[item.get("observation_id")].get("tool_call_id")
+        and _nonblank_identifier(item.get("query_reference"))
+        and item.get("query_reference")
+        == observation_by_id[item.get("observation_id")].get("query_reference")
+        for item in evidence
+    )
+    versioned_records = [run, *calls, *observations, *evidence, *diagnoses]
+    checks["data_versions"] = all(
+        isinstance(item, dict) and item.get("data_version") == data_version
+        for item in versioned_records
+    )
+
+    cited_ids: list[object] = []
+    changes_cited = True
+    diagnoses_valid = bool(diagnoses)
+    for diagnosis in diagnoses:
+        if not isinstance(diagnosis, dict):
+            diagnoses_valid = False
+            continue
+        references = diagnosis.get("evidence_ids")
+        valid_references = (
+            isinstance(references, list)
+            and bool(references)
+            and all(_nonblank_identifier(item) for item in references)
+        )
+        if not valid_references:
+            diagnoses_valid = False
+        else:
+            reference_set = set(references)
+            if len(references) != len(reference_set) or not reference_set.issubset(evidence_ids):
+                diagnoses_valid = False
+            else:
+                cited_ids.extend(references)
+        change = diagnosis.get("change")
+        if change is not None:
+            if not isinstance(change, dict):
+                changes_cited = False
+            else:
+                change_evidence_id = change.get("evidence_id")
+                if (
+                    not _nonblank_identifier(change_evidence_id)
+                    or not valid_references
+                    or change_evidence_id not in references
+                ):
+                    changes_cited = False
+    checks["diagnosis_references"] = (
+        diagnoses_valid
+        and changes_cited
+        and len(cited_ids) == len(set(cited_ids))
+    )
+    checks["nonempty_facts"] = bool(calls and observations and evidence and diagnoses)
+    checks["successful_run"] = run.get("status") == "succeeded"
+
+    failures = [f"{name}_invalid" for name, passed in checks.items() if not passed]
+    return {"passed": not failures, "checks": checks, "failure_codes": failures}
 
 
 class AcceptanceFailure(Exception):
@@ -370,10 +524,16 @@ def run_acceptance(database_url: str, model_env_file: str) -> dict[str, object]:
             if reread.status_code != 200 or reread.json() != first_detail:
                 raise AcceptanceFailure("fresh_application_read_mismatch")
 
+        provenance = _validate_persisted_provenance(
+            first_detail,
+            source_id=source_id,
+            data_version=DATA_VERSION,
+        )
         safe = _json_safe_detail(first_detail, asin)
         run = safe["run"]
         successful = (
-            run["status"] == "succeeded"
+            provenance["passed"] is True
+            and run["status"] == "succeeded"
             and run["diagnosis_count"] == 1
             and run["evidence_count"] > 0
             and safe["diagnosis_evidence_reference_count"] > 0
@@ -385,6 +545,8 @@ def run_acceptance(database_url: str, model_env_file: str) -> dict[str, object]:
         )
         return {
             "status": "passed" if successful else "failed",
+            "acceptance_scope": "sdk_execution_and_persistence",
+            "semantic_evaluation": "not_evaluated",
             "model": "configured",
             "api_mode": api_mode,
             "data_profile": "synthetic",
@@ -402,6 +564,7 @@ def run_acceptance(database_url: str, model_env_file: str) -> dict[str, object]:
                 "max_tool_calls": MAX_TOOL_CALLS,
             },
             "persistence": safe,
+            "provenance": provenance,
         }
     finally:
         _close_async_client(sdk_client)

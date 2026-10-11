@@ -1,7 +1,7 @@
 # MetricSleuth MVP Roadmap
 
 > 状态：当前长期实施计划
-> 更新日期：2026-10-10
+> 更新日期：2026-10-11
 > 审查基线：`main` / `eba3d1846d08876df42c9730289009875dd73dc0`；R2-PG 在其后新增独立提交
 > 目标来源：[`PRODUCT.md`](PRODUCT.md)
 > 架构边界：[`ARCHITECTURE.md`](ARCHITECTURE.md)
@@ -264,6 +264,7 @@
 - **下一验收**：明确非生产模型凭据/模型/调用预算和稳定数据版本后，经真实 SDK 完成一次 API 排队→Worker→SQL→步骤→Diagnosis→历史读取；保存脱敏逐 Run 证据。未通过前不标记 R2 全部完成。并检查真实来源的快照/只读角色与单源队列边界，避免继续增加无运行证据的基础模块。
 - **2026-10-10 首次真实SDK尝试：未通过**。用户一次性授权后沿用现有模型/端点，SDK 返回 `InternalServerError`；无完成工具、Observation、Evidence 或 Diagnosis，失败任务和新应用重连读取正常。此次授权已使用，不自动重试；先确认端点可用性再经新授权复验。记录见 [`live-task-persistence-attempt-2026-10-10.md`](evaluation-artifacts/live-task-persistence-attempt-2026-10-10.md)。不因此改写 Runtime 或引入新的调度模块。
 - **2026-10-10 第二次真实SDK尝试：未通过**。用户恢复推进并新授权一次，现有配置实际返回`AuthenticationError / 401`；0工具/Observation/Evidence/Diagnosis，失败Run及新应用/SQL复核正常，测试库已停止。没有额外重试或模型替换；下一步由用户在本机确认鉴权/端点后新授权验收。补齐验收CLI参数错误脱敏，26项离线守卫、638 tests/OK(skipped=3)通过；不改变业务Runtime或开发路线。记录见 [`live-task-authentication-attempt-2026-10-10.md`](evaluation-artifacts/live-task-authentication-attempt-2026-10-10.md)。脚本passed仅是执行/持久化gate，不自动判Driver/Scope/停止条件正确。
+- **2026-10-11新授权前置探测：未通过**。根目录.env读取与显式SDK配置匹配；一次无重试、256输出上限的工具协议请求返回401，未获得usage/工具结果，因此没有执行完整调查或创建Run，也没有修改CPA服务。需用户本机确认客户端访问密钥/授权，修复后另行确认有限探测/调查。验收工具增加独立持久引用链检查与明确semantic_evaluation=not_evaluated；旧受控成功及旧401失败记录实际PG只读复验符合预期，不把它们当新模型成功。见 [`live-model-preflight-and-provenance-2026-10-11.md`](evaluation-artifacts/live-model-preflight-and-provenance-2026-10-11.md)。Shopify资源明确尚未准备，持续源仍待实际gate。
 - **单源队列边界补验（2026-10-10，已通过）**：应用Worker绑定Runner来源，只领取/恢复自己的任务；共享状态库的Synthetic/Olist交叉排队、running恢复及错误provider绑定在实际PG验证。保持原全局锁和短事务，无新调度机制。数据库回归26/26、离线605 tests / OK (skipped=3)；见 [`worker-source-isolation-acceptance-2026-10-10.md`](evaluation-artifacts/worker-source-isolation-acceptance-2026-10-10.md)。不是多租户授权、分析快照或模型成功。
 - 服务 allowlist 不是用户授权；公开部署前仍需认证、收紧 CORS、隔离旧开发端点、日志/响应脱敏。用户取消与显式重试按真实展示需求确定，不先扩展通用任务框架。
 

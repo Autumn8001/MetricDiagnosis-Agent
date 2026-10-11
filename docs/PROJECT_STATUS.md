@@ -2,11 +2,11 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-11
-> Git 快照：`main`；基线 `3b5078e`，R4-006页面接线形成独立本地提交（用git log查询）；未推送
-> 最近完成：R4-006指标页实际单日/基线读取与带入调查，真实PostgreSQL→API→Edge两profile通过；开发店API尚未验收
+> Git 快照：`main`；基线 `d672131`，模型预检记录与持久证据链校验形成后续独立本地提交（用git log查询）；未推送
+> 最近完成：真实模型一次工具协议预检返回401，完整调查未执行；新增持久证据链校验，经既有真实PG成功/失败记录复读验证。R4-006指标页已通过；开发店API尚未验收
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
-> 最近验证：客户端31/31、任务18/18、格式10/10、lint/类型/build；后端专项31/31含4实际PG读。两次Edge验收0写尝试，数据库计数不变；测试API/PG已停止，数据保留。全量离线649/skipped4为上一后端切片记录，本轮没有重跑全量
-> 下一步：优先确认模型鉴权/端点可用性与新的单次调用授权，以及Shopify开发店/read_orders资源；具备资源后先实际Orders gate再最小持续更新，不扩大同步/编排底座。不重试已消费授权，不用静态数据替代最终MVP
+> 最近验证：本轮验收守卫18/18、最终全量Ran659 / OK(skipped=4)；既有实际PG成功/失败详情只读复验及内存断链拒绝，数量不变，PG已停止。另一次实际模型探测401、无usage或完整调查。上一UI阶段客户端31/31、任务18/18、格式10/10、lint/类型/build及实际Edge/PG通过，本轮未重做UI
+> 下一步：用户本机核对CPA客户端访问密钥与授权配置，修复后另行确认有限探测/调查；Shopify开发店/read_orders明确尚未准备。具备资源后先实际Orders gate再最小持续更新，不扩大同步/编排底座。不自动追加模型请求，不用静态数据替代最终MVP
 
 ## 当前结论
 
@@ -14,6 +14,7 @@ MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 A
 
 ## 已完成且本轮有源码/测试证据
 
+- 2026-10-11新授权模型预检：正确读取根目录.env，显式SDK key/Base匹配、配置无重复/已知占位/内部空白；一次Chat Completions工具声明请求（配置标识gemini-3.8-flash-high、输出上限256、无重试/远程tracing）返回AuthenticationError/401。未获得usage/工具输出，未执行完整调查、不创建Run，未修改CPA；上游实际模型未确认。纯函数独立检查Diagnosis→Evidence→Observation→ToolCall、来源/版本/数量/引用，离线18/18；实际PG旧成功全项通过、旧401失败正确拒绝、内存断链拒绝。脚本明确SDK/持久化范围，不把passed作为Driver/Scope/停止准确率。详情见 [`live-model-preflight-and-provenance-2026-10-11.md`](evaluation-artifacts/live-model-preflight-and-provenance-2026-10-11.md)。
 - R4-006页面：实际PG→独立API→生产build→真实Edge两profilePASS，Synthetic100/100、Olist16861.09/13355.61；缺数据null、受控503安全手动重读、延迟旧响应清除、handoff不POST和刷新不自动查询通过。前端客户端31/31、任务18/18、格式10/10、lint/类型/build；后端专项31/31。独立视觉复核ship，原型hash不变，配置/设计体系未改。状态计数1/1/1/1/1与179/117/155/70/70前后一致，API/PG与验收Edge已停。首次验证工具误判Edge launcher退出已修，两个旧临时profile可能残留但无运行进程；细节/截图目录见 [`metric-observation-ui-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md)。没有模型调用或外部API，不宣称趋势、来源健康或持续更新。
 - R4-006后端切片（此前验收）：GET `/api/metrics/observation` 绑定服务端单源，只接受source_id/target_metric/target_date，读取单日与前7日基线。主线程实际PG专项4/4 PASS，Synthetic100.00/100.00、Olist16861.09/13355.61；缺数据保留null，异源和不支持指标拒绝，状态表计数不变。复用原Analytics/mapper/10秒只读事务，无模型、任务写入、迁移、同步或UI改动。最终离线结果见专项记录 [`metric-observation-api-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md)。异常候选不是Diagnosis，query_reference未持久保存，版本仍为标签。
 - 第二次真实SDK尝试：一次新授权下沿用现有配置，实际返回AuthenticationError/401，0/0/0/0工具与事实；失败Run保存、新应用回读与实际SQL核对通过。CLI参数错误脱敏修复，26项离线守卫与638 tests/OK(skipped=3)通过。测试PG已停止、失败数据保留，没有重试/换模型/商店调用。模型成功gate仍未通过。见 [`live-task-authentication-attempt-2026-10-10.md`](evaluation-artifacts/live-task-authentication-attempt-2026-10-10.md)。

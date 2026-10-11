@@ -93,6 +93,8 @@ Olist 静态公开数据的实际 SQL/步骤留存证据见 `docs/evaluation-art
 
 随后一次新授权的SDK尝试返回`AuthenticationError / 401`，仍无工具结果，见 `docs/evaluation-artifacts/live-task-authentication-attempt-2026-10-10.md`。两次授权均已使用；下一次调用先由用户确认本机鉴权/端点并重新授权。验收脚本passed仅是执行/持久化条件，不自动代表Driver/Scope或停止正确。
 
+2026-10-11新授权先做工具协议预检，实际一次请求仍返回401，完整调查未执行、没有新Run或usage；不自动追加请求。需用户本机核对CPA访问密钥/授权后另行确认有限探测。验收脚本现独立检查持久引用链并输出semantic_evaluation=not_evaluated；既有真实PG成功/失败记录复验见 `docs/evaluation-artifacts/live-model-preflight-and-provenance-2026-10-11.md`。Shopify开发店/read_orders明确尚未准备。
+
 - 开始任务前检查 `git status --short --branch`，保护用户现有修改。
 - 先读取当前阶段代码和测试，再确定最小改动。
 - 一般低风险实现可按 Roadmap 自主推进；重大产品方向、不可逆数据操作、生产部署、密钥和权限变更必须先获得用户确认。
