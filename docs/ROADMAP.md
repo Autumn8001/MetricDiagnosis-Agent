@@ -69,6 +69,7 @@
 - **R1-003 后续数据库验收（2026-10-10）**：现有公共 CSV 在隔离 PostgreSQL 导入、映射及 Analytics 查询已实际通过；四步受控调查保存 27 Observation，失败后新应用读回，未伪造 Diagnosis。证据见 [`olist-persistence-acceptance-2026-10-10.md`](evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md)。这更新了 R1-003 当时未验证数据库的边界，不代表持续同步或 Olist 模型验收。
 - **R1-004a｜来源资料比较与选择门**：已完成（2026-10-10）。官方资料/源码和资源条件核对后，用户确认暂无业务PostgreSQL、可准备Shopify开发店；下一外部验证对象为 `shopify / sandbox`，不是生产经营数据。指标/权限/版本发布方案与资源清单见 [`data-source-selection.md`](data-source-selection.md)。没有外部API、模型或连接器验收。
 - **R1-004b｜Shopify只读 capability spike**：离线准备完成，真实API验收待开展。新增独立 `backend/scripts/probe_shopify_orders.py`，固定HTTPS/query/API版本、read_orders先行、UTC日期窗口、最多5页/无重试/响应大小限制和脱敏汇总；不写DB/平台数据、不运行模型。主线程专项18/18 PASS，全部使用MockTransport/patch，不是外部API证据。运行与资源见 [`shopify-orders-probe.md`](shopify-orders-probe.md)。账号/专用开发店/应用只读权限尚待用户准备；实际分页/字段/覆盖未验收，Sales/AOV需口径确认，Sessions/Conversion默认不支持。通过实际API gate后才进入最小抓取→版本发布→SQL调查切片。
+- **2026-10-11资源操作说明已补齐**：同组织Dev店/Dev Dashboard应用、read_orders版本发布与安装、client credentials短期Token及草稿转Orders的准备步骤，复用上述指南，不新增第二份认证文档。现有probe仅接收Access token，不实现交换/刷新；资源就绪后明确授权有限交换及读取。首轮少量订单权限/字段gate不等待8天，后续指标比较仍需真实历史覆盖，不伪造。离线守卫复验18/18，官方资料已核对；用户账号未实际演练，资源仍未提供。
 
 ### 目标
 
