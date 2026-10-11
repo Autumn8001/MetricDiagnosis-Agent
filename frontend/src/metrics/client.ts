@@ -4,6 +4,7 @@ import type {
   MetricObservationView,
   MetricProvider,
   MetricReadResponse,
+  MetricScanResponse,
 } from "./contracts";
 
 export type MetricReadErrorCode =
@@ -12,6 +13,8 @@ export type MetricReadErrorCode =
   | "invalid_metric_request"
   | "source_not_found"
   | "metric_not_supported"
+  | "no_supported_metrics"
+  | "metric_scan_over_budget"
   | "network_error"
   | "invalid_response"
   | "request_failed";
@@ -22,6 +25,8 @@ const SAFE_SERVER_CODES = new Set<MetricReadErrorCode>([
   "invalid_metric_request",
   "source_not_found",
   "metric_not_supported",
+  "no_supported_metrics",
+  "metric_scan_over_budget",
 ]);
 const PROVIDERS = new Set<MetricProvider>(["postgresql", "shopify", "olist", "synthetic"]);
 const ENVIRONMENTS = new Set<MetricEnvironment>(["live", "sandbox", "benchmark", "validation"]);
@@ -49,6 +54,11 @@ export class MetricClientError extends Error {
 export interface MetricReadInput {
   source_id: string;
   target_metric: string;
+  target_date: string;
+}
+
+export interface MetricScanInput {
+  source_id: string;
   target_date: string;
 }
 
@@ -120,6 +130,15 @@ function validateInput(value: MetricReadInput): MetricReadInput {
   };
 }
 
+function validateScanInput(value: MetricScanInput): MetricScanInput {
+  if (value === null || typeof value !== "object"
+    || !identifier(value.source_id)
+    || !validRequestDate(value.target_date)) {
+    throw new TypeError("Invalid metric scan request");
+  }
+  return { source_id: value.source_id, target_date: value.target_date };
+}
+
 function validDecimal(value: unknown): value is string | null {
   return value === null || (typeof value === "string" && DECIMAL.test(value));
 }
@@ -181,6 +200,56 @@ function validateResponse(value: unknown, input: MetricReadInput): MetricReadRes
   return row as unknown as MetricReadResponse;
 }
 
+function validateScanResponse(value: unknown, input: MetricScanInput): MetricScanResponse {
+  const row = record(value);
+  exactKeys(row, [
+    "source_id", "provider", "environment", "data_version", "data_version_kind", "persisted",
+    "scope", "target_date", "comparison", "snapshot_consistent", "completed_at", "items",
+    "anomaly_candidate_metrics",
+  ]);
+  if (row.source_id !== input.source_id || row.target_date !== input.target_date
+    || typeof row.provider !== "string" || !PROVIDERS.has(row.provider as MetricProvider)
+    || typeof row.environment !== "string" || !ENVIRONMENTS.has(row.environment as MetricEnvironment)
+    || !nonEmptyString(row.data_version) || row.data_version_kind !== "label"
+    || row.persisted !== false || row.scope !== "source_global"
+    || row.comparison !== "previous_7_days" || row.snapshot_consistent !== false
+    || !isUtcTimestamp(row.completed_at)
+    || !Array.isArray(row.items) || row.items.length < 1 || row.items.length > 5
+    || !Array.isArray(row.anomaly_candidate_metrics)) {
+    return invalidResponse();
+  }
+
+  const seenMetrics = new Set<string>();
+  const seenReferences = new Set<string>();
+  const items = row.items.map((value): MetricReadResponse => {
+    const candidate = record(value);
+    if (!identifier(candidate.target_metric)) return invalidResponse();
+    const item = validateResponse(value, {
+      source_id: input.source_id,
+      target_metric: candidate.target_metric,
+      target_date: input.target_date,
+    });
+    if (item.provider !== row.provider || item.environment !== row.environment
+      || item.data_version !== row.data_version
+      || seenMetrics.has(item.target_metric) || seenReferences.has(item.query_reference)) {
+      return invalidResponse();
+    }
+    seenMetrics.add(item.target_metric);
+    seenReferences.add(item.query_reference);
+    return item;
+  });
+
+  const expectedCandidates = items
+    .filter((item) => item.anomaly_candidate === true)
+    .map((item) => item.target_metric);
+  if (row.anomaly_candidate_metrics.length !== expectedCandidates.length
+    || row.anomaly_candidate_metrics.some((metric, index) => metric !== expectedCandidates[index])) {
+    return invalidResponse();
+  }
+
+  return row as unknown as MetricScanResponse;
+}
+
 function serverErrorCode(payload: unknown): MetricReadErrorCode {
   try {
     const body = record(payload);
@@ -196,6 +265,37 @@ function serverErrorCode(payload: unknown): MetricReadErrorCode {
 
 function abortError(): DOMException {
   return new DOMException("The operation was aborted", "AbortError");
+}
+
+async function requestJson(
+  url: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
+): Promise<{ payload: unknown }> {
+  let response: Response;
+  try {
+    response = await fetcher(url, {
+      method: "GET",
+      headers: { accept: "application/json" },
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted || isAbortError(error)) throw abortError();
+    throw new MetricClientError(null, "network_error");
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    if (signal?.aborted || isAbortError(error)) throw abortError();
+    if (response.ok) throw new MetricClientError(response.status, "invalid_response");
+    throw new MetricClientError(response.status, "request_failed");
+  }
+  if (response.ok && signal?.aborted) throw abortError();
+  if (!response.ok) throw new MetricClientError(response.status, serverErrorCode(payload));
+  if (response.status !== 200) throw new MetricClientError(response.status, "invalid_response");
+  return { payload };
 }
 
 function isAbortError(error: unknown): boolean {
@@ -215,30 +315,26 @@ export function createMetricClient(options: MetricClientOptions = {}) {
         target_metric: cleanInput.target_metric,
         target_date: cleanInput.target_date,
       });
-      let response: Response;
-      try {
-        response = await fetcher(`${baseUrl}/api/metrics/observation?${query.toString()}`, {
-          method: "GET",
-          headers: { accept: "application/json" },
-          signal: requestOptions.signal,
-        });
-      } catch (error) {
-        if (requestOptions.signal?.aborted || isAbortError(error)) throw abortError();
-        throw new MetricClientError(null, "network_error");
-      }
-
-      let payload: unknown;
-      try {
-        payload = await response.json();
-      } catch (error) {
-        if (requestOptions.signal?.aborted || isAbortError(error)) throw abortError();
-        if (response.ok) throw new MetricClientError(response.status, "invalid_response");
-        throw new MetricClientError(response.status, "request_failed");
-      }
-      if (response.ok && requestOptions.signal?.aborted) throw abortError();
-      if (!response.ok) throw new MetricClientError(response.status, serverErrorCode(payload));
-      if (response.status !== 200) throw new MetricClientError(response.status, "invalid_response");
+      const { payload } = await requestJson(
+        `${baseUrl}/api/metrics/observation?${query.toString()}`,
+        fetcher,
+        requestOptions.signal,
+      );
       return validateResponse(payload, cleanInput);
+    },
+
+    async scan(input: MetricScanInput, requestOptions: MetricReadRequestOptions = {}): Promise<MetricScanResponse> {
+      const cleanInput = validateScanInput(input);
+      const query = new URLSearchParams({
+        source_id: cleanInput.source_id,
+        target_date: cleanInput.target_date,
+      });
+      const { payload } = await requestJson(
+        `${baseUrl}/api/metrics/scan?${query.toString()}`,
+        fetcher,
+        requestOptions.signal,
+      );
+      return validateScanResponse(payload, cleanInput);
     },
   };
 }

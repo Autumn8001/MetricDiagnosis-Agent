@@ -1,4 +1,4 @@
-/** Wire contract for a one source, one metric, one day observation read. */
+/** Wire contracts for source-bound metric reads and manual daily scans. */
 
 export type MetricProvider = "postgresql" | "shopify" | "olist" | "synthetic";
 export type MetricEnvironment = "live" | "sandbox" | "benchmark" | "validation";
@@ -42,4 +42,20 @@ export interface MetricReadResponse {
   query_reference: string;
   observation: MetricObservationView | null;
   anomaly_candidate: boolean | null;
+}
+
+export interface MetricScanResponse {
+  source_id: string;
+  provider: MetricProvider;
+  environment: MetricEnvironment;
+  data_version: string;
+  data_version_kind: "label";
+  persisted: false;
+  scope: "source_global";
+  target_date: string;
+  comparison: "previous_7_days";
+  snapshot_consistent: false;
+  completed_at: string;
+  items: MetricReadResponse[];
+  anomaly_candidate_metrics: string[];
 }

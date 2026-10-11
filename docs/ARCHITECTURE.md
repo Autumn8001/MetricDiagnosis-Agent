@@ -422,6 +422,8 @@ GET `/api/metrics/observation` 经 `metric_read_routes.py` 验证恰好三个参
 
 GET `/api/metrics/scan`只接受source_id/target_date，复用同一MetricReadService的单指标读取；服务器从Registry和来源能力选择最多5项，在任何SQL前验证整批能力。每项独立只读短事务，响应snapshot_consistent=false、persisted=false，版本仍为label；不是实时快照、已存Evidence或扫描历史。任一查询失败返回安全503，不返回半份成功结果。只把明确anomalous项列为候选；候选为空不等于其他项正常，保留inconclusive/null/insufficient_evidence。没有自动调查、后台扫描、调度模块或前端按钮。实际Synthetic5项/Olist3项读取及验证边界见 [`source-metric-scan-acceptance-2026-10-11.md`](evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md)。旧Benchmark Daily Scan未改。
 
+前端`metrics/client.ts`已提供`createMetricClient.scan()`，复用read的安全请求/取消和单项响应验证；额外拒绝批次来源/日期/provider/environment/version冲突、重复指标/查询引用、伪造或遗漏候选以及非false快照声明。客户端58项离线合同测试通过，但页面尚未调用scan；后续仍须核对来源目录能力/身份、处理过期响应并做实际浏览器验收。客户端通过不代表真实HTTP、模型或持续外部源通过。
+
 ### Historical：旧同步 Benchmark 工作台
 
 旧工作台组件和 API 客户端仍保留在仓库，旧 App 编排可由 Git 历史读取，不再由默认 `App.tsx` 渲染。旧路径曾包含：

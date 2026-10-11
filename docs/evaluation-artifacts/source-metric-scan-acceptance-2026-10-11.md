@@ -40,4 +40,24 @@ python -B -m unittest tests.test_postgres_metric_read_api tests.test_metric_scan
 - 主线程后端全量离线回归：`python -B -m unittest discover -s tests -p 'test_*.py' -q`，Ran668，OK(skipped=4)，进程exit0。跳过的是需显式配置的数据库专项；输出中的Hermetic评测、受控Trace及负向守卫不是模型运行证据。既有SQL解析fallback与unclosed event loop ResourceWarning仍出现，本轮未扩展修复范围。
 - 实际SQL独立核对前后Run/ToolCall/Observation/Evidence/Diagnosis计数：Synthetic库均为1/1/1/1/1，Olist库均为179/117/155/70/70；测试tearDown也逐项校验未变。未新增调查或保存扫描。
 - 本轮启动的隔离PG已用准确data-worker-fresh目录停止，pg_ctl确认no server running，55440监听为0；保留数据库和日志，无生产操作。
-- 前端未改，未重新运行浏览器/build。本轮只完成后端切片；下一产品切片再按冻结原型接手动扫描入口，并单独验收真实API到页面行为。
+- 此后端验收切片未改前端，也未重新运行浏览器/build；后续产品切片再按冻结原型接手动扫描入口，并单独验收真实API到页面行为。客户端准备的后续验证另见下节。
+
+## 后续客户端合同切片（2026-10-11，离线验收）
+
+基线`1c4d2914540ed17da1e08bb7e0a2ca720ad8989b`之后，仅增加`frontend/src/metrics/contracts.ts`的MetricScanResponse、`client.ts`的createMetricClient.scan以及`tests/metric-client.test.mjs`。没有改页面/CSS/后端/配置/依赖；上节数据库验收是前一提交的记录，本切片没有再次访问PG、模型或Shopify。
+
+客户端发送GET且只含source_id/target_date，与read共用安全请求/JSON/Abort处理，无自动重试。整批响应先验证顶层字段与UTC完成时间、1–5项边界、每项来源/日期/provider/environment/version一致、指标及查询引用唯一，再复用单指标Observation/Decimal/null校验；候选列表必须按items顺序精确匹配所有true项，不能缺失、重复或伪造。snapshot_consistent/persisted只允许false；不猜测币种或重算异常阈值。
+
+主线程审查完整diff，并在frontend cwd亲自执行：
+
+```powershell
+npm run test:metrics
+npm run test:tasks
+npm run lint
+.\node_modules\.bin\tsc.cmd --noEmit -p tsconfig.app.json
+npm run build
+```
+
+结果：指标客户端58/58（包含原31项）、任务客户端18/18，lint/类型/build均exit0；git diff --check通过。客户端测试使用注入fetcher与JSON响应，属于离线合同验证，不是浏览器、实际HTTP或真实数据运行。build生成忽略的dist产物，不部署。没有修改原有测试结论或将受控响应称为真实模型数据。
+
+Current限制：没有扫描按钮、页面结果或新的浏览器验收；client仅保证响应内部一致，不证明来源目录中的provider/environment/version或能力集与响应一致。后续页面必须额外核对目录、处理取消/过期响应、显示每项不确定状态并显式带入调查，不能自动POST。真实模型401、Shopify资源及持续外部数据阻碍未解除。

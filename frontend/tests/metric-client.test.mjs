@@ -10,7 +10,16 @@ const { createMetricClient, MetricClientError } = await import(
 );
 
 const request = { source_id: "synthetic/store α", target_metric: "sales", target_date: "2026-10-10" };
+const scanRequest = { source_id: request.source_id, target_date: request.target_date };
 const id = "4a8b2cb3-9080-4e84-a96a-10a7f9115c70";
+const ids = [
+  id,
+  "5b9c3cd4-a191-4f95-8ab7-b20b8a022d81",
+  "6cad4de5-b2a2-40a6-9bc8-c31c9b133e92",
+  "7dbe5ef6-c3b3-41b7-8cd9-d42dac244fa3",
+  "8ecf6a07-d4c4-42c8-9dea-e53ebd3550b4",
+  "9fd07b18-e5d5-43d9-8efb-f64fce4661c5",
+];
 
 function observation(overrides = {}) {
   return {
@@ -46,6 +55,35 @@ function result(overrides = {}) {
     query_reference: `metric-read:${id}`,
     observation: observation(),
     anomaly_candidate: false,
+    ...overrides,
+  };
+}
+
+function scanItem(metric, index, overrides = {}) {
+  return result({
+    target_metric: metric,
+    query_reference: `metric-read:${ids[index]}`,
+    observation: observation({ metric }),
+    anomaly_candidate: false,
+    ...overrides,
+  });
+}
+
+function scanResult(items, overrides = {}) {
+  return {
+    source_id: scanRequest.source_id,
+    provider: "synthetic",
+    environment: "benchmark",
+    data_version: "fixture-label-v1",
+    data_version_kind: "label",
+    persisted: false,
+    scope: "source_global",
+    target_date: scanRequest.target_date,
+    comparison: "previous_7_days",
+    snapshot_consistent: false,
+    completed_at: "2026-10-11T03:04:05.123456Z",
+    items,
+    anomaly_candidate_metrics: [],
     ...overrides,
   };
 }
@@ -217,4 +255,150 @@ test("malformed JSON and wrong success status are classified safely", async () =
   await assert.rejects(malformed.read(request), (error) => error.code === "invalid_response" && !error.message.includes("token"));
   const wrongStatus = createMetricClient({ fetcher: async () => jsonResponse(result(), 201) });
   await assert.rejects(wrongStatus.read(request), (error) => error.code === "invalid_response" && error.status === 201);
+});
+
+test("scan sends only source and date, and validates Synthetic values, candidates, and nulls", async () => {
+  const payload = scanResult([
+    scanItem("sales", 0, { observation: observation({ metric: "sales", status: "anomalous" }), anomaly_candidate: true }),
+    scanItem("orders", 1, { observation: observation({ metric: "orders", status: "insufficient_evidence", current_value: null, baseline_value: null, relative_change: null }), anomaly_candidate: null }),
+  ], { anomaly_candidate_metrics: ["sales"] });
+  const calls = [];
+  const client = createMetricClient({
+    baseUrl: "/root/",
+    fetcher: async (url, init) => {
+      calls.push({ url: new URL(url, "http://localhost"), init });
+      return jsonResponse(payload);
+    },
+  });
+  const value = await client.scan(scanRequest);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url.pathname, "/root/api/metrics/scan");
+  assert.deepEqual([...calls[0].url.searchParams.keys()].sort(), ["source_id", "target_date"]);
+  assert.equal(calls[0].url.searchParams.get("source_id"), scanRequest.source_id);
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(Object.hasOwn(calls[0].init, "body"), false);
+  assert.equal(value.items.length, 2);
+  assert.deepEqual(value.anomaly_candidate_metrics, ["sales"]);
+  assert.equal(value.items[1].observation.current_value, null);
+  assert.equal(value.snapshot_consistent, false);
+});
+
+test("scan accepts Olist validation data with inconclusive metrics and no candidates", async () => {
+  const items = ["merchandise_gmv", "orders", "olist_aov"].map((metric, index) => scanItem(metric, index, {
+    provider: "olist",
+    environment: "validation",
+    data_version: "olist-static-validation-v1",
+    observation: observation({ metric, status: "inconclusive" }),
+    anomaly_candidate: null,
+  }));
+  const payload = scanResult(items, {
+    provider: "olist",
+    environment: "validation",
+    data_version: "olist-static-validation-v1",
+  });
+  const client = createMetricClient({ fetcher: async () => jsonResponse(payload) });
+  const value = await client.scan(scanRequest);
+  assert.deepEqual(value.items.map((item) => item.target_metric), ["merchandise_gmv", "orders", "olist_aov"]);
+  assert.deepEqual(value.anomaly_candidate_metrics, []);
+  assert.ok(value.items.every((item) => item.anomaly_candidate === null));
+});
+
+test("scan rejects malformed batch identity, metadata, candidates, and bounded shape", async (context) => {
+  const validItems = [
+    scanItem("sales", 0, { observation: observation({ metric: "sales", status: "anomalous" }), anomaly_candidate: true }),
+    scanItem("orders", 1, { observation: observation({ metric: "orders", status: "inconclusive" }), anomaly_candidate: null }),
+  ];
+  const base = scanResult(validItems, { anomaly_candidate_metrics: ["sales"] });
+  const cases = [
+    ["unknown top-level field", (body) => { body.debug = "secret"; }],
+    ["non-UTC completion time", (body) => { body.completed_at = "2026-10-11T11:04:05+08:00"; }],
+    ["snapshot claim", (body) => { body.snapshot_consistent = true; }],
+    ["root source mismatch", (body) => { body.source_id = "other-source"; }],
+    ["root version mismatch", (body) => { body.data_version = "other-version"; }],
+    ["item source mismatch", (body) => { body.items[0].source_id = "other-source"; }],
+    ["item date mismatch", (body) => { body.items[0].target_date = "2026-10-09"; }],
+    ["item provider mismatch", (body) => { body.items[0].provider = "olist"; }],
+    ["item environment mismatch", (body) => { body.items[0].environment = "validation"; }],
+    ["item version mismatch", (body) => { body.items[0].data_version = "other-version"; }],
+    ["blank nested metric id", (body) => { body.items[0].target_metric = " "; }],
+    ["oversized nested metric id", (body) => { body.items[0].target_metric = "x".repeat(129); }],
+    ["duplicate metric", (body) => { body.items[1].target_metric = "sales"; body.items[1].observation.metric = "sales"; }],
+    ["duplicate query reference", (body) => { body.items[1].query_reference = body.items[0].query_reference; }],
+    ["forged candidate", (body) => { body.anomaly_candidate_metrics = ["orders"]; }],
+    ["missing candidate", (body) => { body.anomaly_candidate_metrics = []; }],
+    ["duplicate candidate", (body) => { body.anomaly_candidate_metrics = ["sales", "sales"]; }],
+    ["candidate ordering", (body) => { body.items.unshift(scanItem("sessions", 2, { observation: observation({ metric: "sessions", status: "anomalous" }), anomaly_candidate: true })); body.anomaly_candidate_metrics = ["sales", "sessions"]; }],
+    ["empty item list", (body) => { body.items = []; }],
+    ["more than five items", (body) => { body.items = Array.from({ length: 6 }, (_, index) => scanItem(`metric-${index}`, index)); }],
+  ];
+  for (const [name, mutate] of cases) {
+    await context.test(name, async () => {
+      const body = structuredClone(base);
+      mutate(body);
+      const client = createMetricClient({ fetcher: async () => jsonResponse(body) });
+      await assert.rejects(client.scan(scanRequest), (error) => error.code === "invalid_response");
+    });
+  }
+});
+
+test("scan invalid inputs fail before fetch", async () => {
+  let calls = 0;
+  const client = createMetricClient({ fetcher: async () => { calls += 1; return jsonResponse(scanResult([scanItem("sales", 0)])); } });
+  const invalid = [
+    { ...scanRequest, source_id: " " },
+    { ...scanRequest, source_id: "x".repeat(129) },
+    { ...scanRequest, target_date: "2026-2-03" },
+    { ...scanRequest, target_date: "2026-02-30" },
+    { ...scanRequest, target_date: "0001-01-06" },
+  ];
+  for (const input of invalid) await assert.rejects(client.scan(input), TypeError);
+  assert.equal(calls, 0);
+});
+
+test("scan safe errors, unknown server errors, aborts, and network failures do not leak or retry", async () => {
+  for (const code of ["no_supported_metrics", "metric_scan_over_budget"]) {
+    const safe = createMetricClient({ fetcher: async () => jsonResponse({ detail: { code, password: "secret" } }, 400) });
+    await assert.rejects(safe.scan(scanRequest), (error) => error instanceof MetricClientError
+      && error.code === code && !error.message.includes("secret"));
+  }
+
+  let calls = 0;
+  const unknown = createMetricClient({ fetcher: async () => { calls += 1; return jsonResponse({ detail: { code: "db-password-secret" } }, 503); } });
+  await assert.rejects(unknown.scan(scanRequest), (error) => error.code === "request_failed" && !error.message.includes("secret"));
+  assert.equal(calls, 1);
+
+  const network = createMetricClient({ fetcher: async () => { calls += 1; throw new Error("private endpoint"); } });
+  await assert.rejects(network.scan(scanRequest), (error) => error.code === "network_error" && !error.message.includes("private"));
+  assert.equal(calls, 2);
+
+  const controller = new AbortController();
+  const aborted = createMetricClient({ fetcher: async (_url, init) => {
+    assert.equal(init.signal, controller.signal);
+    throw new DOMException("private detail", "AbortError");
+  } });
+  await assert.rejects(aborted.scan(scanRequest, { signal: controller.signal }),
+    (error) => error instanceof DOMException && error.name === "AbortError" && !error.message.includes("private"));
+});
+
+test("scan malformed JSON and non-200 success status are classified safely", async () => {
+  const malformed = createMetricClient({ fetcher: async () => new Response("token=private", { status: 200 }) });
+  await assert.rejects(malformed.scan(scanRequest),
+    (error) => error.code === "invalid_response" && !error.message.includes("token"));
+  const wrongStatus = createMetricClient({ fetcher: async () => jsonResponse(scanResult([scanItem("sales", 0)]), 201) });
+  await assert.rejects(wrongStatus.scan(scanRequest),
+    (error) => error.code === "invalid_response" && error.status === 201);
+});
+
+test("scan honors abort that races with a successful response", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const payload = scanResult([scanItem("sales", 0)]);
+  const client = createMetricClient({ fetcher: async () => {
+    calls += 1;
+    controller.abort();
+    return jsonResponse(payload);
+  } });
+  await assert.rejects(client.scan(scanRequest, { signal: controller.signal }),
+    (error) => error instanceof DOMException && error.name === "AbortError");
+  assert.equal(calls, 1);
 });
