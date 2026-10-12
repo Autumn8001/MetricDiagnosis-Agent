@@ -44,6 +44,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。它读取受�
 8. 不读取、输出或提交真实密钥；不未经确认操作生产数据、线上配置或不可逆部署。
 9. 每个实现任务结束后更新 `docs/ROADMAP.md` 和 `docs/PROJECT_STATUS.md`，并记录验证边界。
 10. 已认可 HTML 原型已提供，原文件/哈希及页面 API 映射见 `docs/PRODUCT.md` 第4节。保留整体设计和交互结构；原型示例数字、固定步骤及追问不得冒充真实 API 能力。
+11. MVP当前仅验收桌面浏览器Web，暂不安排手机端专项工作。用户会提供5小时额度百分比，接近75%时准备收尾；没有账户额度读取工具，不用本线程Token数冒充额度百分比。
 
 ## 5. 常用验证命令
 
@@ -83,7 +84,7 @@ R2 PostgreSQL 专项：在 `backend` 中配置专用 `METRICSLEUTH_TEST_DATABASE
 
 ## 6. 工作方式
 
-R4-007手动扫描后端沿用上述只读PG测试类；边界/复现与首次失败记录见 `docs/evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md`。页面尚未接线，扫描不持久化、不自动调查，不把候选空集解释为全体正常。
+R4-007手动扫描后端沿用上述只读PG测试类；后端/客户端记录见 `docs/evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md`，桌面页面与实际PG/API/Edge验收见 `docs/evaluation-artifacts/source-metric-scan-ui-acceptance-2026-10-12.md`。扫描不持久化、不自动调查，不把候选空集解释为全体正常。
 
 R4-006指标读取专项：`tests.test_postgres_metric_read_api` 只读已有隔离Synthetic/Olist fixture，不迁移、不写数据、不运行模型；专用变量/固定数据库守卫与复现步骤见 `docs/evaluation-artifacts/metric-observation-api-acceptance-2026-10-11.md`。默认跳过不等于实际数据库通过。指标页已显式接线，真实Edge/PG验收见 `docs/evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md`，浏览器脚本只读、不自动提交调查。
 

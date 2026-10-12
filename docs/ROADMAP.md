@@ -355,14 +355,14 @@
 - 页面已验收：沿用原型，显式选指标日期，值/基线/缺数据/安全失败展示；来源key、请求epoch/Abort清过期响应，响应与目录身份/版本不一致时拒绝。带入调查仅填写，不自动POST。主线程Synthetic/Olist实际PG→独立API→build→Edge两profile均PASS，各4真实读取、1受控503、1延迟旧响应、0写尝试；客户端31/31、任务18/18、格式10/10、lint/类型/build、后端专项31/31。独立视觉复核ship（仅修正旧产品文档）；见 [`metric-observation-ui-acceptance-2026-10-11.md`](evaluation-artifacts/metric-observation-ui-acceptance-2026-10-11.md)。不是持续源、真实模型或趋势验收，整个R4仍进行中。
 - 外部依赖仍在：模型401鉴权与新的调用授权；Shopify开发店/read_orders实际gate。资源具备后优先验证，不继续增加同步底座。
 
-### R4-007 — 来源绑定手动指标扫描（后端已验收，页面待接线）
+### R4-007 — 来源绑定手动指标扫描（后端、客户端与桌面页面已验收）
 
 - 目标/依赖：复用R4-006单指标读取，让所选来源支持的指标一次比较单日与前7日；不依赖模型/Shopify凭据，不新增计算器或调度框架。
 - 方案/模块：metric_read service/schema/routes与main安全校验。GET `/api/metrics/scan`只收source_id/target_date，最多5项、批次先验证能力，逐项使用既有只读短事务；失败返回安全错误而非部分结果。明确snapshot_consistent=false、persisted=false、版本为label；无扫描历史、自动调查或新迁移。
 - 已验收：主线程隔离PG7项及离线27项组合34/34；后端全量Ran668 / OK(skipped=4)。Synthetic5指标、Olist3指标，缺数为证据不足/null，异源拒绝，状态表计数未变；PG停止且数据保留。首次实际测试缺数断言错误已记录并修正，未改变产品语义。详见 [`source-metric-scan-acceptance-2026-10-11.md`](evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md)。不是持续数据或模型验收。
-- 待开展/验收标准：按冻结原型接显式手动扫描入口，保留每项状态与原值；候选为空不展示为全体健康，不自动POST调查。用实际PG→API→页面验证缺数、失败、来源切换和候选带入表单；页面尚未修改，不能称按钮可用。
-- 客户端准备已验收（独立后续切片）：createMetricClient.scan复用read的传输/单项验证，增加整批身份/版本/唯一性/候选精确校验与两个安全错误码。主线程指标客户端58/58、任务18/18、lint/类型/build通过；仅离线fetcher合同，没有UI/数据库/模型调用。边界见上述验收记录后续客户端节；页面仍待实际浏览器接线验收。
-- 后续优先级：模型鉴权修复与新的授权、开发店Orders实际gate仍优先于扩大底座；资源未就绪时下一切片仅做上述页面接线。
+- 页面已验收（2026-10-12）：沿用冻结原型，显式日期/扫描、逐项原值与状态、来源明细、候选/未知计数及仅填表handoff；来源/版本/能力key与epoch/Abort清过期结果。Synthetic/Olist实际PG→独立API→build→Edge两profile均PASS，各7次真实scan GET批次、1受控503、1受控版本冲突、2延迟响应、1受控目录切换、0写请求；默认单指标浏览器回归通过。真实PG7/7，客户端58/58、任务18/18、lint/类型/build；独立桌面复核ship，原型hash不变，测试API/PG已停。首次键盘测试缺字符事件已修并保留记录；见 [`source-metric-scan-ui-acceptance-2026-10-12.md`](evaluation-artifacts/source-metric-scan-ui-acceptance-2026-10-12.md)。不是模型/持续更新/新Diagnosis验收。
+- 客户端准备已验收（此前独立切片）：createMetricClient.scan复用read的传输/单项验证，增加整批身份/版本/唯一性/候选精确校验与两个安全错误码。该切片离线58/58，不替代本次实际页面验收；记录仍保留原验证边界。
+- 后续优先级：模型鉴权修复与新的调用授权、开发店Orders实际gate仍优先于扩大底座。资源未就绪时复用既有Synthetic隔离资产推进R5的最小数据实验闭环；不得伪造持续真实数据。桌面Web为当前MVP验收范围，暂不做手机端专项；用户提供5h额度百分比，接近75%先收尾，不以测试数量维持进度。
 
 ### 目标
 

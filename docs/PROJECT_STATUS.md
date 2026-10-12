@@ -1,19 +1,21 @@
 # MetricSleuth Project Status
 
 > 状态：动态接管摘要
-> 快照日期：2026-10-11
-> Git 快照：`main`；基线 `1c4d291`（R4-007扫描后端），客户端合同准备形成后续独立本地提交（准确SHA用git log查询）；未推送
-> 最近完成：R4-007扫描后端实际PG通过，前端scan客户端合同准备离线通过；页面尚未接线。此前R4-006指标页通过。模型预检401、完整调查未执行，Shopify资源仍未提供
+> 快照日期：2026-10-12
+> Git 快照：`main`；基线 `86fc869`（R4-007客户端合同），本轮桌面页面形成后续独立本地提交（准确SHA用git log查询）；未推送
+> 最近完成：R4-007手动扫描桌面页面实际PG/API/Edge通过，独立视觉复核ship；保留单指标查询和仅填表handoff。模型成功调查与持续外部来源仍未通过
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
-> 最近验证：本轮客户端58/58、任务客户端18/18、lint/类型/build均通过，纯离线、没有浏览器/PG/模型/Shopify调用。前一提交扫描/读取/应用34/34（实际PG7+离线27），全量Ran668 / OK(skipped=4)；隔离PG已停、状态计数不变，首次缺数断言错误已记录。本轮未重跑后端/真实Edge
-> 下一步：资源未就绪时仅推进R4-007手动扫描页面接线与实际PG浏览器验收；CPA鉴权修复并新授权后优先有限探测/调查，开发店/read_orders具备后先实际Orders gate再最小持续更新。不扩大同步/编排底座，不自动追加模型请求，不用静态数据替代最终MVP
+> 最近验证：本轮两profile扫描实际Edge均PASS（各7次真实scan GET批次、受控503/版本冲突各1、延迟2、受控目录切换1、0写请求），单指标实际Edge回归PASS；真实PG7/7、客户端58/58、任务18/18、lint/类型/build通过。前后计数不变、API/PG已停；首次键盘驱动失败修正有记录。本轮没有模型/Shopify请求，未重跑后端全量668项
+> 下一步：优先CPA鉴权修复后重新授权的有限模型验收，以及开发店/read_orders实际Orders gate；资源未就绪时按既有R5审查最小隔离实验闭环，不扩大同步/编排底座。本轮先收尾，不自动追加模型请求，不用静态数据替代最终MVP
+> 用户最新约束：只验收桌面浏览器Web，暂不做手机专项；保持持续推进，用户提供5h额度百分比，接近75%准备收尾。当前没有额度读取工具，不猜测百分比
 
 ## 当前结论
 
-MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 API/Worker、默认React工作区和实际单日/前7日指标读取。R4-005浏览器新建任务经受控Runner/真实SQL保存成功结论并刷新复读；R4-006指标页已可只读查询再带入表单，不自动调查。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接、真实模型成功、可执行Lab、生产安全部署及重复真实评测仍未完成，不能称MVP已交付。
+MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 API/Worker、默认React工作区及实际单项读取/来源全局手动扫描。R4-005浏览器新建任务经受控Runner/真实SQL保存成功结论并刷新复读；R4-006/007指标页可读实际值及前7日基线并带入表单，不自动调查。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接、真实模型成功、可执行Lab、生产安全部署及重复真实评测仍未完成，不能称MVP已交付。
 
 ## 已完成且本轮有源码/测试证据
 
+- R4-007桌面页面（2026-10-12）：MetricScanPanel复用冻结设计和scan客户端，来源目录身份/完整能力集合检查，key/epoch/Abort清过期，逐项原值与状态、未知计数及原生明细、handoff仅填表。两profile实际PG/API/build/Edge通过，原单指标回归通过；独立桌面复核ship，无实质修复，DESIGN/sidecar只读核对无须刷新。计数保持Synthetic1/1/1/1/1与Olist179/117/155/70/70；验收API/PG停止、数据保留。[记录](evaluation-artifacts/source-metric-scan-ui-acceptance-2026-10-12.md)区分真实SQL、受控故障/目录以及首次键盘驱动失败。手机端仅有用户明确桌面边界前的附带历史截图，后续不安排专项。本轮没有模型/平台请求，扫描不持久化且不是一致快照。
 - R4-007客户端合同准备：frontend metrics/contracts/client与对应测试新增scan，严格验证整批来源/日期/版本/唯一指标/唯一查询引用及精确候选列表；read共用安全传输且原31项保留。主线程58/58、任务18/18、lint/类型/build通过；[同一验收记录后续客户端节](evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md)明确离线边界。页面未改、目录与响应一致性待页面验证，没有新PG/模型/平台请求。
 - R4-007后端扫描（2026-10-11）：GET `/api/metrics/scan`复用MetricReadService.read/Analytics/Mapper，能力预校验、最多5项、安全参数和失败合同，无自动调查或数据写入。实际PG读取Synthetic5项、Olist3项；缺数null、异源拒绝，状态计数不变。组合34/34、全量668(skipped=4)，PG停止；[验收记录](evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md)保留首次错误与复现步骤。snapshot_consistent=false、版本仅label、扫描不持久化；页面未接线、实际SQL未制造异常，不是模型或持续外部源验证。
 - Shopify资源准备（2026-10-11）：用户明确开发店/read_orders尚未就绪，已按官方Dev Dashboard/同组织client credentials流程整理[操作指南](shopify-orders-probe.md)，说明约24小时Token、脚本无交换/刷新、草稿不等于Orders、首轮少量样本gate与后续8天指标分开。主线程离线守卫18/18；未创建账号、应用、店铺、凭据或订单，未访问Shopify/模型/数据库，不把指南当接入验收。

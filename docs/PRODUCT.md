@@ -1,7 +1,7 @@
 # MetricSleuth 产品定义
 
 > 文档性质：稳定产品方向与 MVP 验收口径。
-> 更新基线：2026-10-10（R4-002 React 接线与受控 HTTP 浏览器验收完成）。
+> 更新基线：2026-10-12（R4-007手动扫描实际PostgreSQL/API/浏览器功能验收）。
 > 状态词：**Confirmed** 表示已经确认的产品决策；**Current** 表示源码当前事实；**Deferred** 表示明确延后；**Unknown** 表示尚未通过仓库或运行证据确认。
 
 ## 1. 产品定位
@@ -37,10 +37,12 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 
 下表定义认可的 MVP 目标，不代表每项在当前源码中已经实现。
 
+**Confirmed（2026-10-12）：** MVP以桌面浏览器Web体验为验收目标；手机端专项设计、优化及验收暂不开展。保留已有基础响应式样式，不因此新增移动端路线。
+
 | 能力 | 状态 | MVP 要求与边界 |
 | --- | --- | --- |
 | 工作概览 | Confirmed / Current | 展示来源及当前来源最多 20 条任务的状态计数与历史；计数不是全库总量，指标数值/异常扫描尚未接入。 |
-| 业务指标 | Confirmed / Current | 页面已可显式读取单源单日值、前7日基线、异常候选/不足数据，并保留能力目录与原始数值/来源明细。Synthetic/Olist实际PG→API→Edge验收通过；可带入调查表单但不自动提交，不是趋势/自动扫描/持续更新。 |
+| 业务指标 | Confirmed / Current | 页面可显式批量扫描当前来源支持的最多5项指标，也可单项读取单日/前7日基线；保留异常候选、不确定/不足数据及原始查询明细。Synthetic/Olist实际PG→API→Edge验收通过；带入调查只填表不提交，扫描不持久化、不是一致快照/趋势/自动扫描/持续更新。 |
 | AI 调查工作区 | Confirmed / Current | React 已提交调查并读取持久任务列表/详情，展示实际返回的状态和事实。受控HTTP交互、真实数据库既有失败历史读取、R4-005新提交与成功Diagnosis的受控真实SQL闭环已验收；新模型成功调查仍未验收。 |
 | 数据接入 | Confirmed / Current | 页面读取服务器配置来源目录及能力声明；该目录不表示连接成功、健康、刷新或日期覆盖。外部源连接器尚未实现。 |
 | 数据实验室 | Confirmed / Current | 五导航区域已保留；实验区明确显示未接入且不写数据。Sandbox 操作尚未实现。 |
@@ -63,7 +65,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 
 - **Confirmed：** 已认可的产品体验包含五个页面/区域：工作概览、业务指标、AI 调查工作区、数据接入、实验室。它是 MVP 的用户体验基线，后续实现应优先补齐数据和状态，不重新发起大幅 UI 改版。
 - **Current / Confirmed：** 产品方于 2026-10-10 提供仓库根目录的 `MetricSleuth_%E4%BA%A4%E4%BA%92%E4%BA%A7%E5%93%81%E5%8E%9F%E5%9E%8B.html`，作为冻结的体验基线，保留原文件，不擅自重新设计。文件 SHA-256：`ae62216b9871c4cf2ee3651ea5e4d1c87a10d499beca2897db69dc80823fe76c`。
-- **Current（R4-002→R4-006）：** `frontend/src/App.tsx` 将默认 React App 接到 `InvestigationWorkspace`；五个原型导航区域保留。工作概览显示当前来源列表页（每页最多20条）的调查计数；业务指标页展示目录能力与显式单日/基线读取；数据页展示配置来源及限制；实验室明确未接入。任务/历史/来源目录通过task API、指标读取通过独立只读接口，不宣称实时趋势或连接健康。
+- **Current（R4-002→R4-007）：** `frontend/src/App.tsx` 将默认 React App 接到 `InvestigationWorkspace`；五个原型导航区域保留。工作概览显示当前来源列表页（每页最多20条）的调查计数；业务指标页展示目录能力、显式批量扫描和单项单日/基线读取；数据页展示配置来源及限制；实验室明确未接入。任务/历史/来源目录通过task API、指标读取通过独立只读接口，不宣称实时趋势或连接健康。
 - **Current：** `frontend/src/tasks/client.ts` 的 `createTaskClient` 供 React 读取来源、提交任务、分页列举和读取详情。`InvestigationWorkspace` 对 queued/running 任务每2秒轮询，终态或读取错误时停止/展示安全错误；页面不实现取消、自动重试、追问、固定进度或实验数据注入。失败记录仅展示已保存事实，不构造缺失 Diagnosis。
 - **Current（验证边界）：** R4-002 已由主线程在真实本机 Edge 配合受控 HTTP fixture 验收，覆盖翻页、提交/轮询停止、失败与成功历史事实、来源切换和未配置服务错误；它没有连接 PostgreSQL 或模型。记录见 [`task-workspace-acceptance-2026-10-10.md`](evaluation-artifacts/task-workspace-acceptance-2026-10-10.md)。视觉规则事实提取见根目录 `DESIGN.md`，原 HTML 仍为设计权威。
 - **Current（R4-003）：** 真实PostgreSQL/独立任务API/Edge读取既有Olist失败调查4Tool Call/27Observation，刷新重读通过；没有新增任务或模型调用。见 [`postgres-browser-history-acceptance-2026-10-10.md`](evaluation-artifacts/postgres-browser-history-acceptance-2026-10-10.md)。
@@ -73,7 +75,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 | 原型区域 | 可复用资产 | 真实接线边界 |
 | --- | --- | --- |
 | 工作概览 | 持久调查列表/状态 API | 当前计数只涵盖所选来源当前页最多20条；指标异常数值与刷新状态仍需真实查询。 |
-| 经营指标 | `/api/investigation-sources` 来源能力目录 | 目前展示指标/粒度/维度声明，不是趋势图、数值计算或来源在线检查。 |
+| 经营指标 | 来源目录、GET `/api/metrics/observation` 与 `/api/metrics/scan` | 可显式读取单项或批量扫描实际数值及前7日基线；能力声明不等于数据覆盖或健康。扫描候选不是Diagnosis、不保存扫描历史，缺数不冒充零或正常。不是趋势图、自动刷新或持续来源在线检查。 |
 | AI 调查 | POST/GET `/api/investigations` 与来源目录 | React 已接入；显示服务端实际状态和持久化事实。取消、自动重试、追问尚无持久接口。示例 `analytics.compare_metric` 不是现有工具合同。 |
 | 数据接入 | 来源能力合同、显式单源应用配置 | 目录不探测连接或数据新鲜度；持续外部连接器/刷新 API 未实现。 |
 | 体验实验室 | Synthetic Benchmark 与隔离测试资产 | 当前页面是未接线说明；尚无可操作的隔离数据变化流程。 |

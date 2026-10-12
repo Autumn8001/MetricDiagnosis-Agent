@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createTaskClient, TaskClientError } from '../tasks/client'
 import type { MetricReadResponse } from '../metrics/contracts'
 import { MetricObservationPanel } from './MetricObservationPanel'
+import { MetricScanPanel } from './MetricScanPanel'
 import { formatDecimal } from './formatDecimal'
 import type {
   InvestigationSourceView,
@@ -420,8 +421,16 @@ function StatusBadge({ status }: { status: TaskRunStatus }) {
 
 function MetricsPage({ source, handoffDisabled, onHandoff }: { source: InvestigationSourceView; handoffDisabled: boolean; onHandoff: (result: MetricReadResponse) => void }) {
   const supportedMetrics = source.metrics.filter((item) => item.supported)
+  const scanIdentity = JSON.stringify([
+    source.source_id,
+    source.provider,
+    source.environment,
+    source.data_version,
+    supportedMetrics.map((item) => item.metric_id).sort(),
+  ])
   return <>
-    <PageHeading title="指标与数据能力" description="选择指标和日期读取实际数值；下方能力目录说明该来源支持的粒度与维度。" />
+    <PageHeading title="指标与数据能力" description="可按日期扫描当前来源支持的指标，或单独读取一项；下方能力目录说明该来源支持的粒度与维度。" />
+    <MetricScanPanel key={scanIdentity} source={source} supportedMetrics={supportedMetrics} handoffDisabled={handoffDisabled} onHandoff={onHandoff} />
     <MetricObservationPanel key={source.source_id} source={source} supportedMetrics={supportedMetrics} handoffDisabled={handoffDisabled} onHandoff={onHandoff} />
     <section className="surface-card">
       <SectionHeader title="可调查指标" subtitle={`${source.display_name} · ${profileLabel(source)}`} />

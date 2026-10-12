@@ -211,6 +211,22 @@
 .error-mark { display: grid; width: 16px; height: 16px; place-items: center; border-radius: 50%; color: white; background: #cc6970; font-size: 10px; font-weight: 700; }
 .inline-notice { margin: 10px 0; color: #16816a; font-size: 10px; }
 .metric-observation-panel { margin-top: 17px; }
+.metric-scan-panel { margin-top: 0; }
+.metric-scan-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 15px; padding: 18px 0 13px; }
+.metric-scan-submit { min-width: 132px; }
+.metric-scan-boundary { margin-top: 0; }
+.metric-scan-summary { margin: 15px 0 2px; border-top: 1px solid #edf1f6; padding: 13px 0 3px; color: #425975; font-size: 12px; line-height: 1.55; }
+.metric-scan-result { min-width: 0; }
+.metric-scan-row { min-width: 0; border-bottom: 1px solid #edf1f6; padding: 15px 0 17px; }
+.metric-scan-row:last-child { border-bottom: 0; }
+.metric-scan-row-heading { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 9px 12px; }
+.metric-scan-row-heading h3 { min-width: 0; margin: 0; color: #2d4666; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.metric-scan-row-heading .metric-read-status { display: inline-flex; width: fit-content; border-radius: 20px; padding: 4px 9px; font-size: 11px; }
+.metric-scan-missing, .metric-scan-periods, .metric-scan-completion { color: #526176; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.metric-scan-missing { margin: 12px 0 0; }
+.metric-scan-periods { margin: 10px 0 0; }
+.metric-scan-completion { margin: 13px 0 0; border-top: 1px solid #edf1f6; padding-top: 12px; }
+.metric-scan-panel :is(button, input, summary):focus-visible { outline: 2px solid #4768e8; outline-offset: 3px; }
 .metric-read-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 15px; padding: 18px 0 13px; }
 .metric-read-submit { min-width: 112px; }
 .metric-read-boundary { margin-top: 0; }
@@ -373,6 +389,9 @@
   .runs-table th, .runs-table td { padding: 10px 7px; font-size: 12px; }
   .runs-table th:nth-child(3), .runs-table td:nth-child(3) { display: none; }
   .form-grid { grid-template-columns: 1fr; gap: 13px; padding: 15px 0; }
+  .metric-scan-form { grid-template-columns: 1fr; gap: 13px; padding: 15px 0; }
+  .metric-scan-submit { width: 100%; }
+  .metric-scan-summary { margin-top: 12px; }
   .metric-read-form { grid-template-columns: 1fr; gap: 13px; padding: 15px 0; }
   .metric-read-submit { width: 100%; }
   .metric-read-handoff-note { display: block; margin: 8px 0 0; }
