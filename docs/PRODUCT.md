@@ -45,7 +45,7 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。
 | 业务指标 | Confirmed / Current | 页面可显式批量扫描当前来源支持的最多5项指标，也可单项读取单日/前7日基线；保留异常候选、不确定/不足数据及原始查询明细。Synthetic/Olist实际PG→API→Edge验收通过；带入调查只填表不提交，扫描不持久化、不是一致快照/趋势/自动扫描/持续更新。 |
 | AI 调查工作区 | Confirmed / Current | React 已提交调查并读取持久任务列表/详情，展示实际返回的状态和事实。受控HTTP交互、真实数据库既有失败历史读取、R4-005新提交与成功Diagnosis的受控真实SQL闭环已验收；新模型成功调查仍未验收。 |
 | 数据接入 | Confirmed / Current | 页面读取服务器配置来源目录及能力声明；该目录不表示连接成功、健康、刷新或日期覆盖。外部源连接器尚未实现。 |
-| 数据实验室 | Confirmed / Current | 五导航区域已保留；实验区明确显示未接入且不写数据。Sandbox 操作尚未实现。 |
+| 数据实验室 | Confirmed / Current | 五导航区域已保留；页面明确未接入且不写数据。已有受保护Python数据发布及真实SQL验收，Lab API与页面操作尚未实现。 |
 | 异常发现 | Confirmed | 支持指标刷新后的异常检测，并能由用户启动调查；自动 Webhook 触发不是 MVP 必需条件。 |
 | 动态 Agent 调查 | Confirmed / Current | Agent 必须根据 Observation 选择下一工具动作并可停止；当前 Agents SDK Runtime 和工具链已存在，但真实外部数据上的端到端验证尚未完成。 |
 | 证据与可追溯性 | Confirmed / Current | 结论只能引用本次工具调用产生的 Observation，并能回到工具参数、数据来源和查询快照；当前 Observation/Evidence/Diagnosis 校验与持久化来源外键已通过受控数据库验收，数据版本仍是标签，可靠查询快照尚未实现。 |

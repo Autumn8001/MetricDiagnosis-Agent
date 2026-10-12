@@ -119,6 +119,10 @@ date × asin × marketplace × traffic_source
 
 `warehouse/seed.py` 生成确定性的 Synthetic 记录，`warehouse/anomaly_injector.py` 修改当前日期的受控异常场景。异常注入是 Benchmark/Sandbox 行为，不是外部业务数据同步。
 
+R5-002 Current：`app/sandbox/dataset_writer.py::publish_sandbox_dataset()`只复用内存函数（no_anomaly/canonical/traffic），不调用旧main/reset。`SandboxTarget`要求显式loopback端口、`metricsleuth_sandbox_*`库名与Synthetic/Sandbox UUID；事务内核对实际数据库/地址/端口、加advisory锁并拒绝已有用户关系。同事务创建warehouse schema，写入3商品/558分段及`warehouse.sandbox_dataset_manifest`（source_id、data_version、row_count、checksum、target_date、scenario_id）。对外Publication不含场景答案；错误仅安全code。hash是生成输入摘要，不是数据库不可变快照或真实性证明。manifest场景输入不注入工具/Runtime，GroundTruth不参与调查。
+
+真实PG已验证正常/变化的现有MetricReadService读取、误连与非空拒绝、CHECK失败DDL/DML回滚及旧数据指纹不变，见[验收](evaluation-artifacts/sandbox-dataset-postgres-acceptance-2026-10-12.md)。验收显式绑定返回来源/版本，无自动manifest绑定或Lab HTTP/UI。此为本地配置防误写，不替代生产授权、最小权限或租户隔离；尚无实际并发发布验收、清理/保留策略与完整实验记录。运行仍依赖仓库warehouse资产。
+
 ### Current：隔离的 Olist 验证 Schema
 
 `warehouse/olist_validation_schema.sql` 和 `backend/scripts/load_olist_validation.py` 使用独立的 `olist_validation` Schema，包含订单、订单明细和按日订单价值的验证对象。`configs/olist_validation_metrics.yaml` 用于 Olist 受控指标验证，并可由显式 `task_application.py` 的 `olist_validation` Profile 加载；它不被 `backend/app/api/service.py` 的默认 Runtime/API 加载，也不替换 Synthetic Profile。

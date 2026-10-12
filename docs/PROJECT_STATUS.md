@@ -2,12 +2,12 @@
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-12
-> Git 快照：`main`；基线 `039b59a`（R4-007桌面扫描），本轮R5-001资产核对形成后续独立文档提交（准确SHA用git log查询）；未推送
-> 最近完成：R5-001复用资产和数据污染边界核对，尚未写入Sandbox；此前R4-007桌面扫描实际PG/API/Edge通过。模型成功调查与持续外部来源仍未通过
+> Git 快照：`main`；本轮基线 `ccaa5e464d514ba2240e3fdd2339ce5143418cfa`，R5-002形成后续独立提交（准确SHA用git log查询）；未推送
+> 最近完成：R5-002受保护Sandbox首次发布与真实PostgreSQL指标回读；Lab API/页面仍未接线。模型成功调查与持续外部来源仍未通过
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
-> 最近验证：本轮只读源码+内存生成核对（558/126/18行、重复一致）与相关离线21/21；未连接数据库/模型/平台、未改业务代码。前一提交扫描实际PG7/7、两profileEdge及58/18客户端、lint/类型/build通过，属于前一阶段证据，不冒充本轮重跑
-> 下一步：资源未就绪时进入R5的专用空库受保护写入/真实SQL读取首验，不调用旧reset/main、不修改既有fixture；通过后才接实验记录/桌面Lab。CPA修复并重新授权、开发店/read_orders具备后仍优先实际gate，不新增同步/调度底座
-> 用户最新约束：只验收桌面浏览器Web，暂不做手机专项；保持持续推进，用户提供5h额度百分比，接近75%准备收尾。当前没有额度读取工具，不猜测百分比
+> 最近验证：主线程7项Fake单测+4项真实PG组合11/11 PASS；全量Ran675 / OK(skipped=5)。首次真实PG发现inet地址CIDR格式，改用host(inet_server_addr())后通过。没有本轮浏览器、模型或平台请求
+> 下一步：用户查看成果后恢复；先核查发布manifest到配置来源的绑定/重读边界，再接最小实验记录/API和桌面Lab。CPA修复并重新授权、开发店/read_orders具备后仍优先实际gate，不新增调度底座
+> 用户最新约束：本次收尾后暂停持续推进，等用户查看成果；只验收桌面Web。用户提供5h额度百分比，接近75%准备收尾；没有额度读取工具，不猜测百分比
 
 ## 当前结论
 
@@ -15,6 +15,7 @@ MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 A
 
 ## 已完成且本轮有源码/测试证据
 
+- R5-002（2026-10-12）：`app/sandbox/dataset_writer.py`以显式loopback专用空库、Synthetic/Sandbox UUID和实际连接身份守卫，单事务写入3商品、558日分段及manifest；不调用旧reset/main，不覆盖已有库。真实PG验证正常sales52000.00与变化45760.00、共同基线52034.28571428571428571428571，候选sales/orders/conversion_rate；重新创建应用/连接回读、非空拒绝、误连拒绝、CHECK失败DDL/DML回滚通过。原R2/R4状态计数和业务表指纹逐项保持不变。三个新库保留，隔离PG已停止且55440无监听；没有API服务器或Worker启动。版本是输入内容标签，不是不可变数据库快照；没有Lab路由、页面、实验记录或Diagnosis。[验收记录](evaluation-artifacts/sandbox-dataset-postgres-acceptance-2026-10-12.md)含复现及首次失败，重跑实际测试必须另建空库，不得重置保存的fixture。
 - R5-001资产核对（2026-10-12）：已确认复用内存生成函数；旧seed reset全表DELETE、injector按日重写18分段，不能作为产品共享库写入口。主线程21/21及内存重复性/数据形状核对；[核对记录](evaluation-artifacts/sandbox-asset-review-2026-10-12.md)区分源码事实、已验证数据和待实现首验。下一步新建空的专用Sandbox库，原子写入并真实SQL回读；未实现写入口、实验版本记录、API或Lab，没有新增数据库/模型调用。
 - R4-007桌面页面（2026-10-12）：MetricScanPanel复用冻结设计和scan客户端，来源目录身份/完整能力集合检查，key/epoch/Abort清过期，逐项原值与状态、未知计数及原生明细、handoff仅填表。两profile实际PG/API/build/Edge通过，原单指标回归通过；独立桌面复核ship，无实质修复，DESIGN/sidecar只读核对无须刷新。计数保持Synthetic1/1/1/1/1与Olist179/117/155/70/70；验收API/PG停止、数据保留。[记录](evaluation-artifacts/source-metric-scan-ui-acceptance-2026-10-12.md)区分真实SQL、受控故障/目录以及首次键盘驱动失败。手机端仅有用户明确桌面边界前的附带历史截图，后续不安排专项。本轮没有模型/平台请求，扫描不持久化且不是一致快照。
 - R4-007客户端合同准备：frontend metrics/contracts/client与对应测试新增scan，严格验证整批来源/日期/版本/唯一指标/唯一查询引用及精确候选列表；read共用安全传输且原31项保留。主线程58/58、任务18/18、lint/类型/build通过；[同一验收记录后续客户端节](evaluation-artifacts/source-metric-scan-acceptance-2026-10-11.md)明确离线边界。页面未改、目录与响应一致性待页面验证，没有新PG/模型/平台请求。
