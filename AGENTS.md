@@ -13,7 +13,8 @@ MetricSleuth 是一个 **AI 自主数据调查与诊断系统**。它读取受�
 3. `docs/PRODUCT.md`：稳定产品目标、MVP 边界和验收标准。
 4. `docs/ARCHITECTURE.md`：源码确认的当前架构与规划架构。
 5. `docs/ROADMAP.md`：长期阶段、依赖和完成条件。
-6. 当前阶段关联源码、测试和专项文档。
+6. `docs/NEXT_DEVELOPMENT_PLAN.md`：从当前源码状态到 MVP 的执行顺序、验收门和停止条件。
+7. 当前阶段关联源码、测试和专项文档。
 
 `任务书.md`、`快速开发版项目基线.md`、`docs/agent-state.md` 和 `docs/project-learning-log.md` 是历史设计与演进记录，不再单独决定当前产品优先级。发生冲突时依次采用：**当前源码与运行证据 → `docs/PRODUCT.md` 中的已确认目标 → `docs/ARCHITECTURE.md` → `docs/ROADMAP.md` → 历史文档**。
 

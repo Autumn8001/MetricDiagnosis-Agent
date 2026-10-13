@@ -6,7 +6,7 @@
 > 最近完成：R5-002受保护Sandbox首次发布与真实PostgreSQL指标回读；Lab API/页面仍未接线。模型成功调查与持续外部来源仍未通过
 > 当前阶段：R4 产品接线进行中；R2真实模型成功gate仍未通过；持续外部源未实现
 > 最近验证：主线程7项Fake单测+4项真实PG组合11/11 PASS；全量Ran675 / OK(skipped=5)。首次真实PG发现inet地址CIDR格式，改用host(inet_server_addr())后通过。没有本轮浏览器、模型或平台请求
-> 下一步：用户查看成果后恢复；先核查发布manifest到配置来源的绑定/重读边界，再接最小实验记录/API和桌面Lab。CPA修复并重新授权、开发店/read_orders具备后仍优先实际gate，不新增调度底座
+> 下一步：按 [`NEXT_DEVELOPMENT_PLAN.md`](NEXT_DEVELOPMENT_PLAN.md) 先核查发布manifest到配置来源的绑定/重读边界，再接最小实验记录/API和桌面Lab；本次文档整理不改变业务实现。CPA修复并重新授权、开发店/read_orders具备后再进入实际gate，不新增调度底座
 > 用户最新约束：本次收尾后暂停持续推进，等用户查看成果；只验收桌面Web。用户提供5h额度百分比，接近75%准备收尾；没有额度读取工具，不猜测百分比
 
 ## 当前结论
