@@ -492,3 +492,10 @@ R4-002受控UI与R4-003真实数据库历史读取不代表完整R4条件满足�
 8. 五个原型页面形成连贯产品体验。
 9. 系统可在个人服务器安全部署，重启后任务和历史不丢失。
 10. 仓库提供可重复测试、部署、备份恢复和演示说明。
+
+
+## 2026-10-13 R5-003 Witt 实现记录（Pending Review）
+
+增加只读 `sandbox_manifest` 启动 Profile，解析发布标签并复用现有 TaskSourceBinding、Worker、任务 API 与指标读取。限定本机命名 Sandbox、Synthetic/Sandbox 身份、唯一 manifest 和服务器配置的 source_id；可选择固定预期版本。未知版本/错误身份/错误物理库 fail-closed；同一 API 启动解析一次并共享上下文。不新增 Runtime、实验编排或快照机制。
+
+已完成独立 PostgreSQL 16.4 临时集群重连/来源目录/真实指标扫描验收，未访问既有R2/R4库；这些历史库的本轮指纹尚未复验，不以新建控制库替代该证据。新建控制库指纹前后相同。完整证据见 evaluation-artifacts/sandbox-manifest-binding-acceptance-2026-10-13.md。下一步 R5-004 独立实验记录和 Lab 接线；未调用模型。

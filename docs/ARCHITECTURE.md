@@ -641,3 +641,12 @@ README/任务书与 `docs/agent-state.md` 的历史测试计数来自不同阶�
 - 原型交互接入真实 API 后的验收结果；当前静态示例不是运行证据。
 
 维护本文件时，新增能力必须同时补充：源码入口、数据/状态边界、测试层次和“能证明/不能证明”说明。任何规划中的表、接口、第三方连接器或部署组件，只有实现并通过相应验收后才能从 `Planned` 移到 `Current`。
+
+
+## R5-003 发布 manifest 到应用绑定（2026-10-13）
+
+`backend/app/sandbox/manifest_reader.py` 在限定 SandboxTarget 上开启只读事务、5 秒语句超时，核对实际库名、loopback 地址及端口，读取唯一 manifest。source_id 必须匹配服务器配置；版本须与64位checksum标签一致，行数、日期、场景必须满足既有发布合同。若固定 expected_data_version，则不存在版本 fail-closed。读取不暴露数据库/driver 原文，连接总是关闭。
+
+`METRICSLEUTH_TASK_PROFILE=sandbox_manifest` 是显式选择；原 synthetic/olist_validation Profile 仍不在构造时连接数据库，仍需显式版本。本 Profile 可以省略 METRICSLEUTH_TASK_DATA_VERSION，由 manifest 读取；设置该变量时相当于版本 pin。source_id/model 等配置仍必需，读取不自动发现/创建来源，也不迁移状态库或发布数据。
+
+CLI 启动解析一次 source_context 后供任务/Worker/指标服务共用；不将场景或 Ground Truth 写入 Prompt。data_version 仍为发布标签，指标/API 继续 snapshot_consistent=false，不能据此声称跨工具查询为同一数据库快照。实验记录、历史版本、并发发布和 Lab API 属于R5-004后续范围。

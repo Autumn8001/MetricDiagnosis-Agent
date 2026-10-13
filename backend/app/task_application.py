@@ -33,9 +33,13 @@ class TaskApplicationConfig:
     max_turns: int = 10
 
     def __post_init__(self):
-        if self.profile not in {"synthetic", "olist_validation"}:
+        if self.profile not in {"synthetic", "olist_validation", "sandbox_manifest"}:
             raise TaskApplicationConfigError("unsupported_task_profile")
-        for value in (self.source_id, self.data_version, self.model):
+        values = ((self.source_id, self.model) if self.profile == "sandbox_manifest"
+                  else (self.source_id, self.data_version, self.model))
+        if not isinstance(self.data_version, str) or len(self.data_version) > 128:
+            raise TaskApplicationConfigError("invalid_task_configuration")
+        for value in values:
             if not isinstance(value, str) or not value.strip() or len(value) > 128:
                 raise TaskApplicationConfigError("invalid_task_configuration")
         for value, maximum in ((self.max_tool_calls, 8), (self.max_turns, 10)):
@@ -63,7 +67,8 @@ class TaskApplicationConfig:
             "METRICSLEUTH_TASK_DATA_VERSION", "METRICSLEUTH_TASK_MODEL",
         )
         values = [os.environ.get(name, "").strip() for name in names]
-        if not all(values):
+        required = [value for index, value in enumerate(values) if index != 4 or values[2] != "sandbox_manifest"]
+        if not all(required):
             raise TaskApplicationConfigError("task_configuration_missing")
         try:
             calls = int(os.environ.get("METRICSLEUTH_TASK_MAX_TOOL_CALLS", "8"))
@@ -86,7 +91,7 @@ def _connection_factory(database_url):
 def _source_context(config: TaskApplicationConfig):
     """Build the profile's server-owned semantic registry and source binding."""
     root = Path(__file__).resolve().parents[2]
-    is_synthetic = config.profile == "synthetic"
+    is_synthetic = config.profile in {"synthetic", "sandbox_manifest"}
     registry = MetricRegistry.from_yaml(root / "configs" / (
         "metrics.yaml" if is_synthetic else "olist_validation_metrics.yaml"
     ))
@@ -96,14 +101,26 @@ def _source_context(config: TaskApplicationConfig):
         provider=SourceProvider.SYNTHETIC if is_synthetic else SourceProvider.OLIST,
         environment=SourceEnvironment.SANDBOX if is_synthetic else SourceEnvironment.VALIDATION,
     )
-    binding = TaskSourceBinding(descriptor, build_capabilities_from_registry(registry, descriptor), config.data_version)
+    data_version = config.data_version
+    if config.profile == "sandbox_manifest":
+        from app.sandbox.dataset_writer import SandboxTarget, SandboxDatasetWriterError
+        from app.sandbox.manifest_reader import read_sandbox_publication, SandboxManifestError
+        try:
+            publication = read_sandbox_publication(
+                SandboxTarget(config.analytics_database_url, descriptor),
+                expected_data_version=config.data_version.strip() or None,
+            )
+        except (SandboxDatasetWriterError, SandboxManifestError) as exc:
+            raise TaskApplicationConfigError(exc.code) from None
+        data_version = publication.data_version
+    binding = TaskSourceBinding(descriptor, build_capabilities_from_registry(registry, descriptor), data_version)
     return registry, binding
 
 
-def build_task_application(config: TaskApplicationConfig, *, diagnosis_runner=None):
-    """Build service/worker without connecting or performing any SQL/model call."""
+def build_task_application(config: TaskApplicationConfig, *, diagnosis_runner=None, source_context=None):
+    """Build service/worker; only explicit manifest mode performs bounded read SQL."""
     from app.persistence.source_runner import SourceInvestigationRunner
-    registry, binding = _source_context(config)
+    registry, binding = _source_context(config) if source_context is None else source_context
     state_factory = _connection_factory(config.state_database_url)
     kwargs = {} if diagnosis_runner is None else {"diagnosis_runner": diagnosis_runner}
     runner = SourceInvestigationRunner(
@@ -117,11 +134,11 @@ def build_task_application(config: TaskApplicationConfig, *, diagnosis_runner=No
     return service, worker
 
 
-def build_metric_read_service(config: TaskApplicationConfig):
-    """Build the read-only metric service without connecting to PostgreSQL."""
+def build_metric_read_service(config: TaskApplicationConfig, *, source_context=None):
+    """Build read service; manifest mode resolves published provenance first."""
     from app.api.metric_read_service import MetricReadService
 
-    registry, binding = _source_context(config)
+    registry, binding = _source_context(config) if source_context is None else source_context
     return MetricReadService(
         binding=binding,
         registry=registry,
@@ -141,13 +158,14 @@ def main(argv=None):
         config = TaskApplicationConfig.from_environment()
         if args.mode == "worker" and not os.environ.get("OPENAI_API_KEY", "").strip():
             raise TaskApplicationConfigError("model_credentials_missing")
-        service, worker = build_task_application(config)
+        source_context = _source_context(config)
+        service, worker = build_task_application(config, source_context=source_context)
         if args.mode == "api":
             import uvicorn
             from app.main import create_app
             app = create_app(
                 investigation_tasks_service=service,
-                metric_read_service=build_metric_read_service(config),
+                metric_read_service=build_metric_read_service(config, source_context=source_context),
                 include_legacy_routes=False,
             )
             uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False)
