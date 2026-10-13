@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router as api_router
 from app.api.metric_read_routes import metric_read_router
 from app.api.task_routes import task_router
+from app.lab.routes import router as lab_router
 
 if TYPE_CHECKING:
     from app.api.task_service import InvestigationTasksService
@@ -23,6 +24,7 @@ def create_app(
     *, investigation_tasks_service: InvestigationTasksService | None = None,
     metric_read_service: MetricReadService | None = None,
     include_legacy_routes: bool = True,
+    lab_service=None,
 ) -> FastAPI:
     """Build the API without opening connections, starting workers or migrating.
 
@@ -37,11 +39,14 @@ def create_app(
     )
     application.state.investigation_tasks_service = investigation_tasks_service
     application.state.metric_read_service = metric_read_service
+    application.state.lab_service = lab_service
 
     @application.exception_handler(RequestValidationError)
     async def safe_task_validation(request: Request, exc: RequestValidationError):
         # Pydantic's default response echoes submitted values, including extra
         # fields. Never echo a mistakenly submitted connection string/secret.
+        if request.url.path.startswith("/api/lab/"):
+            return JSONResponse(status_code=422, content={"detail": {"code": "invalid_lab_request"}})
         if (
             request.url.path == "/api/metrics/observation"
             or request.url.path == "/api/metrics/scan"
@@ -79,6 +84,7 @@ def create_app(
             return {"status": "ok", "mode": "local_tasks"}
     application.include_router(task_router)
     application.include_router(metric_read_router)
+    application.include_router(lab_router)
     return application
 
 

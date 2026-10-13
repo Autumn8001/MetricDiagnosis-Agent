@@ -203,6 +203,8 @@
 .system-state .button { margin-left: auto; }
 .state-error { flex-wrap: wrap; border-color: #f0dada; }
 .state-error > span { flex-basis: 100%; }
+.lab-page .state-error { color: #526176; }
+.lab-page .status-succeeded { color: #126b57; }
 .spinner { width: 15px; height: 15px; border: 2px solid #dfe9f8; border-top-color: #3a7be5; border-radius: 50%; animation: spin .7s linear infinite; }
 .spinner-light { border-color: #ffffff69; border-top-color: white; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -420,3 +422,46 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Lab extends the approved work surface and its existing control vocabulary. */
+.lab-page { display: grid; gap: 20px; }
+.lab-page .page-heading { margin-bottom: 0; }
+.lab-publish, .lab-history, .lab-detail { padding: 24px; }
+.lab-page .section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+.lab-page .section-heading h2 { margin: 0; font-size: 16px; color: var(--ink, #1c2839); }
+.lab-page .section-heading p, .lab-limits { margin: 7px 0 0; color: #526176; font-size: 13px; line-height: 1.65; }
+.lab-form-actions { display: flex; gap: 24px; justify-content: space-between; align-items: center; margin-top: 20px; }
+.lab-form-actions p { margin: 0; max-width: 65ch; font-size: 13px; color: #526176; line-height: 1.65; }
+.lab-form-actions .button { flex-shrink: 0; }
+.lab-notice, .lab-capacity-note { margin: 0; padding: 12px 0; font-size: 13px; color: #3658d5; line-height: 1.6; }
+.lab-page table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lab-page th { text-align: left; font-weight: 650; color: #526176; }
+.lab-page td, .lab-page th { padding: 13px 12px; border-bottom: 1px solid #e7ebf2; vertical-align: top; }
+.lab-page tr.is-selected { background: #f5f7fb; }
+.lab-page table td:nth-child(3), .lab-page table td:nth-child(4) { font-variant-numeric: tabular-nums; }
+.lab-pagination { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 18px; font-size: 12px; color: #526176; }
+.lab-pagination > div { display: flex; gap: 8px; }
+.lab-record-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 16px 0 20px; }
+.lab-record-meta small { display: block; font-size: 12px; color: #526176; margin-bottom: 8px; }
+.lab-record-meta code, .lab-version code { font-size: 12px; overflow-wrap: anywhere; color: #1c2839; }
+.lab-detail-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.lab-version, .lab-metric-result details { margin-top: 14px; color: #526176; font-size: 13px; }
+.lab-version summary, .lab-metric-result summary { cursor: pointer; padding: 8px 0; }
+.lab-metric-result { margin-top: 24px; border-top: 1px solid #e7ebf2; padding-top: 20px; }
+.lab-metric-result h3 { margin: 0 0 12px; font-size: 14px; }
+.lab-metric-result pre { padding: 16px; background: #f5f7fb; max-height: 300px; overflow: auto; font-size: 12px; }
+.lab-loading { display: grid; gap: 12px; color: #526176; font-size: 13px; }
+.lab-loading span { display: block; background: #e7ebf2; height: 16px; border-radius: 4px; }
+.lab-loading span:nth-child(2) { width: 75%; }
+.lab-loading span:nth-child(3) { width: 55%; }
+.lab-page summary:focus-visible, .lab-page button:focus-visible { outline: 2px solid #4768e8; outline-offset: 3px; }
+@media (max-width: 900px) {
+  .lab-record-meta { grid-template-columns: 1fr; gap: 12px; }
+  .lab-form-actions, .lab-pagination { flex-wrap: wrap; }
+  .lab-publish, .lab-history, .lab-detail { padding: 18px; }
+}
+.lab-page .page-heading p { color: #526176; font-size: 13px; }
+.lab-page .page-heading h1 { letter-spacing: -.02em; }
+.lab-page .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.lab-page .table-scroll { overflow-x: auto; }
+.lab-history-table td, .lab-history-table th { white-space: nowrap; }

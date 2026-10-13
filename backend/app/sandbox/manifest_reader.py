@@ -21,7 +21,7 @@ class SandboxManifestError(RuntimeError):
 
 def read_sandbox_publication(
     target: SandboxTarget, *, expected_data_version: str | None = None,
-    connection_factory=None,
+    connection_factory=None, expected_scenario: str | None = None,
 ) -> Publication:
     """Resolve server-owned source/version from a single published manifest.
 
@@ -36,6 +36,8 @@ def read_sandbox_publication(
         or len(expected_data_version) > 128
     ):
         raise SandboxManifestError('sandbox_version_invalid')
+    if expected_scenario is not None and (not isinstance(expected_scenario, str) or expected_scenario not in _ALLOWED_SCENARIOS):
+        raise SandboxManifestError("sandbox_scenario_invalid")
     expected = expected_data_version.strip() if expected_data_version is not None else None
     connection = None
     try:
@@ -70,6 +72,8 @@ def read_sandbox_publication(
                     or type(target_date) is not dt.date or target_date != _TARGET_DATE
                     or not isinstance(scenario, str) or scenario not in _ALLOWED_SCENARIOS):
                     raise SandboxManifestError('sandbox_manifest_invalid')
+                if expected_scenario is not None and scenario != expected_scenario:
+                    raise SandboxManifestError("sandbox_scenario_mismatch")
                 if expected is not None and version != expected:
                     raise SandboxManifestError('sandbox_version_unavailable')
                 return Publication(source_id, version, row_count, checksum, target_date)

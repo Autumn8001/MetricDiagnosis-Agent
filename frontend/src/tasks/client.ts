@@ -417,6 +417,11 @@ function assertSourceId(value: string): void {
   }
 }
 
+/** Shared validation for an existing task returned by an experiment link. */
+export function parseTaskRun(value: unknown, expectedSourceId: string): TaskRunView {
+  return validateRun(value, expectedSourceId)
+}
+
 export function createTaskClient(options: TaskClientOptions = {}) {
   const baseUrl = (options.baseUrl ?? "").replace(/\/$/, "");
   const fetcher = options.fetcher ?? globalThis.fetch;

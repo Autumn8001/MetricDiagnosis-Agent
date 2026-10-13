@@ -1,5 +1,9 @@
 # MetricSleuth 架构说明
 
+## 2026-10-13 Lab 补充（实际数据库验收待执行）
+
+显式 `app.lab_application` 将有限预配置空Sandbox目标与独立应用状态库连接。迁移005只保存实验场景、状态、幂等键、版本标签及调查关联，不保存凭据。发布复用既有空库写入器，来源会话advisory lock保护发布与恢复；恢复只读已提交manifest，不重新发布。实验ID派生稳定run ID，关联复用原任务提交/Worker/证据持久化，API本身不执行模型。React Lab只读响应，明确Synthetic/Sandbox。每目标仅一次发布；版本是label，snapshot_consistent=false。没有替换Runtime。单元/合同与受控HTTP桌面验证通过，真实PG迁移和链路待许可执行，非生产验收。
+
 > **Status：Current + Planned boundary**
 > 更新日期：2026-10-10
 > 审查基线：`main`，R4-002 独立本地提交（用 git log 查询）；包含 R2-PG、R2-005b Worker/API 与 R4-001/002 受控验收

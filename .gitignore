@@ -27,3 +27,6 @@ frontend/node_modules/
 # Local third-party datasets; provenance and mapping contracts are documented,
 # but raw downloads must not enter source control.
 data/raw/
+
+# Disposable visual/browser verification evidence (not product assets)
+.impeccable/review/

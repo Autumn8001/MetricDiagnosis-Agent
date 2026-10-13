@@ -3,6 +3,8 @@ import { createTaskClient, TaskClientError } from '../tasks/client'
 import type { MetricReadResponse } from '../metrics/contracts'
 import { MetricObservationPanel } from './MetricObservationPanel'
 import { MetricScanPanel } from './MetricScanPanel'
+import { LabPanel } from './LabPanel'
+import type { LabExperiment } from '../lab/client'
 import { formatDecimal } from './formatDecimal'
 import type {
   InvestigationSourceView,
@@ -281,6 +283,36 @@ export function InvestigationWorkspace() {
     }
   }
 
+  const openLabInvestigation = async (record: LabExperiment, runId: string, signal?: AbortSignal) => {
+    const epoch = sourceEpoch.current
+    const next = await taskClient.sources({ signal })
+    if (signal?.aborted) return
+    if (sourceEpoch.current !== epoch) throw new TaskClientError(null, "invalid_response")
+    const source = next.items.find(item => item.source_id === record.source_id)
+    if (!source || source.provider !== 'synthetic' || source.environment !== 'sandbox' || source.data_version !== record.data_version) {
+      throw new TaskClientError(null, 'invalid_response')
+    }
+    sourceEpoch.current += 1
+    submitAbort.current?.abort()
+    listAbort.current?.abort()
+    setSubmitting(false)
+    setSources(next.items)
+    setSourceId(source.source_id)
+    setMetric(record.requested_metric ?? 'sales')
+    setTargetDate(record.target_date)
+    setOffset(0)
+    setRuns([])
+    setDetail(null)
+    setDetailError('')
+    setSubmitError('')
+    setCatalogError('')
+    setDetailLoading(true)
+    setSelectedRunId(runId)
+    setDetailRefresh(value => value + 1)
+    setPage('investigation')
+    setNotice('已打开实验关联的持久调查。执行状态与证据来自服务端。')
+  }
+
   const supportedMetrics = currentSource?.metrics.filter((item) => item.supported) ?? []
   const allCounts = useMemo(() => runs.reduce<Record<TaskRunStatus, number>>((counts, run) => {
     counts[run.status] += 1
@@ -324,12 +356,13 @@ export function InvestigationWorkspace() {
         </header>
 
         <div className="page-content">
-          {(catalogLoading || catalogError || !currentSource) && (
+          {page !== 'lab' && (catalogLoading || catalogError || !currentSource) && (
             <section className={`system-state ${catalogError ? 'state-error' : ''}`} role={catalogError ? 'alert' : 'status'}>
               {catalogLoading ? <><span className="spinner" />正在读取数据来源目录…</> : catalogError ? <><strong>数据来源目录不可用</strong><span>{catalogError}</span><button className="button button-secondary" onClick={() => window.location.reload()}>重新加载页面</button></> : <><strong>暂无可用调查来源</strong><span>目前没有可以启动任务的数据来源配置。</span></>}
             </section>
           )}
 
+          {page === 'lab' && <LabPanel onOpen={openLabInvestigation} />}
           {currentSource && <>
             {page === 'overview' && <OverviewPage source={currentSource} runs={runs} counts={allCounts} loading={listLoading} error={listError} onRefresh={refresh} onOpen={openRun} onNew={() => selectPage('investigation')} />}
             {page === 'metrics' && <MetricsPage key={currentSource.source_id} source={currentSource} handoffDisabled={submitting} onHandoff={(result) => {
@@ -368,7 +401,6 @@ export function InvestigationWorkspace() {
               onPage={(nextOffset) => { setOffset(nextOffset); setSelectedRunId(''); setDetail(null); setDetailLoading(false); setDetailError('') }}
             />}
             {page === 'data' && <DataPage source={currentSource} />}
-            {page === 'lab' && <LabPage />}
           </>}
         </div>
       </main>
@@ -454,13 +486,6 @@ function DataPage({ source }: { source: InvestigationSourceView }) {
 
 function Fact({ label, value }: { label: string; value: string }) {
   return <div className="source-fact"><small>{label}</small><strong title={value}>{value}</strong></div>
-}
-
-function LabPage() {
-  return <>
-    <PageHeading title="隔离数据实验室" description="实验室入口保留在产品导航中；隔离事件写入和从事件到调查的完整流程尚未接线。" />
-    <section className="lab-empty surface-card"><div className="lab-illustration" aria-hidden="true"><span><Icon name="plus" /></span><i /><i /><i /></div><h2>在隔离环境验证调查结果</h2><p>当前版本不会通过页面数字或按钮伪造业务变化。实验数据写入、来源隔离与调查验证完成后，这里才会提供可执行操作。</p><span className="future-tag">尚未接入 · 无数据写入</span></section>
-  </>
 }
 
 function InvestigationPage({

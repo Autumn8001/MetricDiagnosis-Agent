@@ -499,3 +499,9 @@ R4-002受控UI与R4-003真实数据库历史读取不代表完整R4条件满足�
 增加只读 `sandbox_manifest` 启动 Profile，解析发布标签并复用现有 TaskSourceBinding、Worker、任务 API 与指标读取。限定本机命名 Sandbox、Synthetic/Sandbox 身份、唯一 manifest 和服务器配置的 source_id；可选择固定预期版本。未知版本/错误身份/错误物理库 fail-closed；同一 API 启动解析一次并共享上下文。不新增 Runtime、实验编排或快照机制。
 
 已完成独立 PostgreSQL 16.4 临时集群重连/来源目录/真实指标扫描验收，未访问既有R2/R4库；这些历史库的本轮指纹尚未复验，不以新建控制库替代该证据。新建控制库指纹前后相同。完整证据见 evaluation-artifacts/sandbox-manifest-binding-acceptance-2026-10-13.md。下一步 R5-004 独立实验记录和 Lab 接线；未调用模型。
+
+## 2026-10-13 R5-004（实现可审查，数据库gate待执行）
+
+新增独立实验记录、幂等发布/状态/历史API、来源绑定调查关联和React Lab；复用现有内核，不覆盖空库发布后的数据、不重放模型。当前每个预配置目标仅一次发布，最多20个。
+
+离线690项/OK(skipped=5)、Lab客户端7项、lint/类型/构建、桌面受控HTTP流程通过。真实临时PG专项执行请求被拒绝，005迁移、锁/恢复及完整PG链路未实际验收，R5-004保持未完成；模型请求0。见 [验证记录](evaluation-artifacts/lab-application-acceptance-2026-10-13.md) 与 [启动说明](lab-application.md)。

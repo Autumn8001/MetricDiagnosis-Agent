@@ -64,6 +64,12 @@ class SandboxManifestTests(unittest.TestCase):
             with self.subTest(index=index),self.assertRaisesRegex(SandboxManifestError,'sandbox_manifest_invalid'):
                 read_sandbox_publication(self.target,connection_factory=lambda:Connection(self.source,[tuple(row)]))
 
+    def test_expected_scenario_does_not_accept_another_publication(self):
+        with self.assertRaisesRegex(SandboxManifestError, 'sandbox_scenario_mismatch'):
+            read_sandbox_publication(self.target, expected_scenario='no_anomaly', connection_factory=lambda: Connection(self.source))
+        with self.assertRaisesRegex(SandboxManifestError, 'sandbox_scenario_invalid'):
+            read_sandbox_publication(self.target, expected_scenario=[], connection_factory=lambda: Connection(self.source))
+
     def test_wrong_database_and_autocommit(self):
         conn=Connection(self.source);conn.cur.fetchone=lambda:('other','127.0.0.1',55443)
         with self.assertRaisesRegex(SandboxManifestError,'sandbox_target_mismatch'):read_sandbox_publication(self.target,connection_factory=lambda:conn)

@@ -1,5 +1,7 @@
 # MetricSleuth Project Status
 
+> 2026-10-13 R5-004：独立实验迁移、Lab API、发布/恢复、关联既有Runtime和React Lab已实现。离线Ran690 / OK(skipped=5)，桌面1440×1000受控HTTP流程通过；不代表真实PG或模型验收。真实临时PG脚本执行请求被拒绝，尚未运行，阶段gate保持未通过。未推送或部署。[验证记录](evaluation-artifacts/lab-application-acceptance-2026-10-13.md)。下方旧快照保留历史；用户已在本线程重新授权持续推进。
+
 > 2026-10-13 Witt 接管进展：R5-003 已实现并通过独立临时 PostgreSQL 来源绑定/重连/API指标扫描验证；离线全量683项 / OK(skipped=5)，新增独立PG脚本实际通过。未访问既有 R2/R4、未调用模型；旧快照保留历史。下一步 R5-004。
 
 > 状态：动态接管摘要

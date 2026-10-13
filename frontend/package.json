@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:lab": "node scripts/test-lab-client.mjs",
     "test:tasks": "node scripts/test-task-client.mjs",
     "test:metrics": "node scripts/test-metric-client.mjs",
     "dev": "vite",
