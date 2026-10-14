@@ -1,5 +1,6 @@
 """Offline HTTP safety and configuration checks. SQL acceptance is separate."""
 from pathlib import Path
+import os
 import tempfile
 import unittest
 from unittest.mock import Mock
@@ -41,6 +42,7 @@ class LabAPITests(unittest.TestCase):
         self.assertEqual(response.status_code,503)
         self.assertNotIn('private-driver-marker',response.text)
 
+    @unittest.skipUnless(os.name != 'nt', 'POSIX file mode bits are not enforceable on Windows')
     def test_private_configuration_only_and_no_credentials_in_service_repr(self):
         import json
         source=str(uuid4())

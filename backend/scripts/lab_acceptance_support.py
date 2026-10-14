@@ -14,20 +14,32 @@ from uuid import uuid4
 def temporary_postgres(binary):
     binary=Path(binary).resolve()
     with tempfile.TemporaryDirectory(prefix='metricsleuth-r5004-pg-') as temporary:
-        root=Path(temporary);data=root/'data';sockets=root/'sockets';sockets.mkdir(mode=0o700)
+        root=Path(temporary);data=root/'data';sockets=root/'sockets'
+        if os.name != 'nt':
+            sockets.mkdir(mode=0o700)
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1',0));port=reservation.getsockname()[1]
         started=False
         with (root/'commands.log').open('wb') as log:
             def run(arguments):
+                command_env = os.environ.copy()
+                # Windows PostgreSQL binaries need the host DLL search path.
+                # Keep the restricted POSIX path only for Linux acceptance.
+                if os.name != 'nt':
+                    command_env.update({'PATH':'/usr/bin:/bin','LANG':'C','LC_ALL':'C'})
+                else:
+                    command_env.update({'LANG':'C','LC_ALL':'C'})
                 result=subprocess.run(arguments,stdout=log,stderr=log,timeout=30,
-                    env={'PATH':'/usr/bin:/bin','LANG':'C','LC_ALL':'C'})
+                    env=command_env)
                 if result.returncode:raise RuntimeError('isolated_postgres_command_failed')
             try:
                 run([str(binary/'initdb'),'-D',str(data),'-U','metricsleuth_test','--auth=trust','--no-locale','-E','UTF8'])
                 # No system service, existing cluster, global configuration or fixed port.
+                options = f'-h 127.0.0.1 -p {port} -c shared_buffers=16MB -c max_connections=20'
+                if os.name != 'nt':
+                    options += f' -k {sockets}'
                 run([str(binary/'pg_ctl'),'-D',str(data),'-l',str(root/'server.log'),'-o',
-                    f'-h 127.0.0.1 -p {port} -k {sockets} -c shared_buffers=16MB -c max_connections=20','-w','start'])
+                    options,'-w','start'])
                 started=True
                 yield lambda name:f'postgresql://metricsleuth_test@127.0.0.1:{port}/{name}'
             finally:

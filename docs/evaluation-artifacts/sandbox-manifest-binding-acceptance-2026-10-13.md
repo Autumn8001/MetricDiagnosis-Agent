@@ -42,4 +42,4 @@ python -B scripts/verify_sandbox_manifest.py --postgres-bin /path/to/postgres/bi
 
 ## 剩余范围
 
-R5-004实验记录/历史/API/Lab页面尚未实现；不提供旧发布版本快照、并发发布、自动清理、外部同步或模型成功验收。
+R5-004实验记录/历史/API/Lab页面已在后续提交实现并通过独立临时PostgreSQL gate；本记录仍只描述R5-003。当前仍不提供旧发布版本快照、自动清理、外部同步或模型成功验收。
