@@ -70,13 +70,13 @@ MetricSleuth 的下一目标不是继续增加底层框架，而是完成一条�
 
 验收条件：真实 API 读取通过；重复同步不重复计数；数据版本/水位可追溯；指标扫描读取已同步数据；没有把 Development Store 数据描述为生产经营数据。
 
-### 阶段 D：R3-002，真实模型调查 Gate
+### 阶段 D：R3-002，真实模型调查 Gate（当前阻塞）
 
 目标：在明确端点、模型和预算并重新获得一次性授权后，执行一次隔离 Synthetic 或 Shopify 测试调查。
 
 限制：最多 8 次工具调用、10 轮、禁用自动重试和远程 tracing；失败立即停止并记录安全错误；不反复消耗额度。
 
-验收条件：保存真实 Tool Trace、Observation、Evidence 和 Diagnosis；每个 Driver/Scope 可回到同一轮 Evidence 与查询引用；能证明 Agent 根据 Observation 选择下一步并在证据充分时停止。401、模型不兼容或工具协议失败只能记为失败，不得记作模型通过。
+当前结果：2026-10-14 一次有限调查返回 `AuthenticationError / 401`，0 工具调用；失败 Run 已保存，未生成伪造 Diagnosis。验收条件仍是保存真实 Tool Trace、Observation、Evidence 和 Diagnosis；每个 Driver/Scope 可回到同一轮 Evidence 与查询引用；能证明 Agent 根据 Observation 选择下一步并在证据充分时停止。401、模型不兼容或工具协议失败只能记为失败，不得记作模型通过。鉴权修复前不重复调用。
 
 ### 阶段 E：R6，真实评测与可靠性
 

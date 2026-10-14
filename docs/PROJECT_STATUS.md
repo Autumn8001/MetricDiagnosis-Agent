@@ -2,7 +2,7 @@
 
 > 2026-10-14 R5-004：独立实验迁移、Lab API、发布/恢复、关联既有Runtime和React Lab已实现。真实临时PostgreSQL脚本六项检查通过；离线Ran690 / OK(skipped=6，Windows跳过POSIX文件模式位测试)，桌面1440×1000受控HTTP流程通过。真实模型和外部业务数据仍未调用，未推送或部署。[验证记录](evaluation-artifacts/lab-application-acceptance-2026-10-13.md)。
 
-> 2026-10-14 主线程验收：R5-003 manifest绑定与R5-004 Lab完整临时PostgreSQL链路均已通过；受控Runner不是模型验收。下一步进入真实模型/真实外部来源Gate，不扩展调度底座。
+> 2026-10-14 主线程验收：R5-003 manifest绑定与R5-004 Lab完整临时PostgreSQL链路均已通过；受控Runner不是模型验收。一次真实SDK调查仍返回AuthenticationError/401，0工具调用，失败Run安全留存。[记录](evaluation-artifacts/live-model-attempt-2026-10-14.md)。下一步等待端点鉴权修复和新的有限授权，不在相同401条件下重试。
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-12
