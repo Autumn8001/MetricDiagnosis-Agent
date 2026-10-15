@@ -2,7 +2,7 @@
 
 > 2026-10-14 R5-004：独立实验迁移、Lab API、发布/恢复、关联既有Runtime和React Lab已实现。真实临时PostgreSQL脚本六项检查通过；离线Ran690 / OK(skipped=6，Windows跳过POSIX文件模式位测试)，桌面1440×1000受控HTTP流程通过。真实模型和外部业务数据仍未调用，未推送或部署。[验证记录](evaluation-artifacts/lab-application-acceptance-2026-10-13.md)。
 
-> 2026-10-14 主线程验收：R5-003 manifest绑定与R5-004 Lab完整临时PostgreSQL链路均已通过；受控Runner不是模型验收。一次真实SDK调查仍返回AuthenticationError/401，0工具调用，失败Run安全留存。[记录](evaluation-artifacts/live-model-attempt-2026-10-14.md)。下一步等待端点鉴权修复和新的有限授权，不在相同401条件下重试。
+> 2026-10-15 主线程验收：更新后的端点已通过 `/v1/models`、最小文本、工具声明和生成结构化Schema四项直接探测；但同一配置进入现有 Agents SDK 调查时仍在首个工具调用前返回 `UserError`，0工具/Observation/Evidence/Diagnosis，失败Run安全留存。[记录](evaluation-artifacts/live-model-sdk-compatibility-2026-10-15.md)。真实模型成功 gate 仍未通过，下一步聚焦 SDK 请求/响应兼容性，不引入第二套 Runtime。
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-12
@@ -53,7 +53,7 @@ MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 A
 ## 已实现但当前未真实复验
 
 - 旧同步 Live API 的完整模型执行路径尚未复验；新应用 Runner 的 AnalyticsTools 聚合 SQL 已由 R2-005b2b 在真实 PostgreSQL 验证，不是外部数据同步。
-- 真实模型动态调查：仓库保存了2026-09-22的Synthetic Live聚合记录。本机被忽略的`.env`有配置但可用性未证明；2026-10-10两次独立授权的SDK持久调查分别返回InternalServerError与401/AuthenticationError，均无完成工具结果。真实模型成功gate仍未通过，分别见两次尝试记录。
+- 真实模型动态调查：2026-10-15 本机 `.env` 已通过端点和直接 Chat Completions 兼容性预检，但 Agents SDK 持久调查仍返回 `UserError`，首个工具调用前失败，0/0/0/0 事实结果；真实模型成功 gate 仍未通过。见 [`live-model-sdk-compatibility-2026-10-15.md`](evaluation-artifacts/live-model-sdk-compatibility-2026-10-15.md)。此前的 401/内部错误记录仍保留为历史尝试，不与本次结果混淆。
 - 前端 production build、lint与类型检查已在R4-005重新通过；这不代表服务器部署或所有页面功能完成。
 
 ## R2-PG：真实 PostgreSQL 持久化验收已通过
