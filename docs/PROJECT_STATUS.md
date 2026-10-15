@@ -1,5 +1,17 @@
 # MetricSleuth Project Status
 
+## 当前接管摘要（2026-10-15，优先于以下历史快照）
+
+- 分支`codex/r5-004-validation`；本轮基线`3f8c1b5`，实际HEAD用`git log -1`核对。
+- 最新验收：同一API进程内真实Edge提交→PG Worker/SDK/SQL→成功轮询→刷新新读取→完成确认通过。Run `607bb0f8-7016-4214-be2d-a965c906876f`，5工具/8观察/6证据/1诊断，6轮，Runner115843ms；配置模型gemini-3.8-flash-high，120秒单请求、无重试。一次授权已使用。
+- 新PG连接只读回算：目标/状态/Driver与provenance通过，4/4声明有证据。Scope准确率、精确停止时机、Token/费用未知；不是重复实验、holdout或真实外部数据。最终表计数194/146/199/92/74。
+- 本轮修复验收manifest超时字段遗漏；前端build、4项断言与lint通过；后端未改、未重跑全量。初始预检未提交，查PG确认0 Run后才重启空闲服务，没有重跑已有模型任务。
+- 已有能力：持久任务/最小Worker、指标读取/手动扫描、Synthetic/Olist内核、受控PG Lab和桌面工作区。持续外部数据、重复模型评测/usage及生产部署仍未完成，不能称MVP交付。
+- 下一步：三场景输入已准备，待独立调用预算；Shopify需开发店/应用/read_orders，先只读字段验证，再最小幂等更新。不扩大Runtime或调度框架。
+- 记录：[完整真实验收](evaluation-artifacts/live-model-browser-complete-2026-10-15.md)、[评测准备](evaluation-artifacts/sandbox-evaluation-plan-2026-10-15.md)、[Shopify指南](shopify-orders-probe.md)。API/PG已停止，数据保留；仅桌面Web，未部署。
+
+## 历史快照（下方“当前/最新/下一步”均指当时状态）
+
 > **浏览器提交真实模型任务（2026-10-15）**：桌面浏览器已经实际提交一笔带明确 `asin` 范围的 Synthetic 任务，经 FastAPI、真实 PostgreSQL Worker、既有 OpenAI Agents SDK 和 Analytics SQL 持久化为 `succeeded`。安全 SQL 与只读 Edge 页面分别核对为 5 Tool Call / 8 Observation / 6 Evidence / 1 Diagnosis；页面刷新重读同一记录通过。首次一体化浏览器 harness 因 Worker 后 API 提前退出而未在同一存活服务中完成终态轮询，已修正为浏览器显式完成信号，但为控制模型调用未重跑第二笔任务。此条更新优先于下方旧“模型成功未通过”的历史快照；完整边界见[验收记录](evaluation-artifacts/live-model-browser-submission-2026-10-15.md)。
 
 > **桌面回读验收 2026-10-15**：基线c3360ff的真实模型成功Run现已通过实际PG→独立API→React build→Edge桌面读取与刷新重开；2工具/5观察/5证据/1诊断、Driver与证据引用核对通过，0写请求，DB前后190/126/167/80/72不变。任务客户端18/18、lint/build通过。API和PG已停止，无新模型调用。[记录](evaluation-artifacts/live-model-browser-readback-2026-10-15.md)。下一步是浏览器新提交→真实Worker/SDK完整闭环及少量重复评测，非继续扩展底座；Shopify资源与部署仍未完成。

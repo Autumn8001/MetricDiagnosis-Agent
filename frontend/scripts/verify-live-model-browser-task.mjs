@@ -85,8 +85,8 @@ async function jsonRequest(url, method, stage, body) {
   try { return { response, payload: JSON.parse(bytes.toString('utf8')) } } catch { fail(stage) }
 }
 
-function assertManifest(manifest) {
-  const keys = ['acceptance_kind', 'api_mode', 'controlled_runner', 'data_profile', 'data_version', 'database', 'max_tool_calls', 'max_turns', 'real_model', 'request_filters', 'source_id', 'target_date', 'target_metric']
+export function assertManifest(manifest) {
+  const keys = ['acceptance_kind', 'api_mode', 'controlled_runner', 'data_profile', 'data_version', 'database', 'max_tool_calls', 'max_turns', 'model_request_timeout_seconds', 'real_model', 'request_filters', 'source_id', 'target_date', 'target_metric']
   check(manifest && typeof manifest === 'object' && !Array.isArray(manifest), 'manifest_shape')
   check(Object.keys(manifest).sort().join(',') === keys.sort().join(','), 'manifest_keys')
   check(manifest.acceptance_kind === 'live_model_browser_task' && manifest.database === 'metricsleuth_r2_acceptance', 'manifest_identity')
@@ -94,6 +94,7 @@ function assertManifest(manifest) {
   check(UUID.test(manifest.source_id) && manifest.target_metric === 'sales' && manifest.target_date === '2026-10-10', 'manifest_task')
   check(manifest.request_filters && Object.keys(manifest.request_filters).length === 1 && UUID.test(manifest.request_filters.asin), 'manifest_filter')
   check(manifest.max_tool_calls === 8 && manifest.max_turns === 10 && typeof manifest.data_version === 'string' && manifest.data_version.length > 0, 'manifest_budget')
+  check([60, 120].includes(manifest.model_request_timeout_seconds), 'manifest_timeout')
 }
 
 function assertCatalog(catalog, manifest) {

@@ -1,5 +1,7 @@
 # MetricSleuth MVP Roadmap
 
+> 2026-10-15最新：同进程真实浏览器Synthetic闭环已通过，Run `607bb0f8-7016-4214-be2d-a965c906876f`，5/8/6/1、6轮，刷新新读回及服务完成确认通过；新PG连接复算Driver/状态/引用4/4支持。[验收记录](evaluation-artifacts/live-model-browser-complete-2026-10-15.md)。以下早期“同进程复跑待完成”仅为历史；后续转入三场景重复语义评测与Shopify实际权限gate，需新预算/资源。Scope准确率、停止时机、usage及部署未完成。
+
 > 2026-10-15桌面增量验收：真实模型成功历史经实际PG/API/Edge显示与刷新重读通过，0写请求，数据库计数不变。复用只读浏览器脚本新增成功模式，无业务UI重构。证据：[成功记录回读](evaluation-artifacts/live-model-browser-readback-2026-10-15.md)。随后已出现浏览器新提交→真实Worker/SDK持久化证据，单进程终态轮询复跑仍待；R6少量重复评测、R3外部源及R7部署继续待完成。
 
 > 2026-10-15新增：浏览器实际提交一笔带 `asin` 固定范围的 Synthetic 任务，真实 Worker/SDK/Analytics 持久化为 `succeeded`，安全SQL为5/8/6/1，后续独立只读API/Edge刷新重读同一记录通过。首次一体化服务在Worker返回后提前退出，浏览器无法在同一存活服务里轮询终态；harness已改为等待浏览器完成信号，但未为修复再消费第二笔模型调用。故R4真实模型链路已具备实际运行证据，单进程自动轮询的验收复跑仍待明确授权。见[专项记录](evaluation-artifacts/live-model-browser-submission-2026-10-15.md)。
@@ -263,7 +265,7 @@
 
 ### R2-005b2 — 产品任务/历史 API 与应用 Runner 接线
 
-**状态：API/应用接线及单次真实模型持久化已验收；完整浏览器同进程复跑与重复语义评测仍待完成。**
+**状态：API/应用接线、单次真实模型持久化及完整浏览器同进程复跑已验收；重复语义评测仍待完成。**
 
 - **R2-005b2a（已完成）**：POST `/api/investigations` 排队，GET 列表/详情读取状态、已保存步骤和结果；服务器绑定 source/provider/environment/capabilities/version，客户端不提供连接配置。FastAPI `create_app()` 显式注入服务；默认返回 503，不启动 Worker、不执行迁移、不注入 Scenario。
 - 主线程真实 PostgreSQL 验收：API 专项 4/4、含既有 Worker/持久化回归 19/19 PASS；新应用实例读取历史、失败步骤留存、跨来源 404、安全错误和非法能力拒绝均通过。Runner 为受控 SELECT，非真实模型。记录见 [`task-api-acceptance-2026-10-10.md`](evaluation-artifacts/task-api-acceptance-2026-10-10.md)。
@@ -316,7 +318,7 @@
 
 ## 7. R4 — 产品 API 与冻结原型接线
 
-**状态：进行中；任务/指标/扫描/Lab已接线，真实模型成功记录桌面回读已通过；同进程完整复跑、持续外部来源页面与最终产品验收仍待完成。**
+**状态：进行中；任务/指标/扫描/Lab已接线，真实模型成功记录桌面回读及同进程完整复跑已通过；持续外部来源页面与最终产品验收仍待完成。**
 
 ### R4-001 — 任务客户端与配置来源目录（已完成）
 

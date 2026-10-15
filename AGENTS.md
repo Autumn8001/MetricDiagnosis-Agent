@@ -93,7 +93,7 @@ R2 任务 API 数据库专项：在相同专用环境运行 `python -B -m unitte
 
 显式本地应用入口为 `python -B -m app.task_application api` / `worker --once`（backend cwd），必须先按 `docs/evaluation-artifacts/task-application-acceptance-2026-10-10.md` 配置；不会自动迁移或注入数据。新增真实 SQL/进程专项 `tests.test_postgres_task_application`；真实模型验收仍需明确凭据与预算。
 
-Olist静态公开数据的实际SQL/步骤留存证据见 `docs/evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md`。早期真实模型401/InternalServerError属于历史失败；2026-10-15真实SDK成功持久化及独立桌面回读已通过，最新边界看 `docs/PROJECT_STATUS.md` 与 `docs/evaluation-artifacts/live-model-browser-submission-2026-10-15.md`，不能沿旧失败状态重复排障。完整同进程浏览器复跑和重复语义评测仍未完成。
+Olist静态公开数据的实际SQL/步骤留存证据见 `docs/evaluation-artifacts/olist-persistence-acceptance-2026-10-10.md`。早期401/InternalServerError及60秒超时均为历史失败；2026-10-15完整同进程真实浏览器提交/SDK/PG/刷新回读已通过，见 `docs/evaluation-artifacts/live-model-browser-complete-2026-10-15.md` 和 `docs/PROJECT_STATUS.md`。不能沿旧失败状态重复排障，也不能将本次单样本通过视为重复语义评测或持续外部源验收。后两项仍待预算/资源。
 
 真实模型脚本是显式计费验收，不是自动回归。遵守用户本会话已授权的调用范围与预算；已使用的一次性预算不能重复使用，不自动重试。脚本passed只证明相应执行/持久化条件，不自动证明Driver/Scope/停止正确。Shopify开发店/read_orders仍未准备，资源清单见 `docs/shopify-orders-probe.md`。
 
