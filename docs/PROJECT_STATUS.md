@@ -11,16 +11,18 @@
 > 2026-10-15 历史兼容性记录：更新后的端点已通过 `/v1/models`、最小文本、工具声明和生成结构化Schema四项直接探测；当时旧任务过滤器没有进入模型可见 Schema，首次 Agents SDK 调查在首个完整工具结果前返回 `UserError`。后续修复已通过真实模型成功验收，故此段只保留历史故障定位，不代表当前 gate 状态；见[旧记录](evaluation-artifacts/live-model-sdk-compatibility-2026-10-15.md)。
 
 > 状态：动态接管摘要；更新时间：2026-10-15
-> 分支：`codex/r5-004-validation`；本轮基线：`21fe9532ea6edbdef08e2c6ce49641d6c25c83af`。当前提交请用 `git log -1` 核对；不以历史 main 快照代替当前分支。
+> 分支：`codex/r5-004-validation`；本轮基线：`2546350e784d6e801e87c8996d5e2552482bdeaa`。当前提交请用 `git log -1` 核对；不以历史 main 快照代替当前分支。
 > 最近验收：R5 Lab 的 PostgreSQL/受控流程、R2 真实 SDK 成功持久化、R4 浏览器提交及同一成功记录的独立桌面回读。完整单进程真实模型浏览器复跑仍待完成。
-> 当前切片：补齐验收脚本保活、一次性提交和新连接证据链复核；不修改业务 Runtime、不增加调度基础设施。
-> 最新验证：后端 Ran 702 / OK(skipped=6)；验收专项11项（含实际loopback HTTP，受控Worker/内存事实）、浏览器断言3项、既有任务/指标/Lab客户端18/58/7项及lint通过。真实PG既有Run只读复核5/8/6/1；全表计数191/131/175/86/73前后一致。没有新模型调用或Shopify调用；隔离PG已停止。全量回归仍有既有event loop ResourceWarning和依赖弃用警告，退出成功不等于零警告。
+> 当前切片：R6持久结果语义回溯。2条历史真实模型成功Run符合预期指标/终态/Driver，引用声明支持分别3/3、4/4；另保留1条历史401失败为不可评分，无伪Diagnosis。这是已知样本回溯，不是新的重复实验或准确率结论。
+> 最新验证：后端 Ran 710 / OK(skipped=6)，新增回溯专项8项通过；真实PG读回3条历史记录，应用表计数191/131/175/86/73前后一致。没有新模型或Shopify调用；隔离PG已停止。Scope准确率、停止时机与Token/成本仍未评测。全量回归仍有既有event loop ResourceWarning和依赖弃用警告。前端未改，本轮未重跑前端；上轮86项及lint通过。
 > 下一步：完成有限真实模型浏览器复跑及小样本重复评测；Shopify资源就绪后先执行只读能力探测，再实现两次更新的幂等同步。不会因等待资源扩展通用框架。
 > 用户约束：已恢复持续推进；仅桌面Web。用户提供5h额度百分比，接近75%准备收尾；不猜测额度。不操作生产环境。
 
 ## 当前结论
 
 MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 API/Worker、默认React工作区及实际单项读取/来源全局手动扫描。浏览器已提交一次真实模型 Synthetic 调查并留下可追溯事实；R4-006/007指标页可读实际值及前7日基线并带入表单，不自动调查。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接、重复真实评测、生产安全部署及一体化浏览器 harness 复跑仍未完成，不能称MVP已交付。
+
+R6复现入口：[`持久语义回溯记录`](evaluation-artifacts/persisted-semantic-replay-2026-10-15.md)；只读脚本 `backend/scripts/score_persisted_task.py` 复用现有声明支持评分器，不调用模型、不读.env、不写数据库。`semantic_passed`只覆盖脚本明确检查的四项，不代表完整R6通过。历史失败仍保留，不能将本次2条通过记录当作无偏准确率样本。
 
 ## 历史阶段证据
 
