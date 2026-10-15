@@ -13,10 +13,10 @@ const profile = await mkdtemp(join(tmpdir(), 'metricsleuth-browser-profile-'))
 const output = process.argv[2] ? resolve(process.argv[2]) : await mkdtemp(join(tmpdir(), 'metricsleuth-browser-evidence-'))
 await mkdir(output, { recursive: true })
 const stamp = '2026-10-10T08:00:00Z'
-const source = (id, provider, metric) => ({ source_id: id, display_name: `${provider} controlled fixture`, provider,
+const source = (id, provider, metric, dimensions = []) => ({ source_id: id, display_name: `${provider} controlled fixture`, provider,
   environment: provider === 'olist' ? 'validation' : 'sandbox', data_version: 'fixture-label-not-snapshot',
-  metrics: [{ metric_id: metric, supported: true, grain: ['date'], dimensions: [], unavailable_reason: null }] })
-const sources = [source('synthetic-fixture', 'synthetic', 'sales'), source('olist-fixture', 'olist', 'orders')]
+  metrics: [{ metric_id: metric, supported: true, grain: ['date'], dimensions, unavailable_reason: null }] })
+const sources = [source('synthetic-fixture', 'synthetic', 'sales', ['asin']), source('olist-fixture', 'olist', 'orders')]
 const run = (id, status = 'failed', sourceId = sources[0].source_id) => ({ investigation_run_id: id, source_id: sourceId,
   provider: sourceId === sources[0].source_id ? 'synthetic' : 'olist', environment: sourceId === sources[0].source_id ? 'sandbox' : 'validation',
   status, requested_metric: sourceId === sources[0].source_id ? 'sales' : 'orders', requested_at: stamp, started_at: stamp,
@@ -74,7 +74,7 @@ const server = createServer(async (req, res) => {
       postCount++
       assert.equal(submitted.source_id, sources[0].source_id)
       assert.equal(submitted.target_date, '2026-10-10')
-      assert.deepEqual(submitted.filters, {})
+      assert.deepEqual(submitted.filters, { asin: 'fixture-asin' })
       return json(run('submitted-fixture', 'queued'), 202)
     }
     if (url.pathname === '/api/investigations') {
@@ -204,6 +204,9 @@ try {
   await until(async () => (await text()).includes('无需归因') && (await text()).includes('fixture-evidence'), 'saved successful evidence and diagnosis')
   await screenshot('investigation-success-desktop', 1440, 1000)
   await evaluate(`{const input=document.querySelector('[data-testid="target-date"]'); if(input.closest('details')) input.closest('details').open=true; const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; setter.call(input,'2026-10-10'); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true}));}`)
+  await evaluate(`{const select=document.querySelector('[data-testid="filter-dimension"]'); const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set; setter.call(select,'asin'); select.dispatchEvent(new Event('change',{bubbles:true}));}`)
+  await until(() => evaluate('document.querySelector(\'[data-testid="filter-value"]\')?.disabled === false'), 'filter value enabled')
+  await evaluate(`{const input=document.querySelector('[data-testid="filter-value"]'); const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; setter.call(input,'fixture-asin'); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true}));}`)
   await until(() => evaluate('!document.querySelector(\'[data-testid="submit-investigation"]\').disabled'), 'valid explicit date')
   await click('submit-investigation')
   await until(async () => detailReads >= 2 && (await text()).includes('submitted-fixture') && (await text()).includes('execution_failed'), 'queued task polling to failure')
@@ -216,6 +219,8 @@ try {
   await until(() => evaluate('document.querySelector(\'[data-testid="metric-select"]\')?.value === "orders"'), 'source-specific metric')
   assert.equal(await evaluate('!!document.querySelector(\'[data-testid="run-detail"]\')'), false, 'source change clears old details')
   assert.equal(await evaluate('document.querySelector(\'[data-testid="target-date"]\').value'), '', 'source change requires explicit date')
+  assert.equal(await evaluate('document.querySelector(\'[data-testid="filter-dimension"]\').value'), '', 'source change clears scope dimension')
+  assert.equal(await evaluate('document.querySelector(\'[data-testid="filter-value"]\').value'), '', 'source change clears scope value')
   catalogUnavailable = true
   await cdp('Page.navigate', { url: origin })
   await until(async () => (await text()).includes('task_service_unavailable'), 'unconfigured service error')

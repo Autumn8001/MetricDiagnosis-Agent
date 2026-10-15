@@ -119,6 +119,8 @@ export function InvestigationWorkspace() {
   const [detailRefresh, setDetailRefresh] = useState(0)
   const [metric, setMetric] = useState('')
   const [targetDate, setTargetDate] = useState('')
+  const [filterDimension, setFilterDimension] = useState('')
+  const [filterValue, setFilterValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [notice, setNotice] = useState('')
@@ -128,6 +130,10 @@ export function InvestigationWorkspace() {
   const listAbort = useRef<AbortController | null>(null)
   const listRequest = useRef(0)
   const currentSource = useMemo(() => sources.find((item) => item.source_id === sourceId) ?? null, [sources, sourceId])
+  const currentMetric = useMemo(
+    () => currentSource?.metrics.find((item) => item.metric_id === metric && item.supported) ?? null,
+    [currentSource, metric],
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -222,7 +228,18 @@ export function InvestigationWorkspace() {
     setRuns([])
     setMetric(sources.find((source) => source.source_id === nextSourceId)?.metrics.find((item) => item.supported)?.metric_id ?? '')
     setTargetDate('')
+    setFilterDimension('')
+    setFilterValue('')
     setSourceId(nextSourceId)
+  }
+
+  const changeMetric = (nextMetric: string) => {
+    setMetric(nextMetric)
+    const nextCapability = currentSource?.metrics.find((item) => item.metric_id === nextMetric && item.supported)
+    if (!nextCapability?.dimensions.includes(filterDimension)) {
+      setFilterDimension('')
+      setFilterValue('')
+    }
   }
 
   const openRun = (runId: string) => {
@@ -239,6 +256,9 @@ export function InvestigationWorkspace() {
     if (!currentSource || !metric || !targetDate || submitting) return
     const epoch = sourceEpoch.current
     const requestedSource = currentSource.source_id
+    const requestedFilters = filterDimension && filterValue.trim()
+      ? { [filterDimension]: filterValue.trim() }
+      : {}
     const controller = new AbortController()
     submitAbort.current?.abort()
     submitAbort.current = controller
@@ -250,7 +270,7 @@ export function InvestigationWorkspace() {
         source_id: requestedSource,
         target_metric: metric,
         target_date: targetDate,
-        filters: {},
+        filters: requestedFilters,
         group_by: [],
       }, { signal: controller.signal })
       if (controller.signal.aborted || sourceEpoch.current !== epoch) return
@@ -300,6 +320,8 @@ export function InvestigationWorkspace() {
     setSourceId(source.source_id)
     setMetric(record.requested_metric ?? 'sales')
     setTargetDate(record.target_date)
+    setFilterDimension('')
+    setFilterValue('')
     setOffset(0)
     setRuns([])
     setDetail(null)
@@ -368,6 +390,8 @@ export function InvestigationWorkspace() {
             {page === 'metrics' && <MetricsPage key={currentSource.source_id} source={currentSource} handoffDisabled={submitting} onHandoff={(result) => {
               setMetric(result.target_metric)
               setTargetDate(result.target_date)
+              setFilterDimension('')
+              setFilterValue('')
               setPage('investigation')
               setSelectedRunId('')
               setDetail(null)
@@ -389,9 +413,14 @@ export function InvestigationWorkspace() {
               detailError={detailError}
               supportedMetrics={supportedMetrics}
               metric={metric}
-              onMetric={setMetric}
+              onMetric={changeMetric}
               targetDate={targetDate}
               onDate={setTargetDate}
+              filterDimension={filterDimension}
+              filterValue={filterValue}
+              filterDimensions={currentMetric?.dimensions ?? []}
+              onFilterDimension={setFilterDimension}
+              onFilterValue={setFilterValue}
               submitting={submitting}
               submitError={submitError}
               notice={notice}
@@ -489,9 +518,9 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function InvestigationPage({
-  source, sources, runs, offset, loading, listError, selectedRunId, detail, detailLoading, detailError, supportedMetrics, metric, onMetric, targetDate, onDate, submitting, submitError, notice, onSubmit, onSelectRun, onRefresh, onPage,
+  source, sources, runs, offset, loading, listError, selectedRunId, detail, detailLoading, detailError, supportedMetrics, metric, onMetric, targetDate, onDate, filterDimension, filterValue, filterDimensions, onFilterDimension, onFilterValue, submitting, submitError, notice, onSubmit, onSelectRun, onRefresh, onPage,
 }: {
-  source: InvestigationSourceView; sources: InvestigationSourceView[]; runs: TaskRunView[]; offset: number; loading: boolean; listError: string; selectedRunId: string; detail: TaskDetailResponse | null; detailLoading: boolean; detailError: string; supportedMetrics: InvestigationSourceView['metrics']; metric: string; onMetric: (value: string) => void; targetDate: string; onDate: (value: string) => void; submitting: boolean; submitError: string; notice: string; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void; onSelectRun: (runId: string) => void; onRefresh: () => void; onPage: (offset: number) => void;
+  source: InvestigationSourceView; sources: InvestigationSourceView[]; runs: TaskRunView[]; offset: number; loading: boolean; listError: string; selectedRunId: string; detail: TaskDetailResponse | null; detailLoading: boolean; detailError: string; supportedMetrics: InvestigationSourceView['metrics']; metric: string; onMetric: (value: string) => void; targetDate: string; onDate: (value: string) => void; filterDimension: string; filterValue: string; filterDimensions: string[]; onFilterDimension: (value: string) => void; onFilterValue: (value: string) => void; submitting: boolean; submitError: string; notice: string; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void; onSelectRun: (runId: string) => void; onRefresh: () => void; onPage: (offset: number) => void;
 }) {
   return <div className="investigation-page">
     <PageHeading title={selectedRunId ? '调查记录详情' : '发起数据调查'} description="提交后，Agent 在服务端按任务执行；这里读取已保存的真实状态、工具记录和证据。" />
@@ -499,11 +528,13 @@ function InvestigationPage({
     {sources.length > 0 && <details key={selectedRunId ? 'existing-run' : 'new-run'} className="investigation-disclosure" open={!selectedRunId}>
       <summary><span>新建调查</span><small>选择来源、指标与目标日期</small></summary>
       <form className="surface-card investigation-form" onSubmit={onSubmit}>
-      <SectionHeader title="调查目标" subtitle="首版按单日与前 7 天基线比较，不附加隐式筛选或分组。" />
+      <SectionHeader title="调查目标" subtitle="首版按单日与前 7 天基线比较；范围筛选和分组只使用明确提交的值。" />
       <div className="form-grid"><label className="field"><span>数据来源</span><select value={source.source_id} disabled><option value={source.source_id}>{source.display_name} · {source.environment}</option></select><small>在顶部来源选择器切换。</small></label>
         <label className="field"><span>目标指标</span><select data-testid="metric-select" value={metric} onChange={(event) => onMetric(event.target.value)} required disabled={supportedMetrics.length === 0}><option value="" disabled>选择可调查指标</option>{supportedMetrics.map((item) => <option key={item.metric_id} value={item.metric_id}>{item.metric_id}</option>)}</select><small>仅列出该来源目录标记为支持的指标。</small></label>
         <label className="field"><span>目标日期</span><input data-testid="target-date" type="date" value={targetDate} onChange={(event) => onDate(event.target.value)} required /><small>请明确选择要调查的日期。</small></label></div>
-      <div className="query-boundary"><span aria-hidden="true">i</span><p>本次请求使用空筛选与空分组。系统会按该指标定义执行；不同指标的数据粒度和可用维度以指标页及后端验证为准。</p></div>
+      <div className="form-grid form-grid-scope"><label className="field"><span>范围维度（可选）</span><select data-testid="filter-dimension" value={filterDimension} onChange={(event) => onFilterDimension(event.target.value)} disabled={filterDimensions.length === 0}><option value="">不限定范围</option>{filterDimensions.map((dimension) => <option key={dimension} value={dimension}>{dimension}</option>)}</select><small>仅列出当前指标支持的维度。</small></label>
+        <label className="field"><span>范围值（可选）</span><input data-testid="filter-value" type="text" value={filterValue} onChange={(event) => onFilterValue(event.target.value)} maxLength={256} disabled={!filterDimension} placeholder={filterDimension ? `输入 ${filterDimension} 的值` : '先选择范围维度'} /><small>留空不会提交筛选；提交后每一步查询都会受此范围约束。</small></label></div>
+      <div className="query-boundary"><span aria-hidden="true">i</span><p>未填写范围时请求使用空筛选与空分组。系统不会推断筛选或分组；不同指标的数据粒度和可用维度以指标页及后端验证为准。</p></div>
       {submitError && <InlineError message={submitError} />}
       {submitError && <p className="submission-uncertain">提交结果可能不确定，请先刷新历史确认任务是否已入队，再决定下一步。系统不会自动重新提交。</p>}
       {notice && <p className="inline-notice" role="status">{notice}</p>}

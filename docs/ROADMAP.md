@@ -1,6 +1,8 @@
 # MetricSleuth MVP Roadmap
 
-> 2026-10-15桌面增量验收：真实模型成功历史经实际PG/API/Edge显示与刷新重读通过，0写请求，数据库计数不变。复用只读浏览器脚本新增成功模式，无业务UI重构。证据：[成功记录回读](evaluation-artifacts/live-model-browser-readback-2026-10-15.md)。R4全闭环仍需浏览器新提交→真实Worker/SDK验收，R6少量重复评测、R3外部源及R7部署继续待完成。
+> 2026-10-15桌面增量验收：真实模型成功历史经实际PG/API/Edge显示与刷新重读通过，0写请求，数据库计数不变。复用只读浏览器脚本新增成功模式，无业务UI重构。证据：[成功记录回读](evaluation-artifacts/live-model-browser-readback-2026-10-15.md)。随后已出现浏览器新提交→真实Worker/SDK持久化证据，单进程终态轮询复跑仍待；R6少量重复评测、R3外部源及R7部署继续待完成。
+
+> 2026-10-15新增：浏览器实际提交一笔带 `asin` 固定范围的 Synthetic 任务，真实 Worker/SDK/Analytics 持久化为 `succeeded`，安全SQL为5/8/6/1，后续独立只读API/Edge刷新重读同一记录通过。首次一体化服务在Worker返回后提前退出，浏览器无法在同一存活服务里轮询终态；harness已改为等待浏览器完成信号，但未为修复再消费第二笔模型调用。故R4真实模型链路已具备实际运行证据，单进程自动轮询的验收复跑仍待明确授权。见[专项记录](evaluation-artifacts/live-model-browser-submission-2026-10-15.md)。
 
 > 2026-10-15最新验收：R2真实模型执行/持久化单次成功 gate 已通过（最终版3轮/2工具/5 Observation/5 Evidence/1 Diagnosis，新应用读回一致）。修复任务固定过滤器的模型可见Schema，保留后端拒绝越界与异常传播。691项离线回归通过，跳过6项。R6重复语义评测、持续外部来源和部署仍未完成。下一切片是桌面真实模型结果读取；不扩展任务调度。证据：[任务范围验收](evaluation-artifacts/live-model-task-scope-2026-10-15.md)。下文早期“真实模型待验收”为历史阶段状态。
 

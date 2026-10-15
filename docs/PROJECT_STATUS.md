@@ -1,12 +1,14 @@
 # MetricSleuth Project Status
 
+> **浏览器提交真实模型任务（2026-10-15）**：桌面浏览器已经实际提交一笔带明确 `asin` 范围的 Synthetic 任务，经 FastAPI、真实 PostgreSQL Worker、既有 OpenAI Agents SDK 和 Analytics SQL 持久化为 `succeeded`。安全 SQL 与只读 Edge 页面分别核对为 5 Tool Call / 8 Observation / 6 Evidence / 1 Diagnosis；页面刷新重读同一记录通过。首次一体化浏览器 harness 因 Worker 后 API 提前退出而未在同一存活服务中完成终态轮询，已修正为浏览器显式完成信号，但为控制模型调用未重跑第二笔任务。此条更新优先于下方旧“模型成功未通过”的历史快照；完整边界见[验收记录](evaluation-artifacts/live-model-browser-submission-2026-10-15.md)。
+
 > **桌面回读验收 2026-10-15**：基线c3360ff的真实模型成功Run现已通过实际PG→独立API→React build→Edge桌面读取与刷新重开；2工具/5观察/5证据/1诊断、Driver与证据引用核对通过，0写请求，DB前后190/126/167/80/72不变。任务客户端18/18、lint/build通过。API和PG已停止，无新模型调用。[记录](evaluation-artifacts/live-model-browser-readback-2026-10-15.md)。下一步是浏览器新提交→真实Worker/SDK完整闭环及少量重复评测，非继续扩展底座；Shopify资源与部署仍未完成。
 
-> **最新状态 2026-10-15**：分支 `codex/r5-004-validation`。真实 SDK + 隔离 PostgreSQL Synthetic 调查已成功（最终收紧版 Run `dc6ab94f-8865-45bc-925d-db2ed8ab901f`）：3轮、2工具、5 Observation/5 Evidence/1 Diagnosis，conversion_rate / marketplace=US，provenance及新应用读回通过。修复是任务过滤器 Schema 绑定，不是更换 SDK；工具异常仍直接终止。691 tests / OK(skipped=6)。模型标识 gemini-3.8-flash-high，Token未采集。隔离PG已停止；未部署。下方旧快照与历史失败不覆盖本条。下一步：现有桌面详情页读取这次成功记录，再做小规模重复评测；持续Shopify资源仍待准备。详见 [验收记录](evaluation-artifacts/live-model-task-scope-2026-10-15.md)。
+> **最新状态 2026-10-15**：分支 `codex/r5-004-validation`。真实 SDK + 隔离 PostgreSQL Synthetic 调查已成功，任务固定过滤器 Schema 已向模型显式绑定，后端仍拒绝越界。新的浏览器提交成功记录补齐了产品提交入口与真实 Worker 的实际接线；但一体化服务保活复跑、重复模型评测、持续外部来源和部署仍待完成。Token 使用量未采集，隔离PG已停止；未部署。
 
 > 2026-10-14 R5-004：独立实验迁移、Lab API、发布/恢复、关联既有Runtime和React Lab已实现。真实临时PostgreSQL脚本六项检查通过；离线Ran690 / OK(skipped=6，Windows跳过POSIX文件模式位测试)，桌面1440×1000受控HTTP流程通过。真实模型和外部业务数据仍未调用，未推送或部署。[验证记录](evaluation-artifacts/lab-application-acceptance-2026-10-13.md)。
 
-> 2026-10-15 主线程验收：更新后的端点已通过 `/v1/models`、最小文本、工具声明和生成结构化Schema四项直接探测；但同一配置进入现有 Agents SDK 调查时仍在首个工具调用前返回 `UserError`，0工具/Observation/Evidence/Diagnosis，失败Run安全留存。[记录](evaluation-artifacts/live-model-sdk-compatibility-2026-10-15.md)。真实模型成功 gate 仍未通过，下一步聚焦 SDK 请求/响应兼容性，不引入第二套 Runtime。
+> 2026-10-15 历史兼容性记录：更新后的端点已通过 `/v1/models`、最小文本、工具声明和生成结构化Schema四项直接探测；当时旧任务过滤器没有进入模型可见 Schema，首次 Agents SDK 调查在首个完整工具结果前返回 `UserError`。后续修复已通过真实模型成功验收，故此段只保留历史故障定位，不代表当前 gate 状态；见[旧记录](evaluation-artifacts/live-model-sdk-compatibility-2026-10-15.md)。
 
 > 状态：动态接管摘要
 > 快照日期：2026-10-12
@@ -19,7 +21,7 @@
 
 ## 当前结论
 
-MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 API/Worker、默认React工作区及实际单项读取/来源全局手动扫描。R4-005浏览器新建任务经受控Runner/真实SQL保存成功结论并刷新复读；R4-006/007指标页可读实际值及前7日基线并带入表单，不自动调查。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接、真实模型成功、可执行Lab、生产安全部署及重复真实评测仍未完成，不能称MVP已交付。
+MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 API/Worker、默认React工作区及实际单项读取/来源全局手动扫描。浏览器已提交一次真实模型 Synthetic 调查并留下可追溯事实；R4-006/007指标页可读实际值及前7日基线并带入表单，不自动调查。Olist仍为公开静态数据，不是持续连接器；Shopify/外部PostgreSQL连接、重复真实评测、生产安全部署及一体化浏览器 harness 复跑仍未完成，不能称MVP已交付。
 
 ## 已完成且本轮有源码/测试证据
 
@@ -57,7 +59,7 @@ MetricSleuth 已具备 Synthetic/Olist 调查内核、持久 PostgreSQL 任务 A
 ## 已实现但当前未真实复验
 
 - 旧同步 Live API 的完整模型执行路径尚未复验；新应用 Runner 的 AnalyticsTools 聚合 SQL 已由 R2-005b2b 在真实 PostgreSQL 验证，不是外部数据同步。
-- 真实模型动态调查：2026-10-15 本机 `.env` 已通过端点和直接 Chat Completions 兼容性预检，但 Agents SDK 持久调查仍返回 `UserError`，首个工具调用前失败，0/0/0/0 事实结果；真实模型成功 gate 仍未通过。见 [`live-model-sdk-compatibility-2026-10-15.md`](evaluation-artifacts/live-model-sdk-compatibility-2026-10-15.md)。此前的 401/内部错误记录仍保留为历史尝试，不与本次结果混淆。
+- 真实模型动态调查：早期 401、InternalServerError 和一次过滤器遗漏导致的 `UserError` 均保留为历史失败；后续修复任务过滤器 Schema 后，真实 SDK 成功 gate 已通过，且本次浏览器提交记录已实际持久化。尚未完成少量重复情形、成本/Token采集或外部数据上的模型评测；详情见 [`live-model-task-scope-2026-10-15.md`](evaluation-artifacts/live-model-task-scope-2026-10-15.md) 与 [`live-model-browser-submission-2026-10-15.md`](evaluation-artifacts/live-model-browser-submission-2026-10-15.md)。
 - 前端 production build、lint与类型检查已在R4-005重新通过；这不代表服务器部署或所有页面功能完成。
 
 ## R2-PG：真实 PostgreSQL 持久化验收已通过
