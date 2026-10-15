@@ -1,4 +1,4 @@
-// Read-only real API/browser acceptance for one previously persisted Olist failure.
+// Read-only real API/browser acceptance for an existing failure or Synthetic success.
 // Usage: node scripts/verify-postgres-workspace.mjs --api http://127.0.0.1:8001 --source UUID --run UUID --output C:/absolute/evidence
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
@@ -17,13 +17,15 @@ function parseArguments(argv) {
   const values = Object.create(null)
   for (let index = 0; index < argv.length; index += 1) {
     const name = argv[index]
-    if (!['--api', '--source', '--run', '--output'].includes(name) || values[name]) throw new Error('arguments')
+    if (!['--api', '--source', '--run', '--output', '--expect'].includes(name) || values[name]) throw new Error('arguments')
     const value = argv[index + 1]
     if (!value || value.startsWith('--')) throw new Error('arguments')
     values[name] = value
     index += 1
   }
-  if (Object.keys(values).length !== 4) throw new Error('arguments')
+  if (!['--api', '--source', '--run', '--output'].every(key => values[key])) throw new Error('arguments')
+  const expectedStatus = values['--expect'] ?? 'failed'
+  if (!['failed', 'succeeded'].includes(expectedStatus)) throw new Error('arguments')
 
   const api = new URL(values['--api'])
   const host = api.hostname.toLowerCase()
@@ -34,7 +36,7 @@ function parseArguments(argv) {
   if (!UUID.test(values['--source']) || !UUID.test(values['--run'])) throw new Error('identifier')
   const output = resolve(values['--output'])
   if (!/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(values['--output'])) throw new Error('output_path')
-  return { apiOrigin: api.origin, sourceId: values['--source'], runId: values['--run'], output }
+  return { apiOrigin: api.origin, sourceId: values['--source'], runId: values['--run'], output, expectedStatus }
 }
 
 function check(condition, label) {
@@ -76,16 +78,32 @@ async function findRun(apiOrigin, sourceId, runId, stagePrefix) {
   throw new Error(`${stagePrefix}_run_missing`)
 }
 
-function assertDetail(detail, source, runId, sourceId, listedRun, stage) {
+function assertDetail(detail, source, runId, sourceId, listedRun, stage, expectedStatus) {
   check(detail?.run?.investigation_run_id === runId, `${stage}_run_identity`)
   check(detail.run.source_id === sourceId && listedRun.source_id === sourceId, `${stage}_source_identity`)
   check(detail.run.provider === source.provider && detail.run.environment === source.environment &&
     listedRun.provider === source.provider && listedRun.environment === source.environment, `${stage}_source_metadata`)
-  check(detail.run.status === 'failed' && listedRun.status === 'failed', `${stage}_failed_status`)
+  check(detail.run.status === expectedStatus && listedRun.status === expectedStatus, `${stage}_status`)
   check(Array.isArray(detail.tool_calls) && detail.tool_calls.length >= 1, `${stage}_tool_calls`)
   check(Array.isArray(detail.observations) && detail.observations.length >= 1, `${stage}_observations`)
-  check(Array.isArray(detail.evidence) && detail.evidence.length === 0, `${stage}_evidence`)
-  check(Array.isArray(detail.diagnoses) && detail.diagnoses.length === 0, `${stage}_diagnoses`)
+  check(Array.isArray(detail.evidence) && Array.isArray(detail.diagnoses), `${stage}_facts`)
+  if (expectedStatus === 'failed') {
+    check(detail.evidence.length === 0 && detail.diagnoses.length === 0, `${stage}_failed_no_diagnosis`)
+  } else {
+    check(detail.evidence.length > 0 && detail.diagnoses.length === 1, `${stage}_success_facts`)
+    const diagnosis = detail.diagnoses[0]
+    check(diagnosis.status === 'diagnosed' && diagnosis.primary_driver === 'conversion_rate' &&
+      diagnosis.affected_scope?.marketplace === 'US', `${stage}_driver_scope`)
+    check(diagnosis.evidence_ids.length > 0 && diagnosis.evidence_ids.every(id =>
+      detail.evidence.some(evidence => evidence.evidence_id === id)), `${stage}_diagnosis_links`)
+    check(detail.evidence.every(evidence => detail.observations.some(observation =>
+      observation.observation_id === evidence.observation_id && observation.tool_call_id === evidence.tool_call_id &&
+      detail.tool_calls.some(tool => tool.tool_call_id === observation.tool_call_id))), `${stage}_evidence_links`)
+    check(detail.evidence.some(evidence => diagnosis.evidence_ids.includes(evidence.evidence_id) && evidence.role === 'supporting' &&
+      detail.observations.some(observation => observation.observation_id === evidence.observation_id &&
+        observation.metric === diagnosis.primary_driver && observation.status === 'anomalous' &&
+        observation.dimensions?.marketplace === 'US')), `${stage}_joint_support`)
+  }
   const observation = detail.observations[0]
   const toolCall = detail.tool_calls.find((item) => item.tool_call_id === observation.tool_call_id)
   const queryReference = observation.query_reference
@@ -96,7 +114,7 @@ function assertDetail(detail, source, runId, sourceId, listedRun, stage) {
   check(observation.current_value !== null && observation.current_value !== undefined, `${stage}_current_value`)
   check(observation.baseline_value !== null && observation.baseline_value !== undefined, `${stage}_baseline_value`)
   check(listedRun.tool_call_count === detail.tool_calls.length && listedRun.observation_count === detail.observations.length &&
-    listedRun.evidence_count === 0 && listedRun.diagnosis_count === 0, `${stage}_persisted_counts`)
+    listedRun.evidence_count === detail.evidence.length && listedRun.diagnosis_count === detail.diagnoses.length, `${stage}_persisted_counts`)
   return {
     observationId: observation.observation_id,
     toolCallId: observation.tool_call_id,
@@ -190,10 +208,10 @@ async function main() {
 
   const catalog = await getJson(new URL('/api/investigation-sources', args.apiOrigin), 'preflight_source_catalog')
   const source = sourceIn(catalog, args.sourceId)
-  check(source && source.provider === 'olist' && source.environment === 'validation', 'preflight_source')
+  check(source && (args.expectedStatus === 'succeeded' ? source.provider === 'synthetic' && source.environment === 'sandbox' : source.provider === 'olist' && source.environment === 'validation'), 'preflight_source')
   const listed = await findRun(args.apiOrigin, args.sourceId, args.runId, 'preflight')
   const detail = await getJson(new URL(`/api/investigations/${encodeURIComponent(args.runId)}?source_id=${encodeURIComponent(args.sourceId)}`, args.apiOrigin), 'preflight_detail')
-  const facts = assertDetail(detail, source, args.runId, args.sourceId, listed.run, 'preflight')
+  const facts = assertDetail(detail, source, args.runId, args.sourceId, listed.run, 'preflight', args.expectedStatus)
 
   const profile = await mkdtemp(join(tmpdir(), 'metricsleuth-postgres-browser-profile-'))
   const profileResolved = resolve(profile)
@@ -297,7 +315,8 @@ async function main() {
           await until(async () => (await bodyText()).includes(facts.observationId), 'browser_detail')
           const rendered = await bodyText()
           for (const expected of [args.runId, source.provider, source.environment, facts.observationId, facts.toolCallId,
-            facts.queryReference, facts.currentValue, facts.baselineValue, '本次任务失败，未保存诊断结论。']) {
+            facts.queryReference, facts.currentValue, facts.baselineValue,
+            ...(args.expectedStatus === 'succeeded' ? ['已定位主要变化', 'conversion_rate', ...detail.diagnoses[0].evidence_ids] : ['本次任务失败，未保存诊断结论。'])]) {
             check(rendered.includes(expected), `${checkStage}_rendered_fact`)
           }
           check(!rendered.includes('预设') && !rendered.includes('fixture-'), `${checkStage}_fixture_copy`)
@@ -318,11 +337,12 @@ async function main() {
     await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false })
     let capture = await cdp('Page.captureScreenshot', { format: 'png' })
     await writeFile(join(outputResolved, 'postgres-workspace-desktop.png'), Buffer.from(capture.data, 'base64'))
-    stage = 'browser_mobile_capture'
-    await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
-    check(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'browser_mobile_overflow')
-    capture = await cdp('Page.captureScreenshot', { format: 'png' })
-    await writeFile(join(outputResolved, 'postgres-workspace-mobile.png'), Buffer.from(capture.data, 'base64'))
+    if (args.expectedStatus === 'succeeded') {
+      stage = 'browser_diagnosis_capture'
+      await evaluate("document.querySelector('.diagnosis-card').scrollIntoView({block:'center'}); true")
+      capture = await cdp('Page.captureScreenshot', { format: 'png' })
+      await writeFile(join(outputResolved, 'postgres-workspace-diagnosis.png'), Buffer.from(capture.data, 'base64'))
+    }
 
     stage = 'browser_reload'
     const readsBeforeReload = activity.targetListReads

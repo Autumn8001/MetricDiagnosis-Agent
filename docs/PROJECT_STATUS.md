@@ -1,5 +1,7 @@
 # MetricSleuth Project Status
 
+> **桌面回读验收 2026-10-15**：基线c3360ff的真实模型成功Run现已通过实际PG→独立API→React build→Edge桌面读取与刷新重开；2工具/5观察/5证据/1诊断、Driver与证据引用核对通过，0写请求，DB前后190/126/167/80/72不变。任务客户端18/18、lint/build通过。API和PG已停止，无新模型调用。[记录](evaluation-artifacts/live-model-browser-readback-2026-10-15.md)。下一步是浏览器新提交→真实Worker/SDK完整闭环及少量重复评测，非继续扩展底座；Shopify资源与部署仍未完成。
+
 > **最新状态 2026-10-15**：分支 `codex/r5-004-validation`。真实 SDK + 隔离 PostgreSQL Synthetic 调查已成功（最终收紧版 Run `dc6ab94f-8865-45bc-925d-db2ed8ab901f`）：3轮、2工具、5 Observation/5 Evidence/1 Diagnosis，conversion_rate / marketplace=US，provenance及新应用读回通过。修复是任务过滤器 Schema 绑定，不是更换 SDK；工具异常仍直接终止。691 tests / OK(skipped=6)。模型标识 gemini-3.8-flash-high，Token未采集。隔离PG已停止；未部署。下方旧快照与历史失败不覆盖本条。下一步：现有桌面详情页读取这次成功记录，再做小规模重复评测；持续Shopify资源仍待准备。详见 [验收记录](evaluation-artifacts/live-model-task-scope-2026-10-15.md)。
 
 > 2026-10-14 R5-004：独立实验迁移、Lab API、发布/恢复、关联既有Runtime和React Lab已实现。真实临时PostgreSQL脚本六项检查通过；离线Ran690 / OK(skipped=6，Windows跳过POSIX文件模式位测试)，桌面1440×1000受控HTTP流程通过。真实模型和外部业务数据仍未调用，未推送或部署。[验证记录](evaluation-artifacts/lab-application-acceptance-2026-10-13.md)。
