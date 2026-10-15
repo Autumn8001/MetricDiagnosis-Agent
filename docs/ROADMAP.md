@@ -1,5 +1,7 @@
 # MetricSleuth MVP Roadmap
 
+> 最新R6增量（2026-10-15）：三场景各2次实际模型调查已完成，执行/结论匹配6/6，22/22声明支持，但严格证据覆盖0/6。新PG连接复算日志一致。[报告与缺口](evaluation-artifacts/sandbox-live-repeated-2026-10-15.md)。下一步修复正常对照引用和正常结论范围，不继续扩大调度；本组6次预算已使用，R6整体仍进行中。Shopify资源更新待用户答复。
+
 > 2026-10-15最新：同进程真实浏览器Synthetic闭环已通过，Run `607bb0f8-7016-4214-be2d-a965c906876f`，5/8/6/1、6轮，刷新新读回及服务完成确认通过；新PG连接复算Driver/状态/引用4/4支持。[验收记录](evaluation-artifacts/live-model-browser-complete-2026-10-15.md)。以下早期“同进程复跑待完成”仅为历史；后续转入三场景重复语义评测与Shopify实际权限gate，需新预算/资源。Scope准确率、停止时机、usage及部署未完成。
 
 > 2026-10-15桌面增量验收：真实模型成功历史经实际PG/API/Edge显示与刷新重读通过，0写请求，数据库计数不变。复用只读浏览器脚本新增成功模式，无业务UI重构。证据：[成功记录回读](evaluation-artifacts/live-model-browser-readback-2026-10-15.md)。随后已出现浏览器新提交→真实Worker/SDK持久化证据，单进程终态轮询复跑仍待；R6少量重复评测、R3外部源及R7部署继续待完成。

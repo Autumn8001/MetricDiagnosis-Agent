@@ -1,6 +1,8 @@
 # MetricSleuth 后续开发方案
 
-> 2026-10-15当前执行入口：阶段A/B已完成真实PG/受控验收；同一API进程的真实浏览器提交→Worker/SDK→终态→刷新新读回已通过，[最新证据](evaluation-artifacts/live-model-browser-complete-2026-10-15.md)。下一步是已准备三场景的小样本重复语义评测（需新预算），Shopify资源就绪后先实际只读字段gate，再最小幂等更新；等待资源时不扩展调度。最新事实以 [PROJECT_STATUS](PROJECT_STATUS.md) 为准；下文为2026-10-13规划基线，其“当前/下一阶段/未知”均按当时理解，不覆盖本段。
+> 最新执行结果：三场景6笔真实调查已运行，Driver/Scope正确6/6，严格引用覆盖未通过（0/6）；[报告](evaluation-artifacts/sandbox-live-repeated-2026-10-15.md)。原“等待首次重复实验”已经推进为“修复正常对照引用/结论范围后再经新预算复验”。既有输入和评分规则不因结果不佳而修改；后续外部来源与部署顺序不变。
+
+> 此前2026-10-15执行入口（实验状态已由上段更新）：阶段A/B已完成真实PG/受控验收；同一API进程的真实浏览器提交→Worker/SDK→终态→刷新新读回已通过，[证据](evaluation-artifacts/live-model-browser-complete-2026-10-15.md)。当时下一步为三场景小样本重复语义评测。Shopify资源就绪后先实际只读字段gate，再最小幂等更新；等待资源时不扩展调度。最新事实以 [PROJECT_STATUS](PROJECT_STATUS.md) 为准；下文为2026-10-13规划基线，其“当前/下一阶段/未知”均按当时理解，不覆盖最新结果。
 
 > R6增量：已有2条真实模型成功结果经真实PG回读后符合预期Driver/终态且声明有证据支持，另保留1条历史失败；[回溯记录](evaluation-artifacts/persisted-semantic-replay-2026-10-15.md)明确不算新重复实验。下一步需要预先固定异常/无异常/负对照及停止验收规则，而不是由已知输出生成答案；独立Scope准确率和usage仍未完成。
 

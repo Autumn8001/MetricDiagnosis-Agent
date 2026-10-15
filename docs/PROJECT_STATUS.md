@@ -2,12 +2,14 @@
 
 ## 当前接管摘要（2026-10-15，优先于以下历史快照）
 
-- 分支`codex/r5-004-validation`；本轮基线`3f8c1b5`，实际HEAD用`git log -1`核对。
-- 最新验收：同一API进程内真实Edge提交→PG Worker/SDK/SQL→成功轮询→刷新新读取→完成确认通过。Run `607bb0f8-7016-4214-be2d-a965c906876f`，5工具/8观察/6证据/1诊断，6轮，Runner115843ms；配置模型gemini-3.8-flash-high，120秒单请求、无重试。一次授权已使用。
-- 新PG连接只读回算：目标/状态/Driver与provenance通过，4/4声明有证据。Scope准确率、精确停止时机、Token/费用未知；不是重复实验、holdout或真实外部数据。最终表计数194/146/199/92/74。
-- 本轮修复验收manifest超时字段遗漏；前端build、4项断言与lint通过；后端未改、未重跑全量。初始预检未提交，查PG确认0 Run后才重启空闲服务，没有重跑已有模型任务。
-- 已有能力：持久任务/最小Worker、指标读取/手动扫描、Synthetic/Olist内核、受控PG Lab和桌面工作区。持续外部数据、重复模型评测/usage及生产部署仍未完成，不能称MVP交付。
-- 下一步：三场景输入已准备，待独立调用预算；Shopify需开发店/应用/read_orders，先只读字段验证，再最小幂等更新。不扩大Runtime或调度框架。
+- 分支`codex/r5-004-validation`；本轮基线`d322c92`，实际HEAD用`git log -1`核对。
+- 最新R6：三场景各2次真实模型已执行，6/6持久成功及Driver/Scope匹配，22/22声明支持；严格证据覆盖0/6通过，不能称质量gate完成。5–7工具用于异常、2工具用于正常，平均Runner39.6535秒；Token/费用和精确停止时机未知。6次预算已全部使用。[逐笔报告](evaluation-artifacts/sandbox-live-repeated-2026-10-15.md)。
+- 新连接只读复算6笔与日志一致，冻结源码/输入哈希一致；四笔异常已查到正常对照但引用不足，两笔正常只查全局未查维度对照。最终表计数200/173/348/124/80。新增守卫5项及全量离线回归通过，既有警告保留；前端未改。三个新Sandbox库保留，PG已停止。
+- 此前浏览器验收：同一API进程内真实Edge提交→PG Worker/SDK/SQL→成功轮询→刷新新读取→完成确认通过。Run `607bb0f8-7016-4214-be2d-a965c906876f`，5工具/8观察/6证据/1诊断，6轮，Runner115843ms；配置模型gemini-3.8-flash-high，120秒单请求、无重试。一次授权已使用。
+- 该浏览器样本的新PG连接只读回算：目标/状态/Driver与provenance通过，4/4声明有证据；当时未独立评分Scope，精确停止时机、Token/费用未知。不是重复实验、holdout或真实外部数据。当时表计数194/146/199/92/74，已由上方六次实验后的计数更新。
+- 该浏览器切片修复验收manifest超时字段遗漏；前端build、4项断言与lint通过，当时后端未改、未重跑全量。初始预检未提交，查PG确认0 Run后才重启空闲服务，没有重跑已有模型任务。
+- 已有能力：持久任务/最小Worker、指标读取/手动扫描、Synthetic/Olist内核、受控PG Lab和桌面工作区。持续外部数据、重复评测的严格质量门、usage及生产部署仍未完成，不能称MVP交付。
+- 下一步：先修复正常对照引用及全局正常结论的范围说明，保留当前6笔基线，改后需新预算复验；Shopify资源状态待回复，先真实只读字段gate再最小同步。不扩大Runtime或调度框架。
 - 记录：[完整真实验收](evaluation-artifacts/live-model-browser-complete-2026-10-15.md)、[评测准备](evaluation-artifacts/sandbox-evaluation-plan-2026-10-15.md)、[Shopify指南](shopify-orders-probe.md)。API/PG已停止，数据保留；仅桌面Web，未部署。
 
 ## 历史快照（下方“当前/最新/下一步”均指当时状态）
