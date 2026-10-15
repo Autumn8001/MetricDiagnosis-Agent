@@ -6,9 +6,9 @@
 
 最终版真实SDK/隔离PG运行已通过：3轮/2工具、5 Observation/5 Evidence/1 Diagnosis及新应用读回；见[验收记录](evaluation-artifacts/live-model-task-scope-2026-10-15.md)。这是Synthetic上的单次成功，非外部同步或重复准确率验收。
 
-## 2026-10-13 Lab 补充（实际数据库验收待执行）
+## 2026-10-13 Lab 补充（实际数据库受控验收已完成）
 
-显式 `app.lab_application` 将有限预配置空Sandbox目标与独立应用状态库连接。迁移005只保存实验场景、状态、幂等键、版本标签及调查关联，不保存凭据。发布复用既有空库写入器，来源会话advisory lock保护发布与恢复；恢复只读已提交manifest，不重新发布。实验ID派生稳定run ID，关联复用原任务提交/Worker/证据持久化，API本身不执行模型。React Lab只读响应，明确Synthetic/Sandbox。每目标仅一次发布；版本是label，snapshot_consistent=false。没有替换Runtime。单元/合同与受控HTTP桌面验证通过，真实PG迁移和链路待许可执行，非生产验收。
+显式 `app.lab_application` 将有限预配置空Sandbox目标与独立应用状态库连接。迁移005只保存实验场景、状态、幂等键、版本标签及调查关联，不保存凭据。发布复用既有空库写入器，来源会话advisory lock保护发布与恢复；恢复只读已提交manifest，不重新发布。实验ID派生稳定run ID，关联复用原任务提交/Worker/证据持久化，API本身不执行模型。React Lab只读响应，明确Synthetic/Sandbox。每目标仅一次发布；版本是label，snapshot_consistent=false。没有替换Runtime。单元/合同、受控HTTP桌面及临时真实PG迁移/恢复六项检查通过；Runner受控，非模型或生产验收，见[记录](evaluation-artifacts/lab-application-acceptance-2026-10-13.md)。
 
 > **Status：Current + Planned boundary**
 > 更新日期：2026-10-10

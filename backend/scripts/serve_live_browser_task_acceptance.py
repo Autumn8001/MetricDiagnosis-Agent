@@ -203,6 +203,59 @@ def build_application(database_url: str, source_id: str, model: str):
     return create_app(investigation_tasks_service=service, include_legacy_routes=False), worker
 
 
+def install_acceptance_boundary(application, manifest, state, state_lock, acceptance_complete):
+    """Restrict this harness independently of its browser-side proxy."""
+    from fastapi import HTTPException
+    from app.api.task_service import TaskServiceError
+    from scripts.verify_live_task_persistence import _validate_persisted_provenance
+
+    service = application.state.investigation_tasks_service
+    original_submit = service.submit
+    expected = {
+        "source_id": manifest["source_id"],
+        "target_metric": manifest["target_metric"],
+        "target_date": manifest["target_date"],
+        "filters": manifest["request_filters"],
+        "group_by": [],
+    }
+
+    def submit_once(payload):
+        if payload.model_dump(mode="json") != expected:
+            raise TaskServiceError(400, "acceptance_task_not_allowed")
+        with state_lock:
+            if state.get("attempted"):
+                raise TaskServiceError(409, "acceptance_submission_already_attempted")
+            # Reserve before I/O: an uncertain write must never trigger a retry.
+            state["attempted"] = True
+        result = original_submit(payload)
+        with state_lock:
+            state["run_id"] = result.investigation_run_id
+            state["submitted"] = True
+        return result
+
+    def complete_acceptance(payload: dict[str, str]) -> dict[str, str]:
+        with state_lock:
+            run_id = state.get("run_id")
+            ready = run_id and state["processed"] == run_id and not state["exception_type"]
+        if not ready or payload != {"run_id": run_id}:
+            raise HTTPException(409, detail={"code": "acceptance_not_ready"})
+        try:
+            detail = service.get_run(run_id, manifest["source_id"]).model_dump(mode="json")
+            provenance = _validate_persisted_provenance(
+                detail, source_id=manifest["source_id"], data_version=manifest["data_version"],
+            )
+        except Exception:
+            raise HTTPException(409, detail={"code": "acceptance_readback_failed"}) from None
+        if detail["run"].get("investigation_run_id") != run_id or not provenance["passed"]:
+            raise HTTPException(409, detail={"code": "acceptance_provenance_failed"})
+        acceptance_complete.set()
+        return {"status": "accepted"}
+
+    service.submit = submit_once
+    application.add_api_route("/__acceptance__/manifest", lambda: manifest, methods=["GET"], include_in_schema=False)
+    application.add_api_route("/__acceptance__/complete", complete_acceptance, methods=["POST"], include_in_schema=False)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = SafeArgumentParser(description=__doc__)
     parser.add_argument("--database-url", required=True)
@@ -233,20 +286,6 @@ def main(argv: list[str] | None = None) -> int:
         state = {"submitted": False, "processed": None, "exception_type": None}
         state_lock = threading.Lock()
         acceptance_complete = threading.Event()
-        original_submit = application.state.investigation_tasks_service.submit
-
-        def submit_and_signal(payload: Any):
-            result = original_submit(payload)
-            with state_lock:
-                state["submitted"] = True
-            return result
-
-        application.state.investigation_tasks_service.submit = submit_and_signal
-
-        def complete_acceptance() -> dict[str, str]:
-            """End the explicit harness after the browser has read its terminal result."""
-            acceptance_complete.set()
-            return {"status": "accepted"}
 
         manifest = {
             "acceptance_kind": "live_model_browser_task",
@@ -263,8 +302,7 @@ def main(argv: list[str] | None = None) -> int:
             "data_version": DATA_VERSION,
             "api_mode": mode,
         }
-        application.add_api_route("/__acceptance__/manifest", lambda: manifest, methods=["GET"], include_in_schema=False)
-        application.add_api_route("/__acceptance__/complete", complete_acceptance, methods=["POST"], include_in_schema=False)
+        install_acceptance_boundary(application, manifest, state, state_lock, acceptance_complete)
 
         import uvicorn
 
@@ -290,7 +328,9 @@ def main(argv: list[str] | None = None) -> int:
                 with state_lock:
                     submitted = state["submitted"]
                 if submitted:
+                    previous_logging_level = logging.root.manager.disable
                     try:
+                        logging.disable(logging.CRITICAL)
                         processed = worker.run_once()
                         with state_lock:
                             state["processed"] = processed
@@ -298,6 +338,8 @@ def main(argv: list[str] | None = None) -> int:
                         name = type(exc).__name__
                         with state_lock:
                             state["exception_type"] = name if SAFE_EXCEPTION.fullmatch(name) else "OtherError"
+                    finally:
+                        logging.disable(previous_logging_level)
                     return
                 time.sleep(0.1)
 

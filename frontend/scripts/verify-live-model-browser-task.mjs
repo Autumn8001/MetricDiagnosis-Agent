@@ -17,6 +17,20 @@ const MAX_BODY_BYTES = 1_048_576
 function fail(code) { throw new Error(code) }
 function check(value, code) { if (!value) fail(code) }
 
+export function assertRenderedDiagnosis(detail, text) {
+  const diagnosis = detail.diagnoses[0]
+  const labels = { diagnosed: '已定位主要变化', no_material_anomaly: '未发现明显异常', insufficient_evidence: '证据不足', budget_exhausted: '调查预算已用尽', tool_failure: '工具执行失败' }
+  check(text.includes(detail.run.investigation_run_id) && text.includes(labels[diagnosis.status] ?? diagnosis.status), 'browser_diagnosis_rendered')
+  check(diagnosis.evidence_ids.every((id) => text.includes(id)), 'browser_citations_rendered')
+  for (const evidence of detail.evidence) {
+    check([evidence.evidence_id, evidence.observation_id, evidence.tool_call_id, evidence.query_reference, evidence.data_version].every((value) => typeof value === 'string' && text.includes(value)), 'browser_provenance_rendered')
+  }
+}
+
+export function assertFreshReadback(first, current, readsBeforeReload, terminalReads) {
+  check(terminalReads > readsBeforeReload && JSON.stringify(first) === JSON.stringify(current), 'browser_refresh_detail')
+}
+
 function parseArguments(argv) {
   const values = Object.create(null)
   let authorization = 0
@@ -161,6 +175,8 @@ function createProxy(apiOrigin, manifest, activity) {
               check(Array.isArray(diagnosis.evidence_ids) && diagnosis.evidence_ids.length > 0 && diagnosis.evidence_ids.every((id) => evidenceIds.has(id)), 'diagnosis_evidence')
               activity.factCounts = { tool_calls: detail.tool_calls.length, observations: detail.observations.length, evidence: detail.evidence.length, diagnoses: detail.diagnoses.length }
               activity.primaryDriver = typeof diagnosis.primary_driver === 'string' ? diagnosis.primary_driver : null
+              activity.terminalReads += 1
+              activity.terminalDetail = detail
             }
           } catch { return send(502, 'upstream_invalid') }
         }
@@ -196,7 +212,7 @@ async function main() {
   const profile = await mkdtemp(join(tmpdir(), 'metricsleuth-live-browser-profile-'))
   const profileResolved = resolve(profile)
   check(profileResolved.startsWith(`${resolve(tmpdir())}${sep}`), 'profile_path')
-  const activity = { postAttempts: 0, forwardedPosts: 0, blockedWrites: 0, rejectedApiRequests: 0, catalogReads: 0, listReads: 0, detailReads: 0, runId: null, latestStatus: null, factCounts: null, primaryDriver: null }
+  const activity = { postAttempts: 0, forwardedPosts: 0, blockedWrites: 0, rejectedApiRequests: 0, catalogReads: 0, listReads: 0, detailReads: 0, terminalReads: 0, terminalDetail: null, runId: null, latestStatus: null, factCounts: null, primaryDriver: null }
   const proxy = createProxy(args.apiOrigin, manifest, activity)
   const browserExecutable = process.env.METRICSLEUTH_TEST_BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
   let browser
@@ -245,16 +261,21 @@ async function main() {
     await click('[data-testid="submit-investigation"]')
     await until(() => activity.forwardedPosts === 1 && UUID.test(activity.runId ?? ''), 'browser_submit', REQUEST_TIMEOUT_MS + 3_000)
     await until(async () => activity.latestStatus === 'succeeded' && activity.factCounts !== null && (await bodyText()).includes(activity.runId), 'browser_terminal', TERMINAL_TIMEOUT_MS)
-    const terminalText = await bodyText()
-    check(terminalText.includes('已定位主要变化') || terminalText.includes('暂无显著异常') || terminalText.includes('需要更多证据'), 'browser_diagnosis_rendered')
+    await until(async () => { assertRenderedDiagnosis(activity.terminalDetail, await bodyText()); return true }, 'browser_facts_rendered')
+    const firstTerminalDetail = activity.terminalDetail
     const screenshot = await cdp('Page.captureScreenshot', { format: 'png' })
     await writeFile(join(args.output, 'live-model-browser-task-desktop.png'), Buffer.from(screenshot.data, 'base64'))
+    const readsBeforeReload = activity.terminalReads
     await cdp('Page.reload', { ignoreCache: true })
     await until(() => evaluate(`!!document.querySelector('[data-testid="history-run"][data-run-id="${activity.runId}"]')`), 'browser_refresh_history')
     await click(`[data-testid="history-run"][data-run-id="${activity.runId}"]`)
-    await until(async () => (await bodyText()).includes(activity.runId) && activity.detailReads >= 2, 'browser_refresh_detail')
+    await until(async () => {
+      assertFreshReadback(firstTerminalDetail, activity.terminalDetail, readsBeforeReload, activity.terminalReads)
+      assertRenderedDiagnosis(activity.terminalDetail, await bodyText())
+      return true
+    }, 'browser_refresh_detail')
     check(activity.postAttempts === 1 && activity.forwardedPosts === 1 && activity.blockedWrites === 0 && activity.rejectedApiRequests === 0, 'browser_request_boundary')
-    const completion = await jsonRequest(new URL('/__acceptance__/complete', args.apiOrigin), 'POST', 'acceptance_complete', JSON.stringify({}))
+    const completion = await jsonRequest(new URL('/__acceptance__/complete', args.apiOrigin), 'POST', 'acceptance_complete', JSON.stringify({ run_id: activity.runId }))
     check(completion.response.status === 200 && completion.payload?.status === 'accepted', 'acceptance_complete')
     console.log(JSON.stringify({ status: 'passed', boundary: 'one browser-submitted real SDK task; isolated Synthetic PostgreSQL; no external business data', run_id: activity.runId, tool_calls: activity.factCounts.tool_calls, observations: activity.factCounts.observations, evidence: activity.factCounts.evidence, diagnoses: activity.factCounts.diagnoses, primary_driver: activity.primaryDriver, api_mode: manifest.api_mode, output: args.output }))
   } finally {
@@ -265,4 +286,6 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.log(JSON.stringify({ status: 'failed', code: error instanceof Error && /^[a-z_]+$/.test(error.message) ? error.message : 'browser_acceptance_failed' })); process.exitCode = 1 })
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => { console.log(JSON.stringify({ status: 'failed', code: error instanceof Error && /^[a-z_]+$/.test(error.message) ? error.message : 'browser_acceptance_failed' })); process.exitCode = 1 })
+}
