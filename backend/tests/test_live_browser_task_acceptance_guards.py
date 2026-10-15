@@ -29,6 +29,22 @@ LOCAL_URL = "postgresql://tester@127.0.0.1:55440/metricsleuth_r2_acceptance"
 
 
 class LiveBrowserTaskAcceptanceGuardTests(unittest.TestCase):
+    def test_bounded_client_timeout_preserves_no_retries_and_disables_tracing(self):
+        for timeout in (60, 120):
+            with (
+                patch("openai.AsyncOpenAI") as client,
+                patch("agents.set_default_openai_client"),
+                patch("agents.set_tracing_disabled") as tracing,
+                patch.dict(acceptance.os.environ),
+            ):
+                acceptance.install_model_client(("test-only", None, "chat_completions", "test-model"),
+                                                request_timeout_seconds=timeout)
+                client.assert_called_once_with(api_key="test-only", base_url=None, max_retries=0, timeout=timeout)
+                tracing.assert_called_once_with(True)
+        for invalid in (True, 0, 61, 600, "120"):
+            with self.subTest(invalid=invalid), self.assertRaises(acceptance.AcceptanceFailure):
+                acceptance.install_model_client((), request_timeout_seconds=invalid)
+
     def test_event_log_survives_close_and_cannot_overwrite_existing_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "acceptance.jsonl"

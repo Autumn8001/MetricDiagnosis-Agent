@@ -122,7 +122,9 @@ def load_model_settings(env_file: str) -> tuple[str, str | None, str, str]:
     return key.strip(), base.strip() if base else None, mode, model.strip()
 
 
-def install_model_client(settings: tuple[str, str | None, str, str]):
+def install_model_client(settings: tuple[str, str | None, str, str], *, request_timeout_seconds: int = 60):
+    if type(request_timeout_seconds) is not int or request_timeout_seconds not in (60, 120):
+        raise AcceptanceFailure("invalid_model_request_timeout")
     from agents import set_default_openai_client, set_tracing_disabled
     from openai import AsyncOpenAI
 
@@ -134,7 +136,7 @@ def install_model_client(settings: tuple[str, str | None, str, str]):
         os.environ.pop("OPENAI_BASE_URL", None)
     os.environ["OPENAI_API_MODE"] = mode
     os.environ["OPENAI_AGENTS_DISABLE_TRACING"] = "1"
-    client = AsyncOpenAI(api_key=key, base_url=base_url, max_retries=0, timeout=60)
+    client = AsyncOpenAI(api_key=key, base_url=base_url, max_retries=0, timeout=request_timeout_seconds)
     set_default_openai_client(client, use_for_tracing=False)
     set_tracing_disabled(True)
     return client, model, mode
@@ -314,6 +316,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--database-url", required=True)
     parser.add_argument("--model-env-file", required=True)
     parser.add_argument("--port", type=int, default=8014)
+    parser.add_argument("--model-request-timeout-seconds", type=int, choices=(60, 120), default=60)
     parser.add_argument("--safe-log-file", required=True,
                         help="New absolute JSONL file outside the repository; never overwritten")
     parser.add_argument("--allow-model-call", action="store_true", required=True)
@@ -343,7 +346,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
         event_log = AcceptanceEventLog(args.safe_log_file)
-        emit({"event": "acceptance_started", "max_tool_calls": MAX_TOOL_CALLS, "max_turns": MAX_TURNS})
+        request_timeout = getattr(args, "model_request_timeout_seconds", 60)
+        emit({"event": "acceptance_started", "max_tool_calls": MAX_TOOL_CALLS, "max_turns": MAX_TURNS,
+              "model_request_timeout_seconds": request_timeout})
         if log_failed.is_set():
             raise AcceptanceFailure("acceptance_event_log_unavailable")
         settings = load_model_settings(args.model_env_file)
@@ -351,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
         source_id = str(uuid4())
         asin = str(uuid4())
         insert_fixture(args.database_url, asin)
-        client, model, mode = install_model_client(settings)
+        client, model, mode = install_model_client(settings, request_timeout_seconds=request_timeout)
         application, worker = build_application(args.database_url, source_id, model)
         state = {"submitted": False, "processed": None, "exception_type": None}
         state_lock = threading.Lock()
@@ -371,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
             "data_profile": "synthetic",
             "data_version": DATA_VERSION,
             "api_mode": mode,
+            "model_request_timeout_seconds": request_timeout,
         }
         install_acceptance_boundary(application, manifest, state, state_lock, acceptance_complete)
 

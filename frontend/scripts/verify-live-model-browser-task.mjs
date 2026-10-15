@@ -11,7 +11,7 @@ const frontend = fileURLToPath(new URL('../', import.meta.url))
 const dist = resolve(frontend, 'dist')
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const REQUEST_TIMEOUT_MS = 15_000
-const TERMINAL_TIMEOUT_MS = 145_000
+const TERMINAL_TIMEOUT_MS = 190_000
 const MAX_BODY_BYTES = 1_048_576
 
 function fail(code) { throw new Error(code) }

@@ -11,6 +11,7 @@
 > 2026-10-15 历史兼容性记录：更新后的端点已通过 `/v1/models`、最小文本、工具声明和生成结构化Schema四项直接探测；当时旧任务过滤器没有进入模型可见 Schema，首次 Agents SDK 调查在首个完整工具结果前返回 `UserError`。后续修复已通过真实模型成功验收，故此段只保留历史故障定位，不代表当前 gate 状态；见[旧记录](evaluation-artifacts/live-model-sdk-compatibility-2026-10-15.md)。
 
 > 状态：动态接管摘要；更新时间：2026-10-15
+> 最新准备：验收harness可显式选择单请求120秒（默认60），启动事件/manifest保存选择；浏览器终态等待190秒，服务仍210秒存活。18项离线守卫、脚本语法与lint通过，未再次调用模型、未重跑全量。详情见[超时记录末节](evaluation-artifacts/live-model-browser-timeout-2026-10-15.md)。下一笔需新授权，不重用已消费预算。
 > **最新实际运行**：用户再次授权的1笔已执行并失败；`46a51b06-ae7f-4f5d-8f19-0bd0a031d544`保存5工具/8观察/0证据/0诊断，安全日志实际捕获`APITimeoutError`。配置模型标识gemini-3.8-flash-high；60秒单请求超时、无重试，Runner84167ms，Token/费用未取得。只读PG复核及失败评分exit1，表计数193/141/191/86/73。前端build通过；API/PG已停止，没有追加调用。[完整证据](evaluation-artifacts/live-model-browser-timeout-2026-10-15.md)。此前“待授权”均为当时状态，本笔新授权现已使用；完整浏览器成功gate仍未通过。
 > 后续增量：R6三场景开发评测输入准备完成，未运行模型。每场景558行/14项数值校核；正常数据冒充异常、负对照污染均拒绝。后端全量715项/OK(skipped=6)，既有警告保留；前端未改。输入/源码哈希与待执行规则见[评测准备](evaluation-artifacts/sandbox-evaluation-plan-2026-10-15.md)，提议6次实验未获调用预算，不能当执行结果。上方成功历史不覆盖下方最新失败记录。
 > 最新增量：真实浏览器harness已强制`--safe-log-file`写仓库外独占JSONL；每事件flush/fsync，安全Worker异常和Run ID可在句柄消失后读取；日志失败不能返回验收成功。17项专项通过，没有新模型/数据库调用，未重跑全量或前端。新的一次调查授权问题已提出，尚未收到答复，不复用上一笔预算；用法见[失败记录末节](evaluation-artifacts/live-model-browser-failure-2026-10-15.md)。
