@@ -1,5 +1,7 @@
 # Live model SDK compatibility acceptance — 2026-10-15
 
+> 后续定位纠正：本记录的“SDK协议不兼容”只是当时推测，并未成立。继续定位发现工具参数遗漏任务绑定过滤器，后端在执行 SQL 前拒绝；SDK 将该错误包装为 UserError。单看持久表的 0 条已完成工具记录不能推断“模型没有发起工具调用”。最新调查结果见 [任务过滤器验收](live-model-task-scope-2026-10-15.md)。
+
 ## Scope
 
 This was a bounded acceptance attempt on the isolated Synthetic PostgreSQL database

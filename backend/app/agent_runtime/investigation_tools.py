@@ -8,6 +8,7 @@ these tools; no investigation workflow or next-dimension policy lives here.
 from __future__ import annotations
 
 import datetime
+import copy
 from decimal import Decimal, DecimalException
 import re
 from typing import Any, Callable, Mapping, Sequence
@@ -79,6 +80,25 @@ _DIAGNOSIS_PROTOCOL = (
     "Observation jointly supports the claim, continue investigating or use a "
     "non-success status."
 )
+
+
+def _require_bound_filters(tool: FunctionTool, required_filters: Mapping[str, str] | None) -> FunctionTool:
+    """Make task-bound filter keys mandatory in the model-facing tool schema."""
+    if not required_filters:
+        return tool
+    schema = copy.deepcopy(tool.params_json_schema)
+    filters_schema = dict(schema.get("properties", {}).get("filters", {}))
+    filters_schema.pop("anyOf", None)
+    properties = dict(filters_schema.get("properties", {}))
+    for key, value in required_filters.items():
+        properties[key] = {"type": "string", "const": value}
+    filters_schema.update({"type": "object", "properties": properties})
+    filters_schema["required"] = list(required_filters)
+    filters_schema.pop("default", None)
+    schema.setdefault("properties", {})["filters"] = filters_schema
+    schema["required"] = list(dict.fromkeys([*schema.get("required", []), "filters"]))
+    tool.params_json_schema = schema
+    return tool
 
 
 class DimensionFilter(BaseModel):
@@ -474,6 +494,7 @@ def create_query_metric_tool(
     budget_guard: ToolCallBudgetGuard,
     clock: Callable[[], datetime.datetime] | None = None,
     progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
+    required_filters: Mapping[str, str] | None = None,
 ) -> FunctionTool:
     """Create the fail-closed SDK query_metric tool."""
     now = clock or (lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -519,7 +540,9 @@ def create_query_metric_tool(
     # Schema, which the SDK's strict-schema normalizer rejects.  Keep the
     # Python/Pydantic input contract strict while allowing this schema shape;
     # invocation still rejects arrays and JSON strings before the adapter runs.
-    return function_tool(query_metric, failure_error_function=None, strict_mode=False)
+    return _require_bound_filters(
+        function_tool(query_metric, failure_error_function=None, strict_mode=False), required_filters
+    )
 
 
 def create_get_metric_definition_tool(
@@ -527,6 +550,7 @@ def create_get_metric_definition_tool(
     *,
     budget_guard: ToolCallBudgetGuard,
     progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
+    required_filters: Mapping[str, str] | None = None,
 ) -> FunctionTool:
     """Create the fail-closed production semantic-definition tool."""
 
@@ -557,6 +581,7 @@ def create_query_related_metrics_tool(
     budget_guard: ToolCallBudgetGuard,
     clock: Callable[[], datetime.datetime] | None = None,
     progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
+    required_filters: Mapping[str, str] | None = None,
 ) -> FunctionTool:
     """Create the fail-closed SDK query_related_metrics tool."""
     now = clock or (lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -598,10 +623,9 @@ def create_query_related_metrics_tool(
         _report_tool_progress(context, payload, progress_callback)
         return payload
 
-    return function_tool(
-        query_related_metrics,
-        failure_error_function=None,
-        strict_mode=False,
+    return _require_bound_filters(
+        function_tool(query_related_metrics, failure_error_function=None, strict_mode=False),
+        required_filters,
     )
 
 
@@ -612,6 +636,7 @@ def create_investigation_tools(
     max_tool_calls: int = DEFAULT_INVESTIGATION_TOOL_BUDGET,
     clock: Callable[[], datetime.datetime] | None = None,
     progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
+    required_filters: Mapping[str, str] | None = None,
 ) -> tuple[FunctionTool, FunctionTool, FunctionTool]:
     """Create all controlled tools with one per-run shared call budget."""
     guard = budget_guard or ToolCallBudgetGuard(max_calls=max_tool_calls)
@@ -620,17 +645,20 @@ def create_investigation_tools(
             analytics_tools,
             budget_guard=guard,
             progress_callback=progress_callback,
+            required_filters=required_filters,
         ),
         create_query_metric_tool(
             analytics_tools,
             budget_guard=guard,
             clock=clock,
             progress_callback=progress_callback,
+            required_filters=required_filters,
         ),
         create_query_related_metrics_tool(
             analytics_tools,
             budget_guard=guard,
             clock=clock,
             progress_callback=progress_callback,
+            required_filters=required_filters,
         ),
     )

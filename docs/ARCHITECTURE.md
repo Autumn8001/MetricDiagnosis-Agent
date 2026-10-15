@@ -1,5 +1,11 @@
 # MetricSleuth 架构说明
 
+## 2026-10-15 任务范围与真实模型验收
+
+`SourceInvestigationRunner` 将任务固定 filters 传入既有 Diagnosis Runtime；`_require_bound_filters` 为每个查询工具深拷贝模型可见 Schema，把 filters 及固定键设为必填、值设为 const。代理未必强制执行Schema，SQL前的 `_BoundAnalyticsTools` 仍为执行权限边界，异常仍直接终止。任务路径不暴露冗余定义工具（查询结果含 Registry 定义），直接 Runtime 默认保留。没有新增Agent循环或动态改写查询过滤器。
+
+最终版真实SDK/隔离PG运行已通过：3轮/2工具、5 Observation/5 Evidence/1 Diagnosis及新应用读回；见[验收记录](evaluation-artifacts/live-model-task-scope-2026-10-15.md)。这是Synthetic上的单次成功，非外部同步或重复准确率验收。
+
 ## 2026-10-13 Lab 补充（实际数据库验收待执行）
 
 显式 `app.lab_application` 将有限预配置空Sandbox目标与独立应用状态库连接。迁移005只保存实验场景、状态、幂等键、版本标签及调查关联，不保存凭据。发布复用既有空库写入器，来源会话advisory lock保护发布与恢复；恢复只读已提交manifest，不重新发布。实验ID派生稳定run ID，关联复用原任务提交/Worker/证据持久化，API本身不执行模型。React Lab只读响应，明确Synthetic/Sandbox。每目标仅一次发布；版本是label，snapshot_consistent=false。没有替换Runtime。单元/合同与受控HTTP桌面验证通过，真实PG迁移和链路待许可执行，非生产验收。

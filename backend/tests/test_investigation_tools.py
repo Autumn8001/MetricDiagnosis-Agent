@@ -83,6 +83,22 @@ class CountingAnalyticsTools:
 
 
 class TestInvestigationTools(unittest.TestCase):
+    def test_bound_filter_schema_requires_exact_task_scope_without_cross_run_leak(self):
+        analytics = CountingAnalyticsTools(metric_result())
+        bound = create_investigation_tools(analytics, required_filters={"asin": "task-product"})
+        other = create_investigation_tools(analytics, required_filters={"asin": "other-product"})
+        unbound = create_investigation_tools(analytics)
+        for tool, other_tool, unbound_tool in zip(bound[1:], other[1:], unbound[1:]):
+            schema = tool.params_json_schema
+            self.assertIn("filters", schema["required"])
+            filters = schema["properties"]["filters"]
+            self.assertEqual(filters["type"], "object")
+            self.assertNotIn("anyOf", filters)
+            self.assertEqual(filters["required"], ["asin"])
+            self.assertEqual(filters["properties"]["asin"]["const"], "task-product")
+            self.assertEqual(other_tool.params_json_schema["properties"]["filters"]["properties"]["asin"]["const"], "other-product")
+            self.assertNotIn("filters", unbound_tool.params_json_schema["required"])
+
     def setUp(self) -> None:
         self.analytics = MagicMock(spec=AnalyticsTools)
         self.analytics.get_metric_definition.return_value = MetricDefinition(

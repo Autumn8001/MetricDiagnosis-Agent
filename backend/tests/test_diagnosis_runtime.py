@@ -361,6 +361,8 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
         guard = MagicMock()
         agent = create_evidence_driven_agent(self.analytics, model=None, budget_guard=guard)
         self.assertIs(agent.output_type, RuntimeDiagnosisIntent)
+        self.assertIn("copy every supplied filter key and exact value", agent.instructions)
+        self.assertIn("Never omit a task-bound filter", agent.instructions)
         self.assertEqual(len(agent.tools), 3)
         self.assertEqual(
             {tool.name for tool in agent.tools},

@@ -195,6 +195,8 @@ class SourceInvestigationRunner:
             max_turns=self._max_turns,
             run_config=run_config,
             progress_callback=progress_callback,
+            include_definition_tool=False,
+            required_filters=fixed_filters,
         )
 
     def _validate_request(
@@ -283,8 +285,12 @@ def _build_prompt(
             "follow relevant evidence, and report only data-supported findings. "
             "Every analytics tool call must explicitly include each supplied filter "
             "with its exact value; these filters define the data scope and cannot "
-            "be omitted or changed."
+            "be omitted or changed. MANDATORY TOOL ARGUMENT RULE: copy the complete "
+            "filters object from this request into every query_metric and "
+            "query_related_metrics call, including the first query. Never send "
+            "filters=null or an empty filters object when this request has fixed filters."
         ),
+        "mandatory_query_filters": dict(filters),
     }
     prompt = json.dumps(
         payload,

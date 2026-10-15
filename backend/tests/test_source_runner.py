@@ -340,10 +340,12 @@ class TestSourceInvestigationRunner(unittest.TestCase):
                 "filters",
                 "group_by",
                 "investigation_request",
+                "mandatory_query_filters",
             },
         )
         self.assertEqual(payload["compare_to"], "previous_7_days")
         self.assertEqual(payload["filters"], {"marketplace": "US"})
+        self.assertEqual(payload["mandatory_query_filters"], {"marketplace": "US"})
         self.assertLessEqual(len(prompt), 8192)
         self.assertNotIn("GroundTruth", prompt)
         self.assertNotIn("api_key", prompt)

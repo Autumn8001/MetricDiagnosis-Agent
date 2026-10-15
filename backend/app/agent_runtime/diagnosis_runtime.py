@@ -11,7 +11,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass, replace
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from agents import Agent, RunConfig, RunResult, Runner
 
@@ -124,6 +124,8 @@ def create_evidence_driven_agent(
     model: Any,
     budget_guard: ToolCallBudgetGuard,
     progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
+    include_definition_tool: bool = True,
+    required_filters: Mapping[str, str] | None = None,
 ) -> Agent:
     """Create an SDK Agent whose output is fact-free diagnosis intent.
 
@@ -136,22 +138,30 @@ def create_evidence_driven_agent(
         tools = create_investigation_tools(
             analytics_tools,
             budget_guard=budget_guard,
+            required_filters=required_filters,
         )
     else:
         tools = create_investigation_tools(
             analytics_tools,
             budget_guard=budget_guard,
             progress_callback=progress_callback,
+            required_filters=required_filters,
         )
+    selected_tools = tuple(
+        tool for tool in tools
+        if include_definition_tool or tool.name != "get_metric_definition"
+    )
     return Agent(
         name="MetricSleuthEvidenceDrivenDiagnosisAgent",
         model=model,
-        tools=list(tools),
+        tools=list(selected_tools),
         output_type=RuntimeDiagnosisIntent,
         instructions=(
             "Investigate the requested business metric using only the available controlled "
             "analytics tools. Query outputs include controlled metric definitions; use "
-            "get_metric_definition only when the needed definition is not already present. "
+            "query_metric for the requested target metric before using get_metric_definition; "
+            "use get_metric_definition only when the needed definition is not already present "
+            "in a query output. "
             "driver_metrics in a definition are the direct metrics that can explain movement in "
             "that metric (they are not formula dependencies or a fixed workflow). Before a "
             "diagnosed intent names a primary_driver that has driver_metrics, observe every one "
@@ -178,6 +188,12 @@ def create_evidence_driven_agent(
             "set start_date and end_date both to the requested target date. Request the seven-day "
             "baseline with compare_to='previous_7_days'; never encode the baseline by widening "
             "the current-period date range. "
+            "When the investigation request includes a filters object, treat it as a fixed task "
+            "scope: before every query_metric or query_related_metrics call, copy every supplied "
+            "filter key and exact value into that tool call. Never omit a task-bound filter, "
+            "replace its value, or send filters=null; a call outside the requested scope will be "
+            "rejected. The requested group_by may be narrowed only when the evidence requires it, "
+            "but it must remain within the dimensions declared by the metric definition. "
             "Treat tool Output as the sole source of factual Observation IDs. In your final "
             "structured intent, copy every observation_id character-for-character from the current "
             "tool Output; never invent, derive, shorten, or paraphrase an Observation ID. Use "
@@ -283,6 +299,8 @@ def run_evidence_driven_diagnosis(
     run_config: RunConfig | None = None,
     created_at: datetime.datetime | None = None,
     progress_callback: Callable[[Any, tuple[Observation, ...]], None] | None = None,
+    include_definition_tool: bool = True,
+    required_filters: Mapping[str, str] | None = None,
 ) -> EvidenceDrivenRunSummary:
     """Run one bounded SDK investigation and resolve a structured Diagnosis.
 
@@ -307,6 +325,8 @@ def run_evidence_driven_diagnosis(
             analytics_tools,
             model=model,
             budget_guard=guard,
+            required_filters=required_filters,
+            include_definition_tool=include_definition_tool,
         )
     else:
         agent = create_evidence_driven_agent(
@@ -314,6 +334,8 @@ def run_evidence_driven_diagnosis(
             model=model,
             budget_guard=guard,
             progress_callback=progress_callback,
+            required_filters=required_filters,
+            include_definition_tool=include_definition_tool,
         )
     result = Runner.run_sync(
         agent,
