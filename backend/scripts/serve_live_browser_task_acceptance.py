@@ -51,6 +51,32 @@ class AcceptanceFailure(Exception):
         super().__init__(code)
 
 
+class AcceptanceEventLog:
+    """Exclusive external JSONL evidence; never captures stdout or SDK logs."""
+
+    def __init__(self, filename: str):
+        self.lock = threading.Lock()
+        try:
+            path = Path(filename)
+            if not path.is_absolute() or path.resolve().is_relative_to(REPOSITORY_ROOT.resolve()):
+                raise ValueError("external_absolute_path_required")
+            self.handle = path.open("x", encoding="utf-8")
+        except (OSError, ValueError):
+            raise AcceptanceFailure("acceptance_event_log_unavailable") from None
+
+    def emit(self, payload: dict) -> None:
+        # Callers supply only explicit safe fields, never original exceptions.
+        line = json.dumps(payload, sort_keys=True)
+        with self.lock:
+            self.handle.write(line + "\n")
+            self.handle.flush()
+            os.fsync(self.handle.fileno())
+
+    def close(self) -> None:
+        with self.lock:
+            self.handle.close()
+
+
 class SafeArgumentParser(argparse.ArgumentParser):
     def error(self, _message: str) -> None:
         self.exit(2, "invalid_arguments\n")
@@ -288,6 +314,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--database-url", required=True)
     parser.add_argument("--model-env-file", required=True)
     parser.add_argument("--port", type=int, default=8014)
+    parser.add_argument("--safe-log-file", required=True,
+                        help="New absolute JSONL file outside the repository; never overwritten")
     parser.add_argument("--allow-model-call", action="store_true", required=True)
     args = parser.parse_args(argv)
     validate_database_url(args.database_url)
@@ -301,8 +329,23 @@ def main(argv: list[str] | None = None) -> int:
     server = None
     server_thread = None
     worker_thread = None
+    event_log = None
+    log_failed = threading.Event()
+
+    def emit(payload):
+        if event_log is not None:
+            try:
+                event_log.emit(payload)
+            except OSError:
+                log_failed.set()
+        print(json.dumps(payload, sort_keys=True), flush=True)
+
     try:
         args = parse_args(argv)
+        event_log = AcceptanceEventLog(args.safe_log_file)
+        emit({"event": "acceptance_started", "max_tool_calls": MAX_TOOL_CALLS, "max_turns": MAX_TURNS})
+        if log_failed.is_set():
+            raise AcceptanceFailure("acceptance_event_log_unavailable")
         settings = load_model_settings(args.model_env_file)
         preflight_database(args.database_url)
         source_id = str(uuid4())
@@ -367,37 +410,46 @@ def main(argv: list[str] | None = None) -> int:
                             state["exception_type"] = name if SAFE_EXCEPTION.fullmatch(name) else "OtherError"
                     finally:
                         logging.disable(previous_logging_level)
-                    print(json.dumps({"event": "worker_finished",
-                                      "telemetry": getattr(application.state, "acceptance_telemetry", None)}, sort_keys=True), flush=True)
+                    with state_lock:
+                        worker_failure = state["exception_type"]
+                        run_id = state.get("run_id")
+                    emit({"event": "worker_finished", "run_id": run_id,
+                          "exception_type": worker_failure,
+                          "telemetry": getattr(application.state, "acceptance_telemetry", None)})
                     return
                 time.sleep(0.1)
 
         worker_thread = threading.Thread(target=run_worker, name="live-browser-worker", daemon=True)
         worker_thread.start()
         print(f"acceptance_server_ready http://127.0.0.1:{args.port}", flush=True)
+        emit({"event": "server_ready", "source_id": source_id, "data_version": DATA_VERSION})
         deadline = time.monotonic() + SERVER_LIFETIME_SECONDS
         failure_readback_deadline = None
         while time.monotonic() < deadline and server_thread.is_alive():
+            if log_failed.is_set():
+                raise AcceptanceFailure("acceptance_event_log_unavailable")
             with state_lock:
                 processed = state["processed"]
                 failure = state["exception_type"]
             if acceptance_complete.is_set():
-                print(json.dumps({"worker": "processed" if processed else "failed", "exception_type": failure,
-                                  "telemetry": getattr(application.state, "acceptance_telemetry", None)}, sort_keys=True), flush=True)
-                return 0 if processed is not None else 1
+                emit({"event": "browser_readback_accepted", "worker": "processed" if processed else "failed",
+                      "exception_type": failure,
+                      "telemetry": getattr(application.state, "acceptance_telemetry", None)})
+                return 0 if processed is not None and not log_failed.is_set() else 1
             telemetry = getattr(application.state, "acceptance_telemetry", {})
             if failure or (processed and telemetry.get("status") == "failed"):
                 if failure_readback_deadline is None:
                     failure_readback_deadline = time.monotonic() + FAILURE_READBACK_GRACE_SECONDS
                 if time.monotonic() >= failure_readback_deadline:
+                    emit({"event": "acceptance_failed", "code": "investigation_failed"})
                     return 1
             time.sleep(0.2)
         raise AcceptanceFailure("acceptance_server_lifetime_expired")
     except AcceptanceFailure as exc:
-        print(json.dumps({"status": "failed", "code": exc.code}, sort_keys=True))
+        emit({"event": "acceptance_failed", "status": "failed", "code": exc.code})
         return 2
     except Exception:
-        print(json.dumps({"status": "failed", "code": "acceptance_setup_failed"}, sort_keys=True))
+        emit({"event": "acceptance_failed", "status": "failed", "code": "acceptance_setup_failed"})
         return 1
     finally:
         if worker_thread is not None:
@@ -409,6 +461,8 @@ def main(argv: list[str] | None = None) -> int:
             server_thread.join(timeout=7)
         if client is not None:
             close_model_client(client)
+        if event_log is not None and (worker_thread is None or not worker_thread.is_alive()):
+            event_log.close()
 
 
 if __name__ == "__main__":

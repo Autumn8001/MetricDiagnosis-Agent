@@ -51,3 +51,15 @@ node scripts/verify-postgres-workspace.mjs --api http://127.0.0.1:8015 --source 
 改进后离线回归：后端全量712项，OK(skipped=6)，其中遥测守卫13项和语义回溯8项通过；前端读取断言3项、lint及生产构建通过。全量仍有既有event loop ResourceWarning及依赖弃用警告。跳过的数据库专项不算本次真实数据库测试通过；真实数据库证据是上文明确记录的既有Run读回。
 
 临时只读API与测试PG均已停止，数据保留。真实外部源、重复评测、停止时机和生产部署依然未完成。
+
+## 后续：强制安全事件落盘
+
+`serve_live_browser_task_acceptance.py`现在要求 `--safe-log-file`：绝对路径、仓库外、文件尚不存在、父目录已存在。只显式写入安全JSONL事件，不转存SDK日志、stdout、异常消息或原始响应。每条事件flush/fsync；记录启动、来源绑定、Worker结束（Run ID、异常类型和上述遥测）、浏览器完成或安全失败码。日志建立或首次写入失败在模型配置读取与数据库访问之前停止；后续落盘失败不能使验收返回成功。已有失败记录的缺失异常无法通过此改动追补。
+
+后续**获得新调用预算后**，在既有隔离PG运行且端口空闲时可从backend执行（不是自动回归命令）：
+
+```powershell
+python -B scripts/serve_live_browser_task_acceptance.py --database-url postgresql://metricsleuth_test@127.0.0.1:55440/metricsleuth_r2_acceptance --model-env-file ../.env --port 8014 --safe-log-file D:/Rag/Agent/metricsleuth-next-browser-safe-events.jsonl --allow-model-call
+```
+
+若日志文件已存在，应选择新的明确文件名，保留原记录；不能删除证据再复用预算。日志包含Synthetic任务标识，不含鉴权配置。此命令需配合既有浏览器脚本，只启动服务不代表完成验收。对应17项离线守卫通过，包含文件持久读回、禁止覆盖、禁止仓库/相对路径、日志创建/写入失败提前停止及受控HTTP生命周期；未再次调用模型。前次后端全量715项记录仍是落盘改动前的结果，本切片未重跑全量或前端。

@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 import socket
+from pathlib import Path
+import tempfile
 import threading
 import time
 from types import SimpleNamespace
@@ -27,6 +29,49 @@ LOCAL_URL = "postgresql://tester@127.0.0.1:55440/metricsleuth_r2_acceptance"
 
 
 class LiveBrowserTaskAcceptanceGuardTests(unittest.TestCase):
+    def test_event_log_survives_close_and_cannot_overwrite_existing_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "acceptance.jsonl"
+            log = acceptance.AcceptanceEventLog(str(path))
+            log.emit({"event": "worker_finished", "exception_type": "ProviderFailure"})
+            log.close()
+            original = path.read_bytes()
+            self.assertEqual(json.loads(original)["exception_type"], "ProviderFailure")
+            with self.assertRaises(acceptance.AcceptanceFailure):
+                acceptance.AcceptanceEventLog(str(path))
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_event_log_rejects_repository_and_relative_paths(self):
+        for path in ("relative.jsonl", str(acceptance.REPOSITORY_ROOT / "do-not-create.jsonl")):
+            with self.subTest(path=path), self.assertRaises(acceptance.AcceptanceFailure):
+                acceptance.AcceptanceEventLog(path)
+
+    def test_unavailable_log_stops_before_settings_or_database_access(self):
+        args = SimpleNamespace(safe_log_file="relative.jsonl")
+        with (
+            patch.object(acceptance, "parse_args", return_value=args),
+            patch.object(acceptance, "load_model_settings") as settings,
+            patch.object(acceptance, "preflight_database") as database,
+            patch("builtins.print"),
+        ):
+            self.assertEqual(acceptance.main([]), 2)
+        settings.assert_not_called()
+        database.assert_not_called()
+
+    def test_log_write_failure_stops_before_model_settings_and_is_sanitized(self):
+        log = Mock()
+        log.emit.side_effect = OSError("private path do-not-print")
+        with (
+            patch.object(acceptance, "parse_args", return_value=SimpleNamespace(safe_log_file="unused")),
+            patch.object(acceptance, "AcceptanceEventLog", return_value=log),
+            patch.object(acceptance, "load_model_settings") as settings,
+            patch("builtins.print") as output,
+        ):
+            self.assertEqual(acceptance.main([]), 2)
+        settings.assert_not_called()
+        self.assertNotIn("do-not-print", str(output.call_args_list))
+        log.close.assert_called_once()
+
     def test_runner_failure_telemetry_records_type_without_raw_error_or_model_secret(self):
         class ProviderFailure(Exception):
             status_code = 401
@@ -212,8 +257,10 @@ class BrowserAcceptanceBoundaryTests(unittest.TestCase):
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
-        args = SimpleNamespace(database_url=LOCAL_URL, model_env_file="unused.env", port=port)
+        args = SimpleNamespace(database_url=LOCAL_URL, model_env_file="unused.env", port=port,
+                               safe_log_file="controlled-test-log")
         with (
+            patch.object(acceptance, "AcceptanceEventLog"),
             patch.object(acceptance, "parse_args", return_value=args),
             patch.object(acceptance, "load_model_settings", return_value=()),
             patch.object(acceptance, "preflight_database"),
