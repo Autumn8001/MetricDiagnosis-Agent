@@ -519,3 +519,7 @@ R4-002受控UI与R4-003真实数据库历史读取不代表完整R4条件满足�
 ## 2026-10-15 R6 持久语义回溯切片
 
 只读 `score_persisted_task.py` 将已有持久事实还原为领域Evidence/Diagnosis，复用 `score_unsupported_claims()`，独立指定预期指标/终态/Driver。真实PG重读2条历史成功与1条历史401失败，成功记录的3/3及4/4声明有联合证据支持；失败不补Diagnosis。前后计数不变，没有模型请求。8项专项及后端710项/OK(skipped=6)通过；[复现及限制](evaluation-artifacts/persisted-semantic-replay-2026-10-15.md)。这只补回溯证据，不关闭预注册重复实验、负对照、Scope准确率、停止时机和usage gate。下一切片先准备独立异常/无异常/负对照评测输入，不向Runtime泄漏答案。
+
+## 2026-10-15 新授权浏览器真实尝试失败
+
+一笔新的隔离Synthetic任务实际运行至5工具/8观察后failed/execution_failed，无Evidence或Diagnosis，未追加调用。原始异常类型未留存，不能臆测根因。独立API/真实Edge读回失败与步骤、刷新重开通过。新增安全遥测和浏览器失败快速终止，保留领域校验与预算限制；改进后未再次调用模型。[实际失败与限制](evaluation-artifacts/live-model-browser-failure-2026-10-15.md)。完整同进程真实成功gate继续待通过；优先确保下一次有限调用有持久安全日志，不用更多编排代码替代验收。

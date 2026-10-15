@@ -260,7 +260,8 @@ async function main() {
     check(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'browser_desktop_overflow')
     await click('[data-testid="submit-investigation"]')
     await until(() => activity.forwardedPosts === 1 && UUID.test(activity.runId ?? ''), 'browser_submit', REQUEST_TIMEOUT_MS + 3_000)
-    await until(async () => activity.latestStatus === 'succeeded' && activity.factCounts !== null && (await bodyText()).includes(activity.runId), 'browser_terminal', TERMINAL_TIMEOUT_MS)
+    await until(async () => (activity.latestStatus === 'failed' || (activity.latestStatus === 'succeeded' && activity.factCounts !== null)) && (await bodyText()).includes(activity.runId), 'browser_terminal', TERMINAL_TIMEOUT_MS)
+    check(activity.latestStatus === 'succeeded', 'browser_task_failed')
     await until(async () => { assertRenderedDiagnosis(activity.terminalDetail, await bodyText()); return true }, 'browser_facts_rendered')
     const firstTerminalDetail = activity.terminalDetail
     const screenshot = await cdp('Page.captureScreenshot', { format: 'png' })

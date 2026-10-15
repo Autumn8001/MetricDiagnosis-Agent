@@ -39,6 +39,7 @@ MAX_TOOL_CALLS = 8
 MAX_TURNS = 10
 WORKER_WAIT_SECONDS = 150
 SERVER_LIFETIME_SECONDS = 210
+FAILURE_READBACK_GRACE_SECONDS = 15
 SAFE_EXCEPTION = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,63}$")
 
 
@@ -192,6 +193,7 @@ def insert_fixture(database_url: str, asin: str) -> None:
 
 
 def build_application(database_url: str, source_id: str, model: str):
+    from app.agent_runtime.diagnosis_runtime import run_evidence_driven_diagnosis
     from app.main import create_app
     from app.task_application import TaskApplicationConfig, build_task_application
 
@@ -199,8 +201,33 @@ def build_application(database_url: str, source_id: str, model: str):
         database_url, database_url, "synthetic", source_id, DATA_VERSION,
         model, MAX_TOOL_CALLS, MAX_TURNS,
     )
-    service, worker = build_task_application(config)
-    return create_app(investigation_tasks_service=service, include_legacy_routes=False), worker
+    telemetry = {"status": "not_started", "turns": None, "tool_calls": None, "tokens": None,
+                 "cost": None, "exception_type": None, "http_status": None, "duration_ms": None,
+                 "configured_model": model if model == "gemini-3.8-flash-high" else "configured_other"}
+
+    def live_runner(*args, **kwargs):
+        started = time.monotonic()
+        telemetry["status"] = "running"
+        try:
+            summary = run_evidence_driven_diagnosis(*args, **kwargs)
+            telemetry["turns"] = summary.investigation.turns_count
+            telemetry["tool_calls"] = summary.investigation.tool_calls_count
+            telemetry["status"] = "succeeded"
+            return summary
+        except Exception as exc:
+            name = type(exc).__name__
+            telemetry["status"] = "failed"
+            telemetry["exception_type"] = name if SAFE_EXCEPTION.fullmatch(name) else "OtherError"
+            code = getattr(exc, "status_code", None)
+            telemetry["http_status"] = code if type(code) is int and 100 <= code <= 599 else None
+            raise
+        finally:
+            telemetry["duration_ms"] = int((time.monotonic() - started) * 1000)
+
+    service, worker = build_task_application(config, diagnosis_runner=live_runner)
+    application = create_app(investigation_tasks_service=service, include_legacy_routes=False)
+    application.state.acceptance_telemetry = telemetry
+    return application, worker
 
 
 def install_acceptance_boundary(application, manifest, state, state_lock, acceptance_complete):
@@ -340,6 +367,8 @@ def main(argv: list[str] | None = None) -> int:
                             state["exception_type"] = name if SAFE_EXCEPTION.fullmatch(name) else "OtherError"
                     finally:
                         logging.disable(previous_logging_level)
+                    print(json.dumps({"event": "worker_finished",
+                                      "telemetry": getattr(application.state, "acceptance_telemetry", None)}, sort_keys=True), flush=True)
                     return
                 time.sleep(0.1)
 
@@ -347,13 +376,21 @@ def main(argv: list[str] | None = None) -> int:
         worker_thread.start()
         print(f"acceptance_server_ready http://127.0.0.1:{args.port}", flush=True)
         deadline = time.monotonic() + SERVER_LIFETIME_SECONDS
+        failure_readback_deadline = None
         while time.monotonic() < deadline and server_thread.is_alive():
             with state_lock:
                 processed = state["processed"]
                 failure = state["exception_type"]
             if acceptance_complete.is_set():
-                print(json.dumps({"worker": "processed" if processed else "failed", "exception_type": failure}, sort_keys=True), flush=True)
+                print(json.dumps({"worker": "processed" if processed else "failed", "exception_type": failure,
+                                  "telemetry": getattr(application.state, "acceptance_telemetry", None)}, sort_keys=True), flush=True)
                 return 0 if processed is not None else 1
+            telemetry = getattr(application.state, "acceptance_telemetry", {})
+            if failure or (processed and telemetry.get("status") == "failed"):
+                if failure_readback_deadline is None:
+                    failure_readback_deadline = time.monotonic() + FAILURE_READBACK_GRACE_SECONDS
+                if time.monotonic() >= failure_readback_deadline:
+                    return 1
             time.sleep(0.2)
         raise AcceptanceFailure("acceptance_server_lifetime_expired")
     except AcceptanceFailure as exc:

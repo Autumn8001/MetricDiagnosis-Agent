@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import redirect_stderr
 from concurrent.futures import ThreadPoolExecutor
 import io
+import json
 import socket
 import threading
 import time
@@ -26,6 +27,39 @@ LOCAL_URL = "postgresql://tester@127.0.0.1:55440/metricsleuth_r2_acceptance"
 
 
 class LiveBrowserTaskAcceptanceGuardTests(unittest.TestCase):
+    def test_runner_failure_telemetry_records_type_without_raw_error_or_model_secret(self):
+        class ProviderFailure(Exception):
+            status_code = 401
+        with (
+            patch("app.agent_runtime.diagnosis_runtime.run_evidence_driven_diagnosis",
+                  side_effect=ProviderFailure("private upstream response do-not-print")),
+            patch("app.task_application.build_task_application", return_value=(Mock(), Mock())) as build,
+        ):
+            app, _ = acceptance.build_application(LOCAL_URL, "test-source", "sk-do-not-print")
+            runner = build.call_args.kwargs["diagnosis_runner"]
+            with self.assertRaises(ProviderFailure):
+                runner("test prompt")
+        telemetry = app.state.acceptance_telemetry
+        self.assertEqual(telemetry["status"], "failed")
+        self.assertEqual(telemetry["exception_type"], "ProviderFailure")
+        self.assertEqual(telemetry["http_status"], 401)
+        self.assertIsNone(telemetry["turns"])
+        self.assertIsNone(telemetry["tokens"])
+        self.assertNotIn("do-not-print", json.dumps(telemetry))
+
+    def test_runner_telemetry_preserves_summary_and_never_invents_usage(self):
+        summary = SimpleNamespace(investigation=SimpleNamespace(turns_count=3, tool_calls_count=2))
+        with (
+            patch("app.agent_runtime.diagnosis_runtime.run_evidence_driven_diagnosis", return_value=summary),
+            patch("app.task_application.build_task_application", return_value=(Mock(), Mock())) as build,
+        ):
+            app, _ = acceptance.build_application(LOCAL_URL, "test-source", "gemini-3.8-flash-high")
+            result = build.call_args.kwargs["diagnosis_runner"]("test prompt")
+        self.assertIs(result, summary)
+        self.assertEqual(app.state.acceptance_telemetry["turns"], 3)
+        self.assertEqual(app.state.acceptance_telemetry["tool_calls"], 2)
+        self.assertIsNone(app.state.acceptance_telemetry["cost"])
+
     def test_only_dedicated_loopback_database_is_accepted(self) -> None:
         acceptance.validate_database_url(LOCAL_URL)
         for value in (

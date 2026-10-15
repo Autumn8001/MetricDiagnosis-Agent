@@ -208,7 +208,8 @@ async function main() {
 
   const catalog = await getJson(new URL('/api/investigation-sources', args.apiOrigin), 'preflight_source_catalog')
   const source = sourceIn(catalog, args.sourceId)
-  check(source && (args.expectedStatus === 'succeeded' ? source.provider === 'synthetic' && source.environment === 'sandbox' : source.provider === 'olist' && source.environment === 'validation'), 'preflight_source')
+  check(source && ((source.provider === 'synthetic' && source.environment === 'sandbox') ||
+    (source.provider === 'olist' && source.environment === 'validation')), 'preflight_source')
   const listed = await findRun(args.apiOrigin, args.sourceId, args.runId, 'preflight')
   const detail = await getJson(new URL(`/api/investigations/${encodeURIComponent(args.runId)}?source_id=${encodeURIComponent(args.sourceId)}`, args.apiOrigin), 'preflight_detail')
   const facts = assertDetail(detail, source, args.runId, args.sourceId, listed.run, 'preflight', args.expectedStatus)
