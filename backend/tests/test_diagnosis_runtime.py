@@ -2,12 +2,16 @@
 
 import datetime
 from decimal import Decimal
+from types import SimpleNamespace
+from dataclasses import replace
 import json
 from unittest.mock import MagicMock, patch
 import unittest
 
 from agents import Agent, MessageOutputItem, RunConfig, RunResult, ToolCallItem, ToolCallOutputItem
 from agents.testing import ScriptedModel, assistant_message, function_call
+from agents.usage import Usage
+from app.agent_runtime.diagnosis_runtime import _reported_token_usage
 from openai.types.responses.response_function_tool_call import ResponseFunctionToolCall
 
 from app.agent_runtime import (
@@ -188,7 +192,7 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
             ]
         )
 
-    def _no_anomaly_model(self, payload: dict | None = None) -> ScriptedModel:
+    def _no_anomaly_model(self, payload: dict | None = None, *, usage=None) -> ScriptedModel:
         return ScriptedModel(
             [
                 [
@@ -216,8 +220,31 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
                     )
                 ],
                 [assistant_message(json.dumps(payload or no_anomaly_intent_payload()))],
-            ]
+            ], default_usage=usage,
         )
+
+    def test_sdk_usage_is_summed_without_raw_provider_metadata(self):
+        model = self._no_anomaly_model(usage=Usage(requests=1, input_tokens=100,
+                                                 output_tokens=20, total_tokens=120))
+        summary = run_evidence_driven_diagnosis(
+            "Check orders.", diagnosis_id="usage-check", analytics_tools=self.analytics,
+            model=model, run_config=self._run_config(), created_at=FIXED_NOW)
+        self.assertEqual(dict(summary.token_usage), {
+            "responses": 3, "input_tokens": 300, "output_tokens": 60, "total_tokens": 360})
+        with self.assertRaises(TypeError):
+            summary.token_usage["input_tokens"] = 0
+        with self.assertRaises(RuntimeTraceError):
+            replace(summary, token_usage={**summary.token_usage, "raw_response": "private"})
+        model.assert_complete()
+
+    def test_partial_or_malformed_usage_is_unknown_not_zero_or_partial_total(self):
+        complete = SimpleNamespace(usage=Usage(requests=1, input_tokens=100,
+                                              output_tokens=20, total_tokens=120))
+        for incomplete in (SimpleNamespace(), SimpleNamespace(usage=Usage()),
+                           SimpleNamespace(usage=SimpleNamespace(input_tokens=True, output_tokens=2, total_tokens=3)),
+                           SimpleNamespace(usage=SimpleNamespace(input_tokens=5, output_tokens=2, total_tokens=10))):
+            self.assertIsNone(_reported_token_usage(SimpleNamespace(raw_responses=[complete, incomplete])))
+        self.assertIsNone(_reported_token_usage(SimpleNamespace(raw_responses=[])))
 
     def test_diagnosed_run_uses_real_tools_and_resolves_structured_diagnosis(self) -> None:
         model = self._diagnosed_model()

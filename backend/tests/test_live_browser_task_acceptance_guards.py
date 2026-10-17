@@ -109,7 +109,8 @@ class LiveBrowserTaskAcceptanceGuardTests(unittest.TestCase):
         self.assertNotIn("do-not-print", json.dumps(telemetry))
 
     def test_runner_telemetry_preserves_summary_and_never_invents_usage(self):
-        summary = SimpleNamespace(investigation=SimpleNamespace(turns_count=3, tool_calls_count=2))
+        summary = SimpleNamespace(investigation=SimpleNamespace(turns_count=3, tool_calls_count=2),
+                                  token_usage=None)
         with (
             patch("app.agent_runtime.diagnosis_runtime.run_evidence_driven_diagnosis", return_value=summary),
             patch("app.task_application.build_task_application", return_value=(Mock(), Mock())) as build,
@@ -119,6 +120,7 @@ class LiveBrowserTaskAcceptanceGuardTests(unittest.TestCase):
         self.assertIs(result, summary)
         self.assertEqual(app.state.acceptance_telemetry["turns"], 3)
         self.assertEqual(app.state.acceptance_telemetry["tool_calls"], 2)
+        self.assertIsNone(app.state.acceptance_telemetry["tokens"])
         self.assertIsNone(app.state.acceptance_telemetry["cost"])
 
     def test_only_dedicated_loopback_database_is_accepted(self) -> None:

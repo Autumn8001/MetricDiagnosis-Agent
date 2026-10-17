@@ -240,6 +240,7 @@ def build_application(database_url: str, source_id: str, model: str):
             summary = run_evidence_driven_diagnosis(*args, **kwargs)
             telemetry["turns"] = summary.investigation.turns_count
             telemetry["tool_calls"] = summary.investigation.tool_calls_count
+            telemetry["tokens"] = dict(summary.token_usage) if summary.token_usage is not None else None
             telemetry["status"] = "succeeded"
             return summary
         except Exception as exc:

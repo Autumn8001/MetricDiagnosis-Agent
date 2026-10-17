@@ -109,7 +109,8 @@ def main(argv=None):
                 try:
                     summary = run_evidence_driven_diagnosis(*runner_args, **kwargs)
                     telemetry.update(turns=summary.investigation.turns_count,
-                                     tool_calls=summary.investigation.tool_calls_count)
+                                     tool_calls=summary.investigation.tool_calls_count,
+                                     tokens=dict(summary.token_usage) if summary.token_usage is not None else None)
                     return summary
                 except Exception as exc:
                     kind = type(exc).__name__

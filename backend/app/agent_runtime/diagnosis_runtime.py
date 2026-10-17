@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass, replace
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from typing import Any, Callable, Mapping
 
 from agents import Agent, RunConfig, RunResult, Runner
@@ -60,6 +60,7 @@ class EvidenceDrivenRunSummary:
     investigation: InvestigationRunSummary
     composition: DiagnosisComposition
     observation_catalog: tuple[Observation, ...] = ()
+    token_usage: Mapping[str, int] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.investigation, InvestigationRunSummary):
@@ -114,6 +115,16 @@ class EvidenceDrivenRunSummary:
                 )
 
         object.__setattr__(self, "observation_catalog", catalog)
+        if self.token_usage is not None:
+            usage = self.token_usage
+            if (
+                not isinstance(usage, Mapping)
+                or set(usage) != {"responses", "input_tokens", "output_tokens", "total_tokens"}
+                or any(type(value) is not int or value <= 0 for value in usage.values())
+                or usage["total_tokens"] != usage["input_tokens"] + usage["output_tokens"]
+            ):
+                raise RuntimeTraceError("Token usage must contain only consistent positive SDK counts.")
+            object.__setattr__(self, "token_usage", MappingProxyType(dict(usage)))
 
     @property
     def observations(self) -> tuple[Observation, ...]:
@@ -256,6 +267,30 @@ def _trace_audit_view(result: RunResult) -> SimpleNamespace:
         raw_responses=raw_responses,
         final_output=_STRUCTURED_TRACE_SENTINEL,
     )
+
+
+def _reported_token_usage(result: RunResult) -> Mapping[str, int] | None:
+    """Allowlist SDK counts only; incomplete/zero-normalized usage is unknown.
+
+    A compatible provider can omit usage and the SDK can normalize it to zero.
+    Require positive, consistent counts on every returned response rather than
+    silently reporting a partial total. No request IDs or raw usage payloads.
+    """
+    responses = result.raw_responses
+    if not responses:
+        return None
+    totals = {"responses": len(responses), "input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    for response in responses:
+        usage = getattr(response, "usage", None)
+        values = {key: getattr(usage, key, None) for key in totals if key != "responses"}
+        if (
+            any(type(value) is not int or value <= 0 for value in values.values())
+            or values["total_tokens"] != values["input_tokens"] + values["output_tokens"]
+        ):
+            return None
+        for key, value in values.items():
+            totals[key] += value
+    return totals
 
 
 def _verify_primary_driver_semantic_closure(
@@ -443,6 +478,7 @@ def run_evidence_driven_diagnosis(
         investigation=investigation,
         composition=composition,
         observation_catalog=observation_catalog,
+        token_usage=_reported_token_usage(result),
     )
 
 
