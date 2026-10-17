@@ -47,6 +47,10 @@ from app.observations.models import Observation, ObservationStatus
 DEFAULT_EVIDENCE_DRIVEN_MAX_TOOL_CALLS = DEFAULT_INVESTIGATION_TOOL_BUDGET
 DEFAULT_EVIDENCE_DRIVEN_MAX_TURNS = DEFAULT_INVESTIGATION_MAX_TURNS
 _STRUCTURED_TRACE_SENTINEL = "structured-diagnosis-output"
+_NORMAL_CONCLUSION_BOUNDARY = (
+    "No-material-anomaly applies only to the cited metric scopes and comparison periods; "
+    "unqueried segments may still be anomalous."
+)
 
 
 @dataclass(frozen=True)
@@ -199,6 +203,13 @@ def create_evidence_driven_agent(
             "tool Output; never invent, derive, shorten, or paraphrase an Observation ID. Use "
             "the deterministic Evidence ID format evidence:{observation_id}:{role}. "
             "Allowed roles are 'supporting', 'negative_control', or 'limitation'. "
+            "Preserve the reasoning in the final citations: select and include in evidence_ids "
+            "the normal Observations used to rule out alternative metric drivers or distinguish "
+            "affected from unaffected segments, with role 'negative_control'. Retain relevant "
+            "stable related metrics as well as the abnormal driver. A queried Observation that "
+            "is not selected and cited is not part of the final explanation. Use the existing "
+            "catalog first; do not repeat queries merely to obtain a citation. Do not label a "
+            "segment normal unless an Observation supports that exact metric and scope. "
             "For 'diagnosed' status, one and the same selected anomalous supporting Observation "
             "must have metric equal to primary_driver and filters/dimensions covering every "
             "affected_scope dimension and value. Do not splice primary_driver from one Evidence "
@@ -208,6 +219,11 @@ def create_evidence_driven_agent(
             "non-success status instead. Cite "
             "target_evidence_id from the target metric Observation. "
             "For 'no_material_anomaly' status: set primary_driver to null and affected_scope to []. "
+            "An aggregate normal result can hide offsetting segment changes. Decide from the "
+            "request and observed results whether relevant allowed segment comparisons could "
+            "change that conclusion; if so, investigate them within the remaining budget. "
+            "Do not claim all segments are normal from aggregate-only evidence. State the "
+            "uninspected scope as a limitation, even when the requested aggregate is normal. "
             "Always include at least one limitation in limitations (e.g. 'Data-level contribution only'). "
             "Set confidence to a decimal string in [0, 1] (e.g. '0.90'). "
             "Do not invent current values, baseline values, relative changes, units, periods, "
@@ -376,6 +392,17 @@ def run_evidence_driven_diagnosis(
     )
 
     evidence_selection_draft, diagnosis_draft = runtime_intent_to_drafts(final_output)
+    # Application-owned scope disclosure, not a model claim or synthetic Evidence.
+    # Keep the audited model intent unchanged; the composed product result carries
+    # this boundary even if the model supplies only a generic limitation.
+    if (
+        diagnosis_draft.status is DiagnosisStatus.NO_MATERIAL_ANOMALY
+        and _NORMAL_CONCLUSION_BOUNDARY not in diagnosis_draft.limitations
+    ):
+        diagnosis_draft = replace(
+            diagnosis_draft,
+            limitations=(*diagnosis_draft.limitations, _NORMAL_CONCLUSION_BOUNDARY),
+        )
     timestamp = (
         datetime.datetime.now(datetime.timezone.utc)
         if created_at is None

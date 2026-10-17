@@ -235,6 +235,8 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
         self.assertEqual(summary.investigation.tool_call_ids, ("target_call", "driver_call", "control_call"))
         self.assertEqual(summary.investigation.observation_count, 3)
         self.assertEqual(summary.composition.diagnosis.status, DiagnosisStatus.DIAGNOSED)
+        self.assertEqual(summary.composition.diagnosis.limitations,
+                         tuple(diagnosed_intent_payload()["limitations"]))
         self.assertEqual(summary.composition.diagnosis.change.current_value, Decimal("80"))
         self.assertEqual(summary.composition.diagnosis.change.baseline_value, Decimal("100"))
         self.assertEqual(dict(summary.composition.diagnosis.affected_scope), {"marketplace": "US"})
@@ -263,6 +265,14 @@ class TestEvidenceDrivenDiagnosisRuntime(unittest.TestCase):
         self.assertEqual(summary.investigation.observation_count, 3)
         self.assertEqual(summary.composition.diagnosis.status, DiagnosisStatus.NO_MATERIAL_ANOMALY)
         self.assertEqual(summary.composition.diagnosis.change.current_value, Decimal("90"))
+        self.assertIn("unqueried segments may still be anomalous",
+                      summary.composition.diagnosis.limitations[-1])
+        self.assertEqual(summary.composition.diagnosis.limitations[:-1],
+                         tuple(no_anomaly_intent_payload()["limitations"]))
+        # Application disclosure must not rewrite the model's audited intent,
+        # query additional data, or promote an unselected Observation.
+        self.assertEqual(json.loads(summary.investigation.final_output)["limitations"],
+                         no_anomaly_intent_payload()["limitations"])
         self.assertEqual(
             tuple(item.evidence_id for item in summary.composition.evidence),
             (

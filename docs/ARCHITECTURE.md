@@ -1,5 +1,9 @@
 # MetricSleuth 架构说明
 
+## 2026-10-17 正常结论的应用边界
+
+`run_evidence_driven_diagnosis()`保留SDK原始结构化intent作为审计输出，转换为DiagnosisDraft后，仅对`no_material_anomaly`附加固定范围说明：结论只适用于引用的指标范围与比较期间，未查询分段仍可能异常。该说明属于应用限制披露，不是模型生成的事实或新的Evidence；最终composition由既有Writer保存。模型提示词要求保留实际用于排除替代解释的正常对照引用，但不自动选择Observation，也没有新增查询顺序、评分特例或基准答案。离线SDK ScriptedModel测试已验证限制披露与原始输出分离；修正后真实模型/数据库复验尚未运行。
+
 ## 2026-10-15 任务范围与真实模型验收
 
 `SourceInvestigationRunner` 将任务固定 filters 传入既有 Diagnosis Runtime；`_require_bound_filters` 为每个查询工具深拷贝模型可见 Schema，把 filters 及固定键设为必填、值设为 const。代理未必强制执行Schema，SQL前的 `_BoundAnalyticsTools` 仍为执行权限边界，异常仍直接终止。任务路径不暴露冗余定义工具（查询结果含 Registry 定义），直接 Runtime 默认保留。没有新增Agent循环或动态改写查询过滤器。

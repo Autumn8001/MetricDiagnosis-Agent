@@ -65,3 +65,13 @@ python -B scripts/replay_sandbox_live_evaluation.py --database-url postgresql://
 新增执行/评分/复算守卫5项通过，覆盖未授权不得启动、遇鉴权/协议错误停止、正确Driver不掩盖错误Scope、失败不伪造评分、重复实验拒绝。添加复算入口后的全量离线回归exit0，仍有既有event loop ResourceWarning及依赖弃用警告；不将其中Hermetic输出当真实模型结果。前端未修改，本切片未重跑前端。
 
 本次6次预算已全部使用。Shopify资源状态问题已提出，尚未收到更新，仍不能宣称持续外部数据已接入。部署、安全认证/TLS/备份演练及usage仍待完成。
+
+## 2026-10-17 最小修正（未调用模型）
+
+基线`ff66701`之后，`backend/app/agent_runtime/diagnosis_runtime.py`补充通用提示：最终引用应保留实际用于排除其他Driver或区分受影响/正常分段的Observation，相关稳定指标也应引用；优先用已有结果，不为引用重复查询。正常聚合结果可能掩盖分段变化，是否继续调查仍由模型结合请求、Observation和预算决定，没有固定维度顺序或已知对照值。
+
+正常结论另由应用附加固定限制说明：只适用于引用的指标范围与比较期间，未查询分段仍可能异常。说明加入DiagnosisDraft并进入最终composition，模型原始intent不被改写；不改变证据集合、Driver/Scope或评分要求，不把范围说明计为负对照。
+
+`python -B -m unittest tests.test_diagnosis_runtime tests.test_sandbox_live_evaluation_guards -v`共13项通过；全量离线回归exit0。测试使用ScriptedModel/Mock Analytics，验证SDK接线、原输出保留、无额外查询/证据与已有拒绝规则，不证明真实模型会完整引用对照。没有新模型或数据库调用，前端未改，既有6笔评分保持原样。全量测试包含Hermetic场景输出，不能当真实调查证据。
+
+旧日志的源码指纹对应修正前代码，重放该基线请使用`ff66701`，不要用当前提示词指纹替换旧日志。修正后的真实调查、严格覆盖改善、正常场景维度检查及停止行为仍待新授权验证。
