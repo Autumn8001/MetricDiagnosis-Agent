@@ -75,3 +75,16 @@ python -B scripts/replay_sandbox_live_evaluation.py --database-url postgresql://
 `python -B -m unittest tests.test_diagnosis_runtime tests.test_sandbox_live_evaluation_guards -v`共13项通过；全量离线回归exit0。测试使用ScriptedModel/Mock Analytics，验证SDK接线、原输出保留、无额外查询/证据与已有拒绝规则，不证明真实模型会完整引用对照。没有新模型或数据库调用，前端未改，既有6笔评分保持原样。全量测试包含Hermetic场景输出，不能当真实调查证据。
 
 旧日志的源码指纹对应修正前代码，重放该基线请使用`ff66701`，不要用当前提示词指纹替换旧日志。修正后的真实调查、严格覆盖改善、正常场景维度检查及停止行为仍待新授权验证。
+
+### 受控SDK与真实PostgreSQL回读补验
+
+2026-10-17在本机专用`metricsleuth_r2_acceptance`实际执行：
+
+```powershell
+$env:METRICSLEUTH_TEST_DATABASE_URL = 'postgresql://metricsleuth_test@127.0.0.1:55440/metricsleuth_r2_acceptance'
+python -B -m unittest tests.test_postgres_task_application.PostgresTaskApplicationTests.test_sdk_normal_scope_disclosure_survives_fresh_application_read -v
+```
+
+结果`Ran 1 test / OK`。新增测试只用ScriptedModel决定一次sessions查询与最终intent，查询工具/SQL/Observation映射/进度checkpoint/Writer和HTTP读取均为实际实现。当前日与基线均为100，Task终态succeeded；重新构建TaskApplication和TestClient后读回1工具/1观察/1证据/1诊断、原有asin过滤器、空分段/Driver、原证据ID及范围说明。SDK原始intent限制字段保持不变，没有自动补出正常分段证据。
+
+首次运行因测试封装重复传入`run_config`而失败，已改为复用SourceRunner传入的配置后通过，失败任务保留。现有测试fixture会幂等重放应用迁移，并为每次运行新增唯一来源/商品与8行Synthetic日数据；没有删除或重置既有样本。PG实际启动和停止均成功，数据保留。未调用外部模型、未读取.env、未变更前端或生产；原6笔真实模型严格评分仍为0/6。此次只证明修正能沿实际持久化链路保存/回读，不证明提示词改善了真实模型引用。

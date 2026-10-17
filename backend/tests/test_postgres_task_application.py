@@ -1,5 +1,6 @@
 """Explicit application wiring + actual Analytics SQL; controlled Runner only."""
 import datetime
+import json
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -14,8 +15,9 @@ from uuid import uuid4
 import httpx
 
 from fastapi.testclient import TestClient
+from agents.testing import ScriptedModel, assistant_message, function_call
 
-from app.agent_runtime import EvidenceDrivenRunSummary
+from app.agent_runtime import EvidenceDrivenRunSummary, run_evidence_driven_diagnosis
 from app.diagnosis import DiagnosisComposition
 from app.data_sources.capabilities import SourceProvider
 from app.evidence import EvidenceRole, promote_observation_to_evidence
@@ -136,6 +138,70 @@ class PostgresTaskApplicationTests(unittest.TestCase):
             self.assertEqual(value, Decimal("780"))
         finally:
             connection.close()
+
+    def test_sdk_normal_scope_disclosure_survives_fresh_application_read(self):
+        # Scripted decisions, actual SDK tools/SQL/Writer. No provider client or
+        # credentials are needed, and unqueried segments are never invented.
+        observation_id = "normal_scope_call_sessions_0"
+        evidence_id = f"evidence:{observation_id}:supporting"
+        payload = {
+            "evidence_selections": [{"observation_id": observation_id, "role": "supporting"}],
+            "status": "no_material_anomaly", "target_metric": "sessions",
+            "target_evidence_id": evidence_id, "driver_evidence_id": None,
+            "primary_driver": None, "affected_scope": [], "evidence_ids": [evidence_id],
+            "confidence": "0.80", "limitations": ["Controlled aggregate-only investigation."],
+        }
+        model = ScriptedModel([
+            [function_call("query_metric", {
+                "metric": "sessions", "start_date": "2026-10-10", "end_date": "2026-10-10",
+                "compare_to": "previous_7_days", "filters": {"asin": self.asin}, "group_by": [],
+            }, call_id="normal_scope_call")],
+            [assistant_message(json.dumps(payload))],
+        ])
+        summaries = []
+
+        def controlled_runner(prompt, **kwargs):
+            kwargs["model"] = model
+            summary = run_evidence_driven_diagnosis(prompt, **kwargs)
+            summaries.append(summary)
+            return summary
+
+        service, worker = build_task_application(self.config, diagnosis_runner=controlled_runner)
+        with TestClient(create_app(investigation_tasks_service=service, include_legacy_routes=False)) as client:
+            response = client.post("/api/investigations", json={
+                "source_id": self.config.source_id, "target_metric": "sessions",
+                "target_date": "2026-10-10", "filters": {"asin": self.asin}, "group_by": [],
+            })
+            self.assertEqual(response.status_code, 202, response.text)
+            run_id = response.json()["investigation_run_id"]
+            self.assertEqual(worker.run_once(), run_id)
+
+        # Rebuild services: response must come from persisted PostgreSQL facts,
+        # not the in-memory SDK summary or original HTTP application.
+        fresh_service, _ = build_task_application(self.config, diagnosis_runner=controlled_runner)
+        with TestClient(create_app(investigation_tasks_service=fresh_service, include_legacy_routes=False)) as client:
+            response = client.get(f"/api/investigations/{run_id}",
+                                  params={"source_id": self.config.source_id})
+            self.assertEqual(response.status_code, 200, response.text)
+            body = response.json()
+        self.assertEqual(body["run"]["status"], "succeeded")
+        self.assertEqual([len(body[key]) for key in ("tool_calls", "observations", "evidence", "diagnoses")],
+                         [1, 1, 1, 1])
+        diagnosis = body["diagnoses"][0]
+        self.assertEqual(diagnosis["status"], "no_material_anomaly")
+        self.assertEqual(diagnosis["affected_scope"], {})
+        self.assertIsNone(diagnosis["primary_driver"])
+        self.assertEqual(diagnosis["evidence_ids"], [evidence_id])
+        self.assertIn("unqueried segments may still be anomalous", diagnosis["limitations"][-1])
+        observation = body["observations"][0]
+        self.assertEqual(observation["filters"], {"asin": self.asin})
+        self.assertEqual(observation["dimensions"], {})
+        self.assertEqual(Decimal(observation["current_value"]), Decimal("100"))
+        self.assertEqual(Decimal(observation["baseline_value"]), Decimal("100"))
+        self.assertEqual(json.loads(summaries[0].investigation.final_output)["limitations"],
+                         payload["limitations"])
+        self.assertEqual(len(summaries), 1)
+        model.assert_complete()
 
     def test_omitted_capabilities_preserved_but_explicit_empty_clears(self):
         connection = self.fixture._transaction_connection()
